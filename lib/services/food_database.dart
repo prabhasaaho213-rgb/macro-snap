@@ -8,6 +8,10 @@ class FoodItem {
   final double fiber;
   final String serving;
 
+  /// False for meat/fish/egg entries so a vegetarian plan can filter them
+  /// out in one pass. Defaults to true - the database is mostly plants.
+  final bool isVeg;
+
   const FoodItem({
     required this.name,
     required this.category,
@@ -17,6 +21,7 @@ class FoodItem {
     required this.fats,
     required this.fiber,
     required this.serving,
+    this.isVeg = true,
   });
 }
 
@@ -37,7 +42,7 @@ class FoodDatabase {
     FoodItem(name: 'Rava Dosa', category: 'Breakfast', calories: 145, protein: 4.0, carbs: 24.0, fats: 4.0, fiber: 1.0, serving: '1 medium'),
     FoodItem(name: 'Methi Thepla', category: 'Breakfast', calories: 170, protein: 5.5, carbs: 26.0, fats: 5.0, fiber: 3.5, serving: '1 piece'),
     FoodItem(name: 'Pongal', category: 'Breakfast', calories: 290, protein: 7.0, carbs: 48.0, fats: 8.0, fiber: 2.0, serving: '1 plate (200g)'),
-    FoodItem(name: 'Bread Omelette', category: 'Breakfast', calories: 280, protein: 14.0, carbs: 24.0, fats: 14.0, fiber: 1.0, serving: '2 slices + 2 eggs'),
+    FoodItem(name: 'Bread Omelette', category: 'Breakfast', calories: 280, protein: 14.0, carbs: 24.0, fats: 14.0, fiber: 1.0, serving: '2 slices + 2 eggs', isVeg: false),
 
     // --- LUNCH / DINNER - ROTI & SABZI ---
     FoodItem(name: 'Roti (1 pc)', category: 'Lunch/Dinner', calories: 85, protein: 3.0, carbs: 15.0, fats: 1.0, fiber: 2.5, serving: '1 medium (40g)'),
@@ -54,12 +59,12 @@ class FoodDatabase {
     FoodItem(name: 'Bhindi Masala', category: 'Lunch/Dinner', calories: 120, protein: 3.0, carbs: 10.0, fats: 7.5, fiber: 4.5, serving: '1 katori (150g)'),
     FoodItem(name: 'Mixed Vegetable Curry', category: 'Lunch/Dinner', calories: 125, protein: 3.5, carbs: 16.0, fats: 5.5, fiber: 4.0, serving: '1 katori (150g)'),
     FoodItem(name: 'Dal Makhani', category: 'Lunch/Dinner', calories: 240, protein: 12.0, carbs: 22.0, fats: 12.0, fiber: 6.0, serving: '1 katori (150g)'),
-    FoodItem(name: 'Chicken Curry', category: 'Lunch/Dinner', calories: 210, protein: 22.0, carbs: 6.0, fats: 12.0, fiber: 0.5, serving: '1 katori (150g)'),
-    FoodItem(name: 'Butter Chicken', category: 'Lunch/Dinner', calories: 290, protein: 24.0, carbs: 10.0, fats: 18.0, fiber: 1.0, serving: '1 katori (150g)'),
-    FoodItem(name: 'Fish Curry', category: 'Lunch/Dinner', calories: 185, protein: 20.0, carbs: 5.0, fats: 10.0, fiber: 0.5, serving: '1 katori (150g)'),
-    FoodItem(name: 'Egg Curry', category: 'Lunch/Dinner', calories: 200, protein: 13.0, carbs: 8.0, fats: 14.0, fiber: 1.0, serving: '2 eggs + gravy'),
+    FoodItem(name: 'Chicken Curry', category: 'Lunch/Dinner', calories: 210, protein: 22.0, carbs: 6.0, fats: 12.0, fiber: 0.5, serving: '1 katori (150g)', isVeg: false),
+    FoodItem(name: 'Butter Chicken', category: 'Lunch/Dinner', calories: 290, protein: 24.0, carbs: 10.0, fats: 18.0, fiber: 1.0, serving: '1 katori (150g)', isVeg: false),
+    FoodItem(name: 'Fish Curry', category: 'Lunch/Dinner', calories: 185, protein: 20.0, carbs: 5.0, fats: 10.0, fiber: 0.5, serving: '1 katori (150g)', isVeg: false),
+    FoodItem(name: 'Egg Curry', category: 'Lunch/Dinner', calories: 200, protein: 13.0, carbs: 8.0, fats: 14.0, fiber: 1.0, serving: '2 eggs + gravy', isVeg: false),
     FoodItem(name: 'Biryani (Veg)', category: 'Lunch/Dinner', calories: 350, protein: 8.0, carbs: 52.0, fats: 12.0, fiber: 3.0, serving: '1 plate (250g)'),
-    FoodItem(name: 'Biryani (Chicken)', category: 'Lunch/Dinner', calories: 420, protein: 20.0, carbs: 50.0, fats: 16.0, fiber: 1.5, serving: '1 plate (300g)'),
+    FoodItem(name: 'Biryani (Chicken)', category: 'Lunch/Dinner', calories: 420, protein: 20.0, carbs: 50.0, fats: 16.0, fiber: 1.5, serving: '1 plate (300g)', isVeg: false),
     FoodItem(name: 'Curd Rice', category: 'Lunch/Dinner', calories: 220, protein: 6.0, carbs: 38.0, fats: 5.0, fiber: 0.5, serving: '1 bowl (200g)'),
     FoodItem(name: 'Lemon Rice', category: 'Lunch/Dinner', calories: 240, protein: 4.5, carbs: 46.0, fats: 4.0, fiber: 1.0, serving: '1 plate (200g)'),
     FoodItem(name: 'Khichdi', category: 'Lunch/Dinner', calories: 260, protein: 8.0, carbs: 48.0, fats: 4.0, fiber: 4.0, serving: '1 plate (250g)'),
@@ -91,15 +96,15 @@ class FoodDatabase {
     FoodItem(name: 'Coconut Chutney', category: 'South Indian', calories: 85, protein: 1.0, carbs: 4.0, fats: 7.5, fiber: 2.0, serving: '2 tbsp (30g)'),
 
     // --- PROTEINS & EGGS ---
-    FoodItem(name: 'Boiled Egg (1 pc)', category: 'Proteins', calories: 72, protein: 6.3, carbs: 0.6, fats: 5.0, fiber: 0.0, serving: '1 medium'),
-    FoodItem(name: 'Omelette (2 eggs)', category: 'Proteins', calories: 180, protein: 14.0, carbs: 1.5, fats: 13.0, fiber: 0.0, serving: '2 eggs'),
-    FoodItem(name: 'Grilled Chicken (100g)', category: 'Proteins', calories: 165, protein: 31.0, carbs: 0.0, fats: 3.6, fiber: 0.0, serving: '100g'),
-    FoodItem(name: 'Chicken Tikka (100g)', category: 'Proteins', calories: 190, protein: 28.0, carbs: 4.0, fats: 7.0, fiber: 0.5, serving: '100g (5-6 pieces)'),
-    FoodItem(name: 'Fish Fry (100g)', category: 'Proteins', calories: 200, protein: 24.0, carbs: 4.0, fats: 10.0, fiber: 0.0, serving: '100g'),
-    FoodItem(name: 'Tandoori Chicken (4 pcs)', category: 'Proteins', calories: 280, protein: 38.0, carbs: 4.0, fats: 12.0, fiber: 0.5, serving: '4 pieces'),
-    FoodItem(name: 'Egg Bhurji', category: 'Proteins', calories: 220, protein: 15.0, carbs: 4.0, fats: 16.0, fiber: 0.5, serving: '2 eggs'),
+    FoodItem(name: 'Boiled Egg (1 pc)', category: 'Proteins', calories: 72, protein: 6.3, carbs: 0.6, fats: 5.0, fiber: 0.0, serving: '1 medium', isVeg: false),
+    FoodItem(name: 'Omelette (2 eggs)', category: 'Proteins', calories: 180, protein: 14.0, carbs: 1.5, fats: 13.0, fiber: 0.0, serving: '2 eggs', isVeg: false),
+    FoodItem(name: 'Grilled Chicken (100g)', category: 'Proteins', calories: 165, protein: 31.0, carbs: 0.0, fats: 3.6, fiber: 0.0, serving: '100g', isVeg: false),
+    FoodItem(name: 'Chicken Tikka (100g)', category: 'Proteins', calories: 190, protein: 28.0, carbs: 4.0, fats: 7.0, fiber: 0.5, serving: '100g (5-6 pieces)', isVeg: false),
+    FoodItem(name: 'Fish Fry (100g)', category: 'Proteins', calories: 200, protein: 24.0, carbs: 4.0, fats: 10.0, fiber: 0.0, serving: '100g', isVeg: false),
+    FoodItem(name: 'Tandoori Chicken (4 pcs)', category: 'Proteins', calories: 280, protein: 38.0, carbs: 4.0, fats: 12.0, fiber: 0.5, serving: '4 pieces', isVeg: false),
+    FoodItem(name: 'Egg Bhurji', category: 'Proteins', calories: 220, protein: 15.0, carbs: 4.0, fats: 16.0, fiber: 0.5, serving: '2 eggs', isVeg: false),
     FoodItem(name: 'Soya Chaap (100g)', category: 'Proteins', calories: 175, protein: 18.0, carbs: 10.0, fats: 7.5, fiber: 4.0, serving: '100g'),
-    FoodItem(name: 'Grilled Fish (100g)', category: 'Proteins', calories: 145, protein: 26.0, carbs: 0.0, fats: 4.0, fiber: 0.0, serving: '100g'),
+    FoodItem(name: 'Grilled Fish (100g)', category: 'Proteins', calories: 145, protein: 26.0, carbs: 0.0, fats: 4.0, fiber: 0.0, serving: '100g', isVeg: false),
 
     // --- DAIRY ---
     FoodItem(name: 'Milk (1 glass)', category: 'Dairy', calories: 120, protein: 6.0, carbs: 10.0, fats: 6.5, fiber: 0.0, serving: '1 glass (200ml)'),
@@ -191,4 +196,8 @@ class FoodDatabase {
   }
 
   static List<String> get categories => _items.map((e) => e.category).toSet().toList();
+
+  /// Everything a vegetarian can eat, in database order - the source for the
+  /// Veg Plan suggestion list.
+  static List<FoodItem> get vegetarian => _items.where((e) => e.isVeg).toList();
 }

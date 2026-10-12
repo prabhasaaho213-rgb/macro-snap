@@ -49,6 +49,9 @@ app.*.map.json
 *.keystore
 key.properties
 
+# Local desktop app workspace state (SQLite logs) - not app source
+.freebuff/
+
 # Backend is its own repo
 /backend/
 

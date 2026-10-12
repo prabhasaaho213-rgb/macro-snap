@@ -12,6 +12,10 @@ enum ActivityLevel { sedentary, light, moderate, active, veryActive }
 
 enum Gender { male, female }
 
+/// Food preference for the suggested meal plan. Vegetarian is the default, so
+/// a profile saved before this option existed keeps the plan it already had.
+enum DietPreference { vegetarian, nonVegetarian }
+
 class DietProfile {
   final double weightKg;
   final double heightCm;
@@ -19,6 +23,7 @@ class DietProfile {
   final Gender gender;
   final Goal goal;
   final ActivityLevel activity;
+  final DietPreference diet;
   final String avatar;
 
   DietProfile({
@@ -28,6 +33,7 @@ class DietProfile {
     required this.gender,
     required this.goal,
     required this.activity,
+    this.diet = DietPreference.vegetarian,
     this.avatar = '😎',
   });
 
@@ -98,6 +104,7 @@ class DietProfile {
     'gender': gender.name,
     'goal': goal.name,
     'activity': activity.name,
+    'diet': diet.name,
     'avatar': avatar,
   };
 
@@ -121,6 +128,12 @@ class DietProfile {
       activity: ActivityLevel.values.firstWhere(
         (a) => a.name == activityName,
         orElse: () => ActivityLevel.sedentary,
+      ),
+      // Missing on profiles saved before the option existed - orElse keeps
+      // them on the vegetarian plan they were already being shown.
+      diet: DietPreference.values.firstWhere(
+        (d) => d.name == json['diet'],
+        orElse: () => DietPreference.vegetarian,
       ),
       avatar: json['avatar'] as String? ?? '😎',
     );
@@ -193,6 +206,15 @@ class DietPlanService {
         return 'Maintain';
       case Goal.gainMuscle:
         return 'Muscle Gain';
+    }
+  }
+
+  static String dietLabel(DietPreference d) {
+    switch (d) {
+      case DietPreference.vegetarian:
+        return 'Vegetarian';
+      case DietPreference.nonVegetarian:
+        return 'Non-Vegetarian';
     }
   }
 

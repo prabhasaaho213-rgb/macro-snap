@@ -27,6 +27,7 @@ class _DietPlanScreenState extends State<DietPlanScreen> {
   Gender _gender = Gender.male;
   Goal _goal = Goal.loseWeight;
   ActivityLevel _activity = ActivityLevel.sedentary;
+  DietPreference _diet = DietPreference.vegetarian;
   DietProfile? _profile;
   String _avatar = '😎';
   bool _subscribed = false;
@@ -57,6 +58,7 @@ class _DietPlanScreenState extends State<DietPlanScreen> {
           _gender = p.gender;
           _goal = p.goal;
           _activity = p.activity;
+          _diet = p.diet;
         });
       }
     }
@@ -90,6 +92,7 @@ class _DietPlanScreenState extends State<DietPlanScreen> {
       gender: _gender,
       goal: _goal,
       activity: _activity,
+      diet: _diet,
       avatar: _avatar,
     );
     HapticFeedback.heavyImpact();
@@ -122,6 +125,8 @@ class _DietPlanScreenState extends State<DietPlanScreen> {
           'gender': _profile!.gender.name,
           'goal': _profile!.goal.name,
           'activity': _profile!.activity.name,
+          // The generated plan has to respect the food preference too.
+          'diet': _profile!.diet.name,
         }),
       );
       final data = jsonDecode(resp.body) as Map<String, dynamic>;
@@ -153,6 +158,7 @@ class _DietPlanScreenState extends State<DietPlanScreen> {
         gender: Gender.male,
         goal: Goal.maintain,
         activity: ActivityLevel.moderate,
+        diet: DietPreference.vegetarian,
       ),
     );
     _weightCtrl.text = '70';
@@ -162,6 +168,7 @@ class _DietPlanScreenState extends State<DietPlanScreen> {
       _gender = Gender.male;
       _goal = Goal.maintain;
       _activity = ActivityLevel.moderate;
+      _diet = DietPreference.vegetarian;
       _profile = null;
       _avatar = '😎';
       _aiPlan = null;
@@ -350,6 +357,40 @@ class _DietPlanScreenState extends State<DietPlanScreen> {
                 )
                 .toList(),
             onChanged: (v) => setState(() => _activity = v!),
+          ),
+          const SizedBox(height: 12),
+          // Food preference - drives the suggested meal plan below.
+          DropdownButtonFormField<DietPreference>(
+            initialValue: _diet,
+            decoration: InputDecoration(
+              labelText: 'Food Preference',
+              filled: true,
+              fillColor: isDark ? MacroSnapTheme.cardDark : Colors.white,
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(16),
+                borderSide: BorderSide.none,
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(16),
+                borderSide: BorderSide(
+                  color: MacroSnapTheme.borderSubtle(context),
+                ),
+              ),
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 20,
+                vertical: 18,
+              ),
+            ),
+            isExpanded: true,
+            items: DietPreference.values
+                .map(
+                  (d) => DropdownMenuItem(
+                    value: d,
+                    child: Text(DietPlanService.dietLabel(d)),
+                  ),
+                )
+                .toList(),
+            onChanged: (v) => setState(() => _diet = v!),
           ),
           const SizedBox(height: 20),
           GradientButton(
@@ -829,6 +870,15 @@ class _DietPlanScreenState extends State<DietPlanScreen> {
               color: isDark ? Colors.white : const Color(0xFF1A1A1A),
             ),
           ),
+          const SizedBox(height: 4),
+          Text(
+            '${DietPlanService.dietLabel(p.diet)} plan - '
+            'change it under Food Preference above.',
+            style: TextStyle(
+              fontSize: 12,
+              color: MacroSnapTheme.textTertiary(context),
+            ),
+          ),
           const SizedBox(height: 16),
           _mealItem(
             Icons.wb_sunny_rounded,
@@ -933,32 +983,52 @@ class _DietPlanScreenState extends State<DietPlanScreen> {
   }
 
   String _breakfastSuggestion(DietProfile p) {
+    final nonVeg = p.diet == DietPreference.nonVegetarian;
     if (p.goal == Goal.loseWeight) {
-      return '2 egg whites + 1 multigrain roti + 1 bowl curd + mixed veggies';
+      return nonVeg
+          ? '3 boiled egg whites + 1 multigrain roti + curd + mixed veggies'
+          : '1 multigrain roti + 1 bowl curd + mixed veggies + 5 almonds';
     }
-    return '2 whole eggs + 2 multigrain roti + 1 bowl sprouts salad + 1 banana';
+    return nonVeg
+        ? '3 whole eggs + 2 multigrain roti + sprouts salad + 1 banana'
+        : '2 multigrain roti + 1 bowl sprouts salad + 1 banana + milk';
   }
 
   String _lunchSuggestion(DietProfile p) {
+    final nonVeg = p.diet == DietPreference.nonVegetarian;
     if (p.goal == Goal.loseWeight) {
-      return '1 roti + dal + green veg sabzi + salad + buttermilk';
+      return nonVeg
+          ? '1 roti + grilled chicken (150g) + green veg sabzi + salad'
+          : '1 roti + dal + green veg sabzi + salad + buttermilk';
     }
     if (p.goal == Goal.gainMuscle) {
-      return '2 roti + dal + paneer bhurji + rice + curd + salad';
+      return nonVeg
+          ? '2 roti + chicken curry (200g) + rice + curd + salad'
+          : '2 roti + dal + paneer bhurji + rice + curd + salad';
     }
-    return '2 roti + dal + seasonal veg + salad + curd';
+    return nonVeg
+        ? '2 roti + fish/chicken curry (150g) + seasonal veg + salad'
+        : '2 roti + dal + seasonal veg + salad + curd';
   }
 
   String _dinnerSuggestion(DietProfile p) {
+    final nonVeg = p.diet == DietPreference.nonVegetarian;
     if (p.goal == Goal.loseWeight) {
-      return 'Grilled chicken/fish + stir-fried veggies + soup';
+      return nonVeg
+          ? 'Grilled chicken/fish + stir-fried veggies + soup'
+          : 'Paneer tikka + stir-fried veggies + soup';
     }
     if (p.goal == Goal.gainMuscle) {
-      return 'Chicken/paneer + rice + veggies + 1 glass milk';
+      return nonVeg
+          ? 'Grilled chicken/fish + rice + veggies + 1 glass milk'
+          : 'Paneer/soya chunks + rice + veggies + 1 glass milk';
     }
-    return 'Light roti/kichdi + veg curry + salad';
+    return nonVeg
+        ? 'Grilled chicken/fish + roti + salad'
+        : 'Light roti/kichdi + veg curry + salad';
   }
 
+  // Snacks are the same for both preferences - none of these contain meat.
   String _snackSuggestion(DietProfile p) {
     if (p.goal == Goal.loseWeight) {
       return '1 apple + 5 almonds or green tea / black coffee';

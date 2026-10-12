@@ -6,7 +6,7 @@ import '../screens/subscription_screen.dart';
 final GlobalKey<NavigatorState> appNavigatorKey = GlobalKey<NavigatorState>();
 
 /// Shared index of the active tab in [MainShell]:
-/// 0 = Home, 1 = Scan, 2 = Habits.
+/// 0 = Home, 1 = Scan, 2 = Habits, 3 = Updates.
 /// Notification taps set this so the shell switches to the Habits tab;
 /// [MainShell] reads it in initState and listens for changes.
 final ValueNotifier<int> shellTabIndex = ValueNotifier<int>(0);

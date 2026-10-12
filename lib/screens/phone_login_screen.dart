@@ -14,6 +14,7 @@ import '../models/diet_profile.dart';
 import '../services/gemini_service.dart';
 import '../services/meal_store.dart';
 import '../services/habit_store.dart';
+import '../services/rate_us_service.dart';
 import '../widgets/nickname_prompt.dart';
 import 'main_shell.dart';
 
@@ -119,7 +120,9 @@ class _PhoneLoginScreenState extends State<PhoneLoginScreen>
 
       // Brand-new users (no nickname anywhere) pick one once (limited to 15
       // characters). Skipping never blocks login — they get asked again on
-      // a future login until they set one.
+      // a future login until they set one. A restored server nickname marks
+      // a returning user, so isNewUser stays false for them.
+      final isNewUser = NicknameStore.shouldAskNickname(prefs);
       if (NicknameStore.shouldAskNickname(prefs)) {
         final chosen = mounted ? await showNicknamePrompt(context) : null;
         if (chosen != null && chosen.trim().isNotEmpty && mounted) {
@@ -139,6 +142,13 @@ class _PhoneLoginScreenState extends State<PhoneLoginScreen>
           }),
         );
       } catch (e) { debugPrint("Error: $e"); }
+
+      // Brand-new users get a one-shot Play Store rating button right after
+      // their first login. Shown before navigating so the context is valid.
+      if (isNewUser && mounted) {
+        await RateUsService.showNewUserRatingButton(context);
+      }
+
       if (mounted) {
         if (Navigator.of(context).canPop()) {
           Navigator.pop(context, email);

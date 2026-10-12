@@ -9,32 +9,41 @@ final ValueNotifier<ThemeMode> themeModeNotifier = ValueNotifier(
 /// didPopNext callbacks.
 final ValueNotifier<String> userNameNotifier = ValueNotifier('');
 
-/// MacroSnap dark neon theme — Pop UPI inspired bold & vibrant aesthetic
+/// MacroSnap theme — matched to POP (com.popclub.android) UPI app:
+/// near-black surfaces, a deep violet "curtain" hero gradient, and a single
+/// saturated burnt-orange accent used for coins/rewards/CTAs. Public API
+/// (color/method names) is unchanged so existing screens keep compiling;
+/// only the underlying values moved off the old neon-rainbow palette.
 class MacroSnapTheme {
-  // ─── Neon Palette ──────────────────────────────────────────
-  static const Color neonGreen = Color(0xFF00FF66);
-  static const Color neonPink = Color(0xFFFF007F);
-  static const Color neonPurple = Color(0xFF7C3AED);
-  static const Color neonOrange = Color(0xFFFF6B00);
-  static const Color neonCyan = Color(0xFF00D4FF);
-  static const Color neonYellow = Color(0xFFFFD600);
-  static const Color neonRed = Color(0xFFFF1744);
+  // ─── POP Palette ───────────────────────────────────────────
+  /// Primary accent — POPcoin orange. Used for CTAs, streaks, highlight
+  /// numbers, badges. This is the ONE saturated color that should recur
+  /// everywhere, the way POP uses its coin-orange.
+  static const Color neonGreen = Color(0xFFF4511E); // kept name for API compat
+  /// Deep violet — hero/card gradient family (POP's "curtain" background).
+  static const Color neonPink = Color(0xFFB0281F); // kept name; now "danger/rose"
+  static const Color neonPurple = Color(0xFF8B3FE8);
+  static const Color neonOrange = Color(0xFFF4511E);
+  static const Color neonCyan = Color(0xFF9B7BFF); // lighter violet, kept name
+  static const Color neonYellow = Color(0xFFF4A340); // amber, kept name
+  static const Color neonRed = Color(0xFFE8481C);
 
   // ─── Semantic Macro Color Aliases ──────────────────────────
-  /// Calories → amber/orange energy
+  /// Calories → coin orange (the brand accent)
   static const Color macroCalories = neonOrange;
 
-  /// Protein → pink/rose
-  static const Color macroProtein = neonPink;
+  /// Protein → warm rose/red
+  static const Color macroProtein = neonRed;
 
-  /// Carbs → yellow
+  /// Carbs → amber
   static const Color macroCarbs = neonYellow;
 
-  /// Fats → cyan
-  static const Color macroFats = neonCyan;
+  /// Fats → violet
+  static const Color macroFats = neonPurple;
 
-  /// Fiber → green
-  static const Color macroFiber = neonGreen;
+  /// Fiber → green (kept distinct from the violet/orange brand pair so
+  /// nutrient rings stay readable against each other)
+  static const Color macroFiber = Color(0xFF3EA55A);
 
   // ─── General Purpose Semantic Tokens ───────────────────────
   // Dark-mode hierarchy: textPrimaryMuted (white70) is the BRIGHTEST token
@@ -94,11 +103,11 @@ class MacroSnapTheme {
   ];
 
   // ─── Background & Surface Colors ───────────────────────────
-  static const Color surfaceDark = Color(0xFF07070A);
-  static const Color surfaceLight = Color(0xFFE8E2FF);
-  static const Color cardDark = Color(0xFF111118);
-  static const Color cardDarkBorder = Color(0xFF2E2E3E);
-  static const Color cardDarkLight = Color(0xFF181822);
+  static const Color surfaceDark = Color(0xFF0A0A0A);
+  static const Color surfaceLight = Color(0xFFF3EEFF);
+  static const Color cardDark = Color(0xFF141414);
+  static const Color cardDarkBorder = Color(0xFF2A2A2A);
+  static const Color cardDarkLight = Color(0xFF1C1C1C);
 
   // ─── Card Decorations ──────────────────────────────────────
   /// Hero gradient card with neon border (Pop UPI hero card style).
@@ -114,28 +123,36 @@ class MacroSnapTheme {
   }) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     if (isDark) {
+      // POP's signature hero look: a vertical violet "curtain" gradient
+      // fading to near-black at the edges, not a diagonal neon blend.
       return BoxDecoration(
         gradient: const LinearGradient(
-          colors: [Color(0xFF050508), Color(0xFF181830), Color(0xFF11151E)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
+          colors: [
+            Color(0xFF6D28D9),
+            Color(0xFF3B0F82),
+            Color(0xFF160A2E),
+            Color(0xFF0A0A0A),
+          ],
+          stops: [0.0, 0.35, 0.7, 1.0],
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
         ),
         borderRadius: borderRadius,
-        border: showBorder ? Border.all(color: const Color(0xFF353550)) : null,
+        border: showBorder ? Border.all(color: const Color(0xFF3D2166)) : null,
       );
     }
     return BoxDecoration(
       gradient: const LinearGradient(
-        colors: [Color(0xFFFFFFFF), Color(0xFFF4EFFF)],
+        colors: [Color(0xFFFFFFFF), Color(0xFFF1E8FF)],
         begin: Alignment.topLeft,
         end: Alignment.bottomRight,
       ),
       borderRadius: borderRadius,
-      border: showBorder ? Border.all(color: const Color(0xFFC8BEFF)) : null,
+      border: showBorder ? Border.all(color: const Color(0xFFCBB8F5)) : null,
     );
   }
 
-  /// Standard elevated card (Pop UPI style).
+  /// Standard elevated card (POP style — flat black, subtle border, no glow).
   ///
   /// Shares the exact same rich gradient background as the hero "Make it
   /// count" card in dark mode so every card across the app looks uniform.
@@ -147,21 +164,22 @@ class MacroSnapTheme {
   }) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     if (isDark) {
-      // Identical to the hero card → uniform dark gradient cards everywhere.
-      return habitlyHeroCard(
-        context,
+      // POP keeps the violet gradient reserved for hero banners only —
+      // ordinary cards/rows are flat black with a hairline border.
+      return BoxDecoration(
+        color: cardDark,
         borderRadius: borderRadius,
-        showBorder: showBorder,
+        border: showBorder ? Border.all(color: cardDarkBorder) : null,
       );
     }
     return BoxDecoration(
       gradient: const LinearGradient(
-        colors: [Color(0xFFFFFFFF), Color(0xFFF4EFFF)],
+        colors: [Color(0xFFFFFFFF), Color(0xFFF1E8FF)],
         begin: Alignment.topLeft,
         end: Alignment.bottomRight,
       ),
       borderRadius: borderRadius,
-      border: showBorder ? Border.all(color: const Color(0xFFC8BEFF)) : null,
+      border: showBorder ? Border.all(color: const Color(0xFFCBB8F5)) : null,
     );
   }
 
@@ -169,21 +187,13 @@ class MacroSnapTheme {
   /// strong colored border and glow so emoji glyphs pop with rich color
   /// instead of looking washed out.
   static BoxDecoration emojiContainer(Color color) {
+    // POP's utility tiles ("Pay friends", "Check balance") are flat black
+    // pills with a thin gray border — the icon glyph itself carries the
+    // color, not the tile background. No glow/shadow.
     return BoxDecoration(
-      gradient: LinearGradient(
-        begin: Alignment.topLeft,
-        end: Alignment.bottomRight,
-        colors: [color.withValues(alpha: 0.55), color.withValues(alpha: 0.26)],
-      ),
-      borderRadius: BorderRadius.circular(16),
-      border: Border.all(color: color.withValues(alpha: 0.65), width: 1.4),
-      boxShadow: [
-        BoxShadow(
-          color: color.withValues(alpha: 0.35),
-          blurRadius: 12,
-          offset: const Offset(0, 3),
-        ),
-      ],
+      color: cardDarkLight,
+      borderRadius: BorderRadius.circular(18),
+      border: Border.all(color: cardDarkBorder, width: 1),
     );
   }
 
@@ -197,12 +207,12 @@ class MacroSnapTheme {
     return TextStyle(fontSize: fontSize);
   }
 
-  /// Neon accent pill
+  /// Accent pill — POP uses solid-fill badges (e.g. the orange "New" tag),
+  /// not low-alpha tinted outlines.
   static BoxDecoration neonPill(Color color) {
     return BoxDecoration(
-      color: color.withValues(alpha: 0.12),
+      color: color,
       borderRadius: BorderRadius.circular(24),
-      border: Border.all(color: color.withValues(alpha: 0.25)),
     );
   }
 
@@ -367,18 +377,18 @@ class MacroSnapTheme {
       useMaterial3: true,
       brightness: Brightness.dark,
       colorScheme: ColorScheme.dark(
-        primary: neonGreen,
-        secondary: neonPink,
+        primary: neonOrange,
+        secondary: neonPurple,
         tertiary: neonCyan,
         surface: surfaceDark,
-        error: neonPink,
+        error: neonRed,
       ),
       scaffoldBackgroundColor: surfaceDark,
       inputDecorationTheme: _inputTheme(true),
       filledButtonTheme: FilledButtonThemeData(
         style: FilledButton.styleFrom(
-          backgroundColor: neonGreen,
-          foregroundColor: Colors.black,
+          backgroundColor: neonOrange,
+          foregroundColor: Colors.white,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(16),
           ),
@@ -388,24 +398,31 @@ class MacroSnapTheme {
       ),
       textButtonTheme: TextButtonThemeData(
         style: TextButton.styleFrom(
-          foregroundColor: neonGreen,
+          foregroundColor: neonOrange,
           textStyle: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
         ),
       ),
       textTheme: ThemeData.dark().textTheme
           .apply(fontFamily: 'Inter')
           .copyWith(
+            // POP's signature move: big hero numbers/headlines ("Save ₹100
+            // on card bill") render in an elegant italic, not bold sans —
+            // it's what makes the hero banner feel editorial instead of
+            // shouty. True serif needs a bundled font (see note below);
+            // this uses Inter italic as the closest available approximation.
             displayLarge: const TextStyle(
               fontSize: 32,
-              fontWeight: FontWeight.w900,
-              letterSpacing: -1,
+              fontWeight: FontWeight.w600,
+              fontStyle: FontStyle.italic,
+              letterSpacing: -0.5,
               color: Colors.white,
               fontFamily: 'Inter',
             ),
             displayMedium: const TextStyle(
               fontSize: 28,
-              fontWeight: FontWeight.w900,
-              letterSpacing: -0.5,
+              fontWeight: FontWeight.w600,
+              fontStyle: FontStyle.italic,
+              letterSpacing: -0.3,
               color: Colors.white,
               fontFamily: 'Inter',
             ),
@@ -470,10 +487,12 @@ class MacroSnapTheme {
       ),
       bottomNavigationBarTheme: const BottomNavigationBarThemeData(
         elevation: 0,
-        selectedItemColor: neonGreen,
+        // POP's active tab is white (not brand-orange) — orange is reserved
+        // for the coin/CTA accent, not nav state.
+        selectedItemColor: Colors.white,
         unselectedItemColor: Colors.white30,
         type: BottomNavigationBarType.fixed,
-        backgroundColor: Color(0xFF17171D),
+        backgroundColor: Color(0xFF121212),
       ),
     );
   }

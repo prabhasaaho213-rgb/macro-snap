@@ -98,15 +98,26 @@ Future<String?> showNicknamePrompt(BuildContext context) async {
           hintText: 'e.g. MacroChamp 💪',
           counterText: '',
         ),
-        onSubmitted: (v) => Navigator.pop(ctx, v),
+        onSubmitted: (v) {
+          // Dismiss the keyboard BEFORE popping so it doesn't linger after
+          // the dialog closes (the TextField still had focus).
+          FocusManager.instance.primaryFocus?.unfocus();
+          Navigator.pop(ctx, v);
+        },
       ),
       actions: [
         TextButton(
-          onPressed: () => Navigator.pop(ctx),
+          onPressed: () {
+            FocusManager.instance.primaryFocus?.unfocus();
+            Navigator.pop(ctx);
+          },
           child: const Text('Skip'),
         ),
         FilledButton(
-          onPressed: () => Navigator.pop(ctx, controller.text),
+          onPressed: () {
+            FocusManager.instance.primaryFocus?.unfocus();
+            Navigator.pop(ctx, controller.text);
+          },
           style: FilledButton.styleFrom(
             backgroundColor: MacroSnapTheme.neonGreen,
             foregroundColor: Colors.black,

@@ -34,15 +34,24 @@ class RateUsService {
     final web = Uri.parse(
         'https://play.google.com/store/apps/details?id=$_packageName');
 
+    // The Play Store app first (native listing, where the star rating lives),
+    // then the web listing for a device without Play Store.
+    for (final uri in [market, web]) {
+      try {
+        if (await canLaunchUrl(uri)) {
+          if (await launchUrl(uri, mode: LaunchMode.externalApplication)) {
+            return true;
+          }
+        }
+      } catch (e) { debugPrint("Error: $e"); }
+    }
+
+    // Last resort: open the web listing even when the visibility check said
+    // no. canLaunchUrl() answers false for anything not declared in the
+    // manifest's <queries>, and that used to make this button do nothing at
+    // all on Android 11+ (the store entry could not be seen from the app).
     try {
-      if (await canLaunchUrl(market)) {
-        return await launchUrl(market, mode: LaunchMode.externalApplication);
-      }
-    } catch (e) { debugPrint("Error: $e"); }
-    try {
-      if (await canLaunchUrl(web)) {
-        return await launchUrl(web, mode: LaunchMode.externalApplication);
-      }
+      return await launchUrl(web, mode: LaunchMode.externalApplication);
     } catch (e) { debugPrint("Error: $e"); }
     return false;
   }
@@ -91,6 +100,103 @@ class RateUsService {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setBool(_ratedKey, true);
     } catch (e) { debugPrint("Error: $e"); }
+  }
+
+  /// One-shot "Rate us" button shown to brand-new users right after their
+  /// first login. Tapping it opens the Play Store rating page directly.
+  /// Shown only once per install, then never again.
+  static const String _newUserShownKey = 'rate_new_user_shown';
+
+  static Future<void> showNewUserRatingButton(BuildContext context) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      if (prefs.getBool(_newUserShownKey) ?? false) return;
+      await prefs.setBool(_newUserShownKey, true);
+      if (!context.mounted) return;
+      await _showNewUserDialog(context);
+    } catch (_) {
+      // Best-effort — never break login over the rating prompt.
+    }
+  }
+
+  static Future<void> _showNewUserDialog(BuildContext context) async {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: true,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: isDark ? MacroSnapTheme.cardDark : Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+        contentPadding: const EdgeInsets.fromLTRB(24, 28, 24, 20),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Stars row
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: List.generate(5, (i) {
+                return Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 2),
+                  child: Icon(
+                    Icons.star_rounded,
+                    size: 32,
+                    color: MacroSnapTheme.neonYellow.withValues(
+                      alpha: 1 - (i * 0.08),
+                    ),
+                  ),
+                );
+              }),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'Enjoying MacroSnap?',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.w900,
+                letterSpacing: -0.3,
+                color: isDark ? Colors.white : const Color(0xFF1A1A1A),
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'If you love it, a quick rating on the Play Store helps '
+              'more people discover the app. Thanks for your support!',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 13,
+                height: 1.4,
+                color: MacroSnapTheme.textSecondary(context),
+              ),
+            ),
+            const SizedBox(height: 24),
+            SizedBox(
+              width: double.infinity,
+              height: 50,
+              child: GradientButton(
+                label: 'Rate us on Play Store ⭐',
+                onPressed: () async {
+                  Navigator.of(ctx).pop();
+                  await rateNowFromSettings();
+                },
+                height: 50,
+              ),
+            ),
+            const SizedBox(height: 8),
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: Text(
+                'Later',
+                style: TextStyle(
+                  fontSize: 13,
+                  color: MacroSnapTheme.textTertiary(context),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   /// The prompt dialog: "Enjoying MacroSnap? Rate us 5 stars!"

@@ -255,24 +255,19 @@ void main() {
     );
   });
 
-  // ─── VIBRANCY FIX VALUES ───────────────────────────────────
-  test('emojiContainer tile is vividly tinted (vibrancy change)', () {
+  // ─── POP REDESIGN TILE STYLE ───────────────────────────────
+  test('emojiContainer tile is flat black with a hairline border', () {
     const c = Color(0xFF00FF66);
     final deco = MacroSnapTheme.emojiContainer(c);
-    final gradient = deco.gradient! as LinearGradient;
 
-    // Brighter background tint: 0.55 → 0.26 alpha (was 0.32 → 0.14).
-    expect(gradient.colors.first.a, closeTo(0.55, 0.001));
-    expect(gradient.colors.last.a, closeTo(0.26, 0.001));
+    // POP style: flat black pill, no gradient / glow — the glyph itself
+    // carries the color.
+    expect(deco.gradient, isNull);
+    expect(deco.boxShadow, isNull);
+    expect(deco.color, MacroSnapTheme.cardDarkLight);
 
-    // Stronger colored border: 0.65 alpha (was 0.4).
     final border = deco.border! as Border;
-    expect(border.top.color.a, closeTo(0.65, 0.001));
-
-    // Stronger glow shadow: 0.35 alpha, blur 12 (was 0.18 / blur 8).
-    final shadow = deco.boxShadow!.first;
-    expect(shadow.color.a, closeTo(0.35, 0.001));
-    expect(shadow.blurRadius, 12);
+    expect(border.top.color, MacroSnapTheme.cardDarkBorder);
   });
 
   test('emojiStyle is flat — no ghost shadows on the glyph', () {

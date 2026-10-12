@@ -14,6 +14,7 @@ import '../widgets/animations.dart';
 import '../widgets/confetti_celebration.dart';
 import 'diet_plan_screen.dart';
 import 'scan_screen.dart';
+import 'veg_plan_screen.dart';
 import 'settings_screen.dart';
 import 'recipe_list_screen.dart';
 import 'barcode_scan_screen.dart';
@@ -811,8 +812,12 @@ class _HomeScreenState extends State<HomeScreen>
               ),
             ),
             const SizedBox(height: 16),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceAround,
+            // Wrap, not Row: five actions must still fit a 320dp phone at 2x
+            // system font without a RenderFlex overflow.
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              alignment: WrapAlignment.spaceAround,
               children: [
                 _quickAction(
                   Icons.camera_alt_rounded,
@@ -863,6 +868,18 @@ class _HomeScreenState extends State<HomeScreen>
                       context,
                       habitFlowRoute(const RecipeListScreen()),
                     );
+                  },
+                ),
+                _quickAction(
+                  Icons.grass_rounded,
+                  'Veg Plan',
+                  MacroSnapTheme.macroFiber,
+                  isDark,
+                  () {
+                    Navigator.push(
+                      context,
+                      habitFlowRoute(const VegPlanScreen()),
+                    ).then((_) => _refresh());
                   },
                 ),
               ],

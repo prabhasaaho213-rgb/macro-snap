@@ -10,6 +10,7 @@ import 'home_screen.dart';
 import 'habits_tab.dart';
 import 'scan_screen.dart';
 import 'subscription_screen.dart';
+import 'updates_tab.dart';
 
 class MainShell extends StatefulWidget {
   const MainShell({super.key});
@@ -22,12 +23,17 @@ class _MainShellState extends State<MainShell> {
   int _currentIndex = 0;
   bool _isGuest = true;
 
+  /// True while the user has not opened the Updates tab since the newest
+  /// release - drives the dot on that tab's icon.
+  bool _hasUnseenUpdate = false;
+
   @override
   void initState() {
     super.initState();
     _currentIndex = shellTabIndex.value;
     shellTabIndex.addListener(_onShellTabChanged);
     _loadGuestStatus();
+    _loadUpdateBadge();
     // Launch prompts, ordered so dialogs never stack: subscription upsell
     // first, then the notification-permission ask if still denied.
     WidgetsBinding.instance.addPostFrameCallback(
@@ -43,7 +49,12 @@ class _MainShellState extends State<MainShell> {
   /// taps). Tab switches are instant — no transition animation.
   void _goToTab(int index) {
     if (index == _currentIndex) return;
-    setState(() => _currentIndex = index);
+    setState(() {
+      _currentIndex = index;
+      // Opening Updates counts as having seen the new release.
+      if (index == 3) _hasUnseenUpdate = false;
+    });
+    if (index == 3) _markUpdatesSeen();
   }
 
   void _onShellTabChanged() {
@@ -63,6 +74,31 @@ class _MainShellState extends State<MainShell> {
       setState(() {
         _isGuest = phone.isEmpty || phone.startsWith('guest_');
       });
+    }
+  }
+
+  /// Puts a dot on the Updates tab until the newest release has been opened.
+  Future<void> _loadUpdateBadge() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final seen = prefs.getString(UpdatesTab.seenVersionKey) ?? '';
+      if (mounted) {
+        setState(() => _hasUnseenUpdate = seen != UpdatesTab.latestVersion);
+      }
+    } catch (_) {
+      // The badge is cosmetic - never break the shell over it.
+    }
+  }
+
+  Future<void> _markUpdatesSeen() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(
+        UpdatesTab.seenVersionKey,
+        UpdatesTab.latestVersion,
+      );
+    } catch (_) {
+      // Best-effort - a failed write only means the dot appears once more.
     }
   }
 
@@ -256,6 +292,7 @@ class _MainShellState extends State<MainShell> {
       child: const ScanScreen(),
     ),
     const HabitsTab(),
+    const UpdatesTab(),
   ];
 
   /// Build the current tab content — plain instant switch, no transition.
@@ -287,7 +324,9 @@ class _MainShellState extends State<MainShell> {
                     if (velocity.abs() < 300) return;
                     if (velocity < 0) {
                       // Swipe left → next tab
-                      if (_currentIndex < 2) _goToTab(_currentIndex + 1);
+                      if (_currentIndex < _tabPages.length - 1) {
+                        _goToTab(_currentIndex + 1);
+                      }
                     } else {
                       // Swipe right → previous tab
                       if (_currentIndex > 0) _goToTab(_currentIndex - 1);
@@ -417,6 +456,13 @@ class _MainShellState extends State<MainShell> {
                 isSelected: _currentIndex == 2,
                 onTap: () => _goToTab(2),
               ),
+              _NavItem(
+                icon: Icons.new_releases_rounded,
+                label: 'Updates',
+                isSelected: _currentIndex == 3,
+                showBadge: _hasUnseenUpdate,
+                onTap: () => _goToTab(3),
+              ),
             ],
           ),
         ),
@@ -430,6 +476,10 @@ class _NavItem extends StatelessWidget {
   final String label;
   final bool isSelected;
   final bool isScan;
+
+  /// Draws a small dot on the icon - Updates uses it when a release the user
+  /// has not opened yet is out.
+  final bool showBadge;
   final VoidCallback onTap;
 
   const _NavItem({
@@ -437,6 +487,7 @@ class _NavItem extends StatelessWidget {
     required this.label,
     required this.isSelected,
     this.isScan = false,
+    this.showBadge = false,
     required this.onTap,
   });
 
@@ -501,12 +552,30 @@ class _NavItem extends StatelessWidget {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(
-              icon,
-              size: 20,
-              color: isSelected
-                  ? MacroSnapTheme.neonGreen
-                  : (MacroSnapTheme.textTertiary(context)),
+            Stack(
+              clipBehavior: Clip.none,
+              children: [
+                Icon(
+                  icon,
+                  size: 20,
+                  color: isSelected
+                      ? MacroSnapTheme.neonGreen
+                      : (MacroSnapTheme.textTertiary(context)),
+                ),
+                if (showBadge)
+                  Positioned(
+                    right: -2,
+                    top: -2,
+                    child: Container(
+                      width: 8,
+                      height: 8,
+                      decoration: const BoxDecoration(
+                        color: MacroSnapTheme.neonOrange,
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                  ),
+              ],
             ),
             if (isSelected) ...[
               const SizedBox(width: 6),

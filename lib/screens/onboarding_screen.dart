@@ -23,6 +23,9 @@ class _OnboardingScreenState extends State<OnboardingScreen>
     with TickerProviderStateMixin {
   final _pageController = PageController();
   final _nameController = TextEditingController();
+  // Focus node for the name field, held explicitly so the keyboard can be
+  // dismissed the moment the user leaves this step (see _dismissKeyboard).
+  final _nameFocus = FocusNode();
   final ValueNotifier<int> _page = ValueNotifier(0);
 
   // Page entrance animation
@@ -67,11 +70,22 @@ class _OnboardingScreenState extends State<OnboardingScreen>
     _entranceAnim.dispose();
     _pageController.dispose();
     _nameController.dispose();
+    _nameFocus.dispose();
     _page.dispose();
     super.dispose();
   }
 
+  /// Closes the soft keyboard.
+  ///
+  /// Tapping NEXT / BACK (or Skip) is NOT a focus change in Flutter — the
+  /// name field keeps focus and the keyboard stays up over every step that
+  /// follows, which is why it seemed to "stick" after entering a name.
+  void _dismissKeyboard() {
+    FocusManager.instance.primaryFocus?.unfocus();
+  }
+
   Future<void> _complete() async {
+    _dismissKeyboard();
     HapticFeedback.heavyImpact();
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('onboarding_v2_done', true);
@@ -99,6 +113,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
   }
 
   void _next() {
+    _dismissKeyboard();
     HapticFeedback.lightImpact();
     if (_page.value < _totalSteps - 1) {
       // Reset entrance animation for next page
@@ -114,6 +129,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
   }
 
   void _prev() {
+    _dismissKeyboard();
     HapticFeedback.lightImpact();
     if (_page.value > 0) {
       _entranceAnim.reset();
@@ -193,7 +209,12 @@ class _OnboardingScreenState extends State<OnboardingScreen>
               child: PageView.builder(
                 controller: _pageController,
                 physics: const NeverScrollableScrollPhysics(),
-                onPageChanged: (i) => _page.value = i,
+                onPageChanged: (i) {
+                  _page.value = i;
+                  // Leaving the name step always drops keyboard focus, so the
+                  // field can never hold it while it is off screen.
+                  if (i != 1) _dismissKeyboard();
+                },
                 itemCount: _totalSteps,
                 itemBuilder: (_, i) => _buildPage(i, textColor, subText, isDark),
               ),
@@ -354,8 +375,11 @@ class _OnboardingScreenState extends State<OnboardingScreen>
             const SizedBox(height: 28),
             TextField(
               controller: _nameController,
+              focusNode: _nameFocus,
               textCapitalization: TextCapitalization.words,
               autofocus: true,
+              // Tapping the background closes the keyboard too.
+              onTapOutside: (_) => _dismissKeyboard(),
               textAlign: TextAlign.center,
               style: TextStyle(fontSize: 28, fontWeight: FontWeight.w800, color: textColor),
               decoration: InputDecoration(

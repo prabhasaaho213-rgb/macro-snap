@@ -16,5 +16,30 @@ void main() {
     expect(profile.gender, Gender.male);
     expect(profile.goal, Goal.loseWeight);
     expect(profile.activity, ActivityLevel.sedentary);
+    // A profile saved before the food preference existed is vegetarian - the
+    // plan those users were already being shown.
+    expect(profile.diet, DietPreference.vegetarian);
+  });
+
+  test('an unknown food preference falls back to vegetarian', () {
+    final profile = DietProfile.fromJson({'diet': 'pescatarian'});
+    expect(profile.diet, DietPreference.vegetarian);
+  });
+
+  test('the food preference survives a save/load round trip', () {
+    final original = DietProfile(
+      weightKg: 80,
+      heightCm: 180,
+      age: 30,
+      gender: Gender.male,
+      goal: Goal.gainMuscle,
+      activity: ActivityLevel.active,
+      diet: DietPreference.nonVegetarian,
+    );
+
+    final restored = DietProfile.fromJson(original.toJson());
+
+    expect(restored.diet, DietPreference.nonVegetarian);
+    expect(original.toJson()['diet'], 'nonVegetarian');
   });
 }
