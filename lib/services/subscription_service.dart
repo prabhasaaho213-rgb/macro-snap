@@ -20,12 +20,28 @@ class SubscriptionService extends ChangeNotifier {
 
   static const String _subscribedKey = 'subscribed';
   static const String _subscribedAtKey = 'subscribed_at';
+  static const String _trialEndsAtKey = 'trial_ends_at';
 
   /// The owner account — always gets Pro for free, forever.
   static const String adminEmail = 'prabhasaaho213@gmail.com';
 
   bool _subscribed = false;
+  bool _paid = false;
   String? _subscribedAt;
+  DateTime? _trialEndsAt;
+
+  /// True while the account is inside its one-time 30-day free plan and has
+  /// not paid. [trialDaysLeft] counts down from the server-issued end date,
+  /// which is persisted so the countdown survives restarts and works offline.
+  bool get isPaid => _paid;
+  bool get trialActive =>
+      !_paid && _trialEndsAt != null && DateTime.now().isBefore(_trialEndsAt!);
+  int get trialDaysLeft {
+    final end = _trialEndsAt;
+    if (end == null || _paid) return 0;
+    final left = end.difference(DateTime.now()).inDays + 1;
+    return left < 1 ? 0 : left;
+  }
 
   bool get isSubscribed => _subscribed;
   String? get subscribedAt => _subscribedAt;
@@ -49,6 +65,7 @@ class SubscriptionService extends ChangeNotifier {
     final p = await SharedPreferences.getInstance();
     var subscribed = p.getBool(_subscribedKey) ?? false;
     var at = p.getString(_subscribedAtKey);
+    final subscribedNow = subscribed;
 
     if (await isAdmin()) {
       // Owner: force lifetime Pro, regardless of any previous paid state.
@@ -66,9 +83,31 @@ class SubscriptionService extends ChangeNotifier {
       at = null;
     }
 
-    if (subscribed != _subscribed || at != _subscribedAt) {
+    // ── One-time 30-day free plan ──────────────────────────
+    // An unexpired trial counts as Pro everywhere. The server-issued end
+    // date is persisted so the countdown survives restarts and works
+    // offline; an expired marker is cleared here and never re-granted (the
+    // backend owns the one-time grant).
+    DateTime? trialEnd;
+    final trialRaw = p.getString(_trialEndsAtKey);
+    if (!subscribedNow && trialRaw != null) {
+      trialEnd = DateTime.tryParse(trialRaw);
+      if (trialEnd == null || !DateTime.now().isBefore(trialEnd)) {
+        await p.remove(_trialEndsAtKey);
+        trialEnd = null;
+      }
+    }
+    final paid = subscribedNow;
+    if (!subscribedNow && trialEnd != null) subscribed = true;
+
+    if (subscribed != _subscribed ||
+        at != _subscribedAt ||
+        paid != _paid ||
+        trialEnd != _trialEndsAt) {
       _subscribed = subscribed;
       _subscribedAt = at;
+      _paid = paid;
+      _trialEndsAt = trialEnd;
       notifyListeners();
     }
   }
@@ -88,6 +127,47 @@ class SubscriptionService extends ChangeNotifier {
     } catch (e) { debugPrint("Error: $e"); }
   }
 
+  /// Asks the backend for this account's one-time 30-day free plan. The
+  /// backend grants it on the first ever check and computes expiry — the
+  /// app only mirrors the server-issued end date. Offline, the persisted
+  /// date keeps the countdown honest and never re-grants anything.
+  Future<void> _verifyTrial() async {
+    if (_subscribed) return; // paying users don't need it
+    final p = await SharedPreferences.getInstance();
+    final phone = p.getString('phone') ?? '';
+    final email = p.getString('email') ?? '';
+    if (phone.isEmpty && email.isEmpty) return; // guest — no identity
+    try {
+      final uri = Uri.parse('${GeminiService.serverUrl}/trial/status')
+          .replace(queryParameters: {
+        if (phone.isNotEmpty) 'phone': phone,
+        if (email.isNotEmpty) 'email': email,
+      });
+      final res = await http.get(uri).timeout(const Duration(seconds: 8));
+      if (res.statusCode != 200) return;
+      final data = jsonDecode(res.body) as Map<String, dynamic>;
+      if (data['active'] == true && data['endsAt'] is String) {
+        final end = DateTime.tryParse(data['endsAt'] as String);
+        if (end != null) {
+          await p.setString(_trialEndsAtKey, end.toIso8601String());
+          if (_trialEndsAt != end || !_subscribed) {
+            _trialEndsAt = end;
+            _subscribed = true;
+            notifyListeners();
+          }
+        }
+      } else if (data['expired'] == true) {
+        await p.remove(_trialEndsAtKey);
+        if (_trialEndsAt != null) {
+          _trialEndsAt = null;
+          notifyListeners();
+        }
+      }
+    } catch (_) {
+      // Offline or server unreachable — the persisted trial state stands.
+    }
+  }
+
   /// Verifies the paid subscription from **Firestore** — the source of truth
   /// for payments and subscription state after the Phase-3 migration.
   ///
@@ -103,6 +183,10 @@ class SubscriptionService extends ChangeNotifier {
   Future<void> verifyServerSubscription() async {
     // The admin's lifetime Pro is local-only; don't override it.
     if (await isAdmin()) return;
+
+    // One-time 30-day free plan: checked at startup AND after every login,
+    // which is how existing users receive theirs right after updating.
+    await _verifyTrial();
 
     // ── Firestore first: users/{uid}.subscribed ────────────────────────
     try {

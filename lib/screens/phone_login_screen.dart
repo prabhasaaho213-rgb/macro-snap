@@ -15,6 +15,7 @@ import '../services/gemini_service.dart';
 import '../services/meal_store.dart';
 import '../services/habit_store.dart';
 import '../services/rate_us_service.dart';
+import '../services/subscription_service.dart';
 import '../widgets/nickname_prompt.dart';
 import 'main_shell.dart';
 
@@ -161,6 +162,9 @@ class _PhoneLoginScreenState extends State<PhoneLoginScreen>
       }
       // Pull in cloud backup for the newly active account in the background
       // (non-blocking so sign-in isn't stalled by the cloud fetch).
+      // Hand this account its one-time 30-day free plan — this call is
+      // also what existing users get right after updating + logging in.
+      unawaited(SubscriptionService.instance.verifyServerSubscription());
       unawaited(MealStore.instance.reload());
       unawaited(HabitStore.instance.reload().catchError((e) { debugPrint('HabitStore reload error: $e'); }));
     } catch (e) {

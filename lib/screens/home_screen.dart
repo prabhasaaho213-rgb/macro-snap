@@ -7,6 +7,7 @@ import '../services/meal_store.dart';
 import '../models/meal_record.dart';
 import '../services/scan_gate.dart';
 import '../services/meal_streak_service.dart';
+import '../services/subscription_service.dart';
 import '../models/diet_profile.dart';
 import '../services/share_service.dart';
 
@@ -16,6 +17,8 @@ import 'diet_plan_screen.dart';
 import 'scan_screen.dart';
 import 'veg_plan_screen.dart';
 import 'settings_screen.dart';
+import 'chat_screen.dart';
+import 'subscription_screen.dart';
 import 'recipe_list_screen.dart';
 import 'barcode_scan_screen.dart';
 import 'result_screen.dart';
@@ -36,6 +39,8 @@ class _HomeScreenState extends State<HomeScreen>
   int _streak = 0;
   int _bestStreak = 0;
   int _scansLeft = 3;
+  bool _trialActive = false;
+  int _trialDaysLeft = 0;
   bool _previousGoalMet = false; // Track to detect transition to goal-met
 
   @override
@@ -52,6 +57,7 @@ class _HomeScreenState extends State<HomeScreen>
     ).animate(CurvedAnimation(parent: _animController, curve: Curves.easeOut));
     MealStore.instance.changeNotifier.addListener(_onDataChanged);
     userNameNotifier.addListener(_onNameChanged);
+    SubscriptionService.instance.addListener(_onSubscriptionChanged);
     _loadAll();
   }
 
@@ -78,6 +84,14 @@ class _HomeScreenState extends State<HomeScreen>
     }
   }
 
+  void _onSubscriptionChanged() {
+    if (!mounted) return;
+    setState(() {
+      _trialActive = SubscriptionService.instance.trialActive;
+      _trialDaysLeft = SubscriptionService.instance.trialDaysLeft;
+    });
+  }
+
   Future<void> _refreshName() async {
     final prefs = await SharedPreferences.getInstance();
     final name = prefs.getString('name') ?? '';
@@ -93,6 +107,7 @@ class _HomeScreenState extends State<HomeScreen>
   Future<void> _loadAll() async {
     await MealStore.instance.load();
     await DietPlanService.instance.load();
+    await SubscriptionService.instance.load();
     final prefs = await SharedPreferences.getInstance();
     final name = prefs.getString('name') ?? '';
     final streak = await MealStreakService.getCurrent();
@@ -105,6 +120,8 @@ class _HomeScreenState extends State<HomeScreen>
         _streak = streak;
         _bestStreak = best;
         _scansLeft = scans;
+        _trialActive = SubscriptionService.instance.trialActive;
+        _trialDaysLeft = SubscriptionService.instance.trialDaysLeft;
       });
       userNameNotifier.value = name;
       _animController.forward();
@@ -121,6 +138,7 @@ class _HomeScreenState extends State<HomeScreen>
     routeObserver.unsubscribe(this);
     MealStore.instance.changeNotifier.removeListener(_onDataChanged);
     userNameNotifier.removeListener(_onNameChanged);
+    SubscriptionService.instance.removeListener(_onSubscriptionChanged);
     _animController.stop();
     _animController.dispose();
     super.dispose();
@@ -135,6 +153,21 @@ class _HomeScreenState extends State<HomeScreen>
       backgroundColor: isDark
           ? MacroSnapTheme.surfaceDark
           : MacroSnapTheme.surfaceLight,
+      floatingActionButton: Padding(
+        // Sits on the tab body, above the shell's bottom nav — its position
+        // is fixed and it never moves with the scrolling content.
+        padding: const EdgeInsets.only(bottom: 12),
+        child: FloatingActionButton(
+          onPressed: () => Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const ChatScreen()),
+          ),
+          tooltip: 'Ask the nutrition assistant',
+          backgroundColor: MacroSnapTheme.neonPink,
+          child: const Icon(Icons.chat_bubble_rounded,
+              color: Colors.white, size: 24),
+        ),
+      ),
       body: SafeArea(
         child: SlideTransition(
           position: _slideAnim,
@@ -144,6 +177,12 @@ class _HomeScreenState extends State<HomeScreen>
               physics: const BouncingScrollPhysics(),
               slivers: [
                 SliverToBoxAdapter(child: _buildHeader(context, isDark)),
+                SliverToBoxAdapter(
+                  child: AnimatedEntrance(
+                    delayMs: 25,
+                    child: _buildTrialBanner(context, isDark),
+                  ),
+                ),
                 SliverToBoxAdapter(
                   child: AnimatedEntrance(
                     delayMs: 50,
@@ -183,6 +222,57 @@ class _HomeScreenState extends State<HomeScreen>
                 const SliverToBoxAdapter(child: SizedBox(height: 100)),
               ],
             ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ─── FREE TRIAL COUNTDOWN ─────────────────────────────
+  // Shown only while the one-time 30-day free plan runs. Tapping it opens
+  // the plans screen; it disappears on its own at expiry.
+  Widget _buildTrialBanner(BuildContext context, bool isDark) {
+    if (!_trialActive) return const SizedBox.shrink();
+    final days = _trialDaysLeft;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
+      child: GestureDetector(
+        onTap: () => Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => const SubscriptionScreen()),
+        ),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(
+              colors: [Color(0xFF7C3AED), Color(0xFFDB2777)],
+            ),
+            borderRadius: BorderRadius.circular(14),
+          ),
+          child: Row(
+            children: [
+              const Icon(Icons.workspace_premium_rounded,
+                  color: Colors.white, size: 18),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  days == 1 ? 'Free plan \u00b7 last day!' : 'Free plan \u00b7 $days days left',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 13,
+                  ),
+                ),
+              ),
+              const Text(
+                'View plans',
+                style: TextStyle(
+                  color: Colors.white70,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
           ),
         ),
       ),
