@@ -764,7 +764,9 @@ class _DietPlanScreenState extends State<DietPlanScreen> {
                 const SizedBox(height: 4),
                 Text(
                   meal['description'] ?? '',
-                  maxLines: 2,
+                  // 4 lines so the inline plain-English glosses the backend
+                  // now appends to Indian dish names stay visible.
+                  maxLines: 4,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                     fontSize: 12,
@@ -961,6 +963,17 @@ class _DietPlanScreenState extends State<DietPlanScreen> {
               color: MacroSnapTheme.textTertiary(context),
             ),
           ),
+          const SizedBox(height: 6),
+          Text(
+            'Indian food terms: roti = whole-wheat flatbread · dal = lentil stew · '
+            'sabzi = cooked vegetable curry · curd = yogurt · '
+            'paneer = cottage cheese · khichdi = soft rice & lentil dish · '
+            'chana = chickpeas',
+            style: TextStyle(
+              fontSize: 11,
+              color: MacroSnapTheme.textTertiary(context),
+            ),
+          ),
         ],
       ),
     );
@@ -1063,7 +1076,7 @@ class _DietPlanScreenState extends State<DietPlanScreen> {
     }
     return nonVeg
         ? 'Grilled chicken/fish + roti + salad'
-        : 'Light roti/kichdi + veg curry + salad';
+        : 'Light roti/khichdi (soft rice & lentil dish) + veg curry + salad';
   }
 
   // Snacks are the same for both preferences - none of these contain meat.
