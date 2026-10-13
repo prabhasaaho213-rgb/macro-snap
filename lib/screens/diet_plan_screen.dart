@@ -76,7 +76,10 @@ class _DietPlanScreenState extends State<DietPlanScreen> {
   Widget _dietOption(DietPreference d) {
     final selected = _diet == d;
     return GestureDetector(
-      onTap: () => setState(() => _diet = d),
+      onTap: () {
+        HapticFeedback.selectionClick();
+        setState(() => _diet = d);
+      },
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 180),
         padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 6),

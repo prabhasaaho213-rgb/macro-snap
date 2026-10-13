@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:uuid/uuid.dart';
 import '../core/theme.dart';
-import '../models/meal_record.dart';
 import '../services/recent_food_service.dart';
 import '../services/meal_store.dart';
 import '../widgets/animations.dart';

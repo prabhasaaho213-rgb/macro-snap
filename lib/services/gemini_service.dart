@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -146,7 +147,15 @@ class GeminiService {
   static String get serverUrl => _serverUrl;
   static bool get hasServerUrl => _serverUrl.isNotEmpty;
 
+  /// Integration-test hook: when set, [analyzeFoodImage] returns this mock
+  /// instead of calling the backend. Used by integration_test/flow_test.dart
+  /// so on-device flows run without a live server.
+  @visibleForTesting
+  static NutritionResult? mockResult;
+
   static Future<NutritionResult> analyzeFoodImage(String imagePath) async {
+    final mock = mockResult;
+    if (mock != null) return mock;
     if (!hasServerUrl) {
       throw Exception('Server URL not set. Enter your server URL in Settings.');
     }

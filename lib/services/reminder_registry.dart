@@ -314,7 +314,7 @@ class ReminderRegistry {
     String? subscribedDate,
   }) async {
     final subscribed = subscribedDate != null && subscribedDate.isNotEmpty;
-    final isLifetime = subscribed && subscribedDate!.startsWith('1900');
+    final isLifetime = subscribed && subscribedDate.startsWith('1900');
     if (subscribed) {
       await _scheduleBuiltIns(subscribedDate);
     } else {

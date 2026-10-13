@@ -34,22 +34,18 @@ class RateUsService {
     final web = Uri.parse(
         'https://play.google.com/store/apps/details?id=$_packageName');
 
-    // The Play Store app first (native listing, where the star rating lives),
-    // then the web listing for a device without Play Store.
-    for (final uri in [market, web]) {
-      try {
-        if (await canLaunchUrl(uri)) {
-          if (await launchUrl(uri, mode: LaunchMode.externalApplication)) {
-            return true;
-          }
-        }
-      } catch (e) { debugPrint("Error: $e"); }
-    }
+    // Launch the Play Store app DIRECTLY — deliberately not gated behind
+    // canLaunchUrl(). That probe still answers false on several OEM builds
+    // even with the manifest <queries> entry, which downgraded these buttons
+    // to a dead tap or the browser listing instead of the Play Store app.
+    // A failed market:// launch throws, and only then do we fall back to
+    // the web listing.
+    try {
+      final opened =
+          await launchUrl(market, mode: LaunchMode.externalApplication);
+      if (opened) return true;
+    } catch (e) { debugPrint("Error: $e"); }
 
-    // Last resort: open the web listing even when the visibility check said
-    // no. canLaunchUrl() answers false for anything not declared in the
-    // manifest's <queries>, and that used to make this button do nothing at
-    // all on Android 11+ (the store entry could not be seen from the app).
     try {
       return await launchUrl(web, mode: LaunchMode.externalApplication);
     } catch (e) { debugPrint("Error: $e"); }

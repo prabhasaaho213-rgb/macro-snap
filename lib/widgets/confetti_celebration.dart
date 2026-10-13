@@ -29,7 +29,7 @@ class ConfettiCelebration extends StatefulWidget {
       barrierColor: Colors.transparent,
       barrierLabel: 'celebration',
       transitionDuration: const Duration(milliseconds: 300),
-      pageBuilder: (_, __, ___) => ConfettiCelebration(
+      pageBuilder: (_, _, _) => ConfettiCelebration(
         particleCount: particleCount,
       ),
     );

@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import '../core/theme.dart';
 import '../services/gemini_service.dart';
@@ -50,6 +51,7 @@ class _ChatScreenState extends State<ChatScreen> {
   Future<void> _send(String raw) async {
     final text = raw.trim();
     if (text.isEmpty || _busy) return;
+    HapticFeedback.lightImpact();
     _input.clear();
     setState(() {
       _messages.add(_ChatMessage(role: _Role.user, text: text));

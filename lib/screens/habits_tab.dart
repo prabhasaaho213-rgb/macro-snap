@@ -24,6 +24,7 @@ class _HabitsTabState extends State<HabitsTab> {
   bool _subscribed = false;
   bool _isAdmin = false;
   bool _previousAllDone = false; // Track to detect transition to all-complete
+  bool _celebrationBaselineSet = false; // First build must not celebrate
 
   /// True when this user can create unlimited habits: the owner/admin account
   /// is always exempt (lifetime Pro) even before [SubscriptionService.load]
@@ -76,14 +77,22 @@ class _HabitsTabState extends State<HabitsTab> {
         ? (store.waterToday / store.waterGoal).clamp(0.0, 1.0)
         : 0.0;
 
-    // 🎉 Detect: all missions just completed → confetti celebration!
+    // 🎉 Detect: all missions JUST completed → confetti celebration.
+    // The tab's State is recreated on every visit, so the very first build
+    // only records the baseline — a day that was already complete must never
+    // replay the celebration when the user switches back to this tab.
     final allDone = active.isNotEmpty && completed >= active.length;
-    if (allDone && !_previousAllDone) {
+    if (!_celebrationBaselineSet) {
+      _celebrationBaselineSet = true;
+      _previousAllDone = allDone;
+    } else if (allDone && !_previousAllDone) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) ConfettiCelebration.show(context);
       });
+      _previousAllDone = true;
+    } else {
+      _previousAllDone = allDone;
     }
-    _previousAllDone = allDone;
 
     return Scaffold(
       backgroundColor: isDark
@@ -107,14 +116,19 @@ class _HabitsTabState extends State<HabitsTab> {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Expanded(
-                    child: const Text(
+                    child: Text(
                       'Habits',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
+                      // Explicit bright colour: inheriting the ListView's
+                      // default style rendered the heading grey-on-grey.
                       style: TextStyle(
                         fontSize: 28,
                         fontWeight: FontWeight.w900,
                         letterSpacing: -0.5,
+                        color: isDark
+                            ? Colors.white
+                            : const Color(0xFF1A1A1A),
                       ),
                     ),
                   ),

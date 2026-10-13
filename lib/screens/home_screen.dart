@@ -1,5 +1,6 @@
 import 'dart:math';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../core/theme.dart';
 import '../navigation/route_observer.dart';
@@ -1004,7 +1005,11 @@ class _HomeScreenState extends State<HomeScreen>
     // which is what made the row look broken. Every tile is now identical and
     // the label ellipsises instead of overflowing.
     return ScaleOnPress(
-      onTap: onTap,
+      // Tap feedback for every quick action (Snap, Barcode, Diet, ...).
+      onTap: () {
+        HapticFeedback.lightImpact();
+        onTap();
+      },
       scaleAmount: 0.93,
       child: Container(
         width: _quickActionWidth,

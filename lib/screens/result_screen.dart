@@ -352,7 +352,8 @@ class _ResultScreenState extends State<ResultScreen>
                 scannedAt: DateTime.now(),
               ));
               HapticFeedback.mediumImpact();
-              Navigator.pop(ctx);
+              // The recent-food save above awaits — guard the pop for it.
+              if (ctx.mounted) Navigator.pop(ctx);
             },
             child: const Text('Add'),
           ),
@@ -1339,7 +1340,9 @@ class _ResultScreenState extends State<ResultScreen>
             children: [
               Row(
                 children: [
-                  Flexible(
+                  // Full-width name: long dish names get their own line and
+                  // ellipsise instead of wrapping into the portion text.
+                  Expanded(
                     child: Container(
                       padding: const EdgeInsets.symmetric(
                         horizontal: 10,
@@ -1351,6 +1354,7 @@ class _ResultScreenState extends State<ResultScreen>
                       ),
                       child: Text(
                         dish.name,
+                        maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
                           fontSize: 13,
@@ -1360,20 +1364,7 @@ class _ResultScreenState extends State<ResultScreen>
                       ),
                     ),
                   ),
-                  if (dish.portionDescription.isNotEmpty) ...[
-                    const SizedBox(width: 8),
-                    Flexible(
-                      child: Text(
-                        dish.portionDescription,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: MacroSnapTheme.textTertiary(context),
-                        ),
-                      ),
-                    ),
-                  ],
-                  const Spacer(),
+                  const SizedBox(width: 8),
                   Container(
                     padding: const EdgeInsets.symmetric(
                       horizontal: 8,
@@ -1394,30 +1385,42 @@ class _ResultScreenState extends State<ResultScreen>
                   ),
                 ],
               ),
+              if (dish.portionDescription.isNotEmpty) ...[
+                const SizedBox(height: 4),
+                Text(
+                  dish.portionDescription,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: MacroSnapTheme.textTertiary(context),
+                  ),
+                ),
+              ],
               const SizedBox(height: 10),
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   _buildDishMacro(
-                    'P',
+                    'Protein',
                     (dish.proteinPer100g * ratio),
                     MacroSnapTheme.macroProtein,
                     isDark,
                   ),
                   _buildDishMacro(
-                    'C',
+                    'Carbs',
                     (dish.carbsPer100g * ratio),
                     MacroSnapTheme.macroCalories,
                     isDark,
                   ),
                   _buildDishMacro(
-                    'F',
+                    'Fat',
                     (dish.fatsPer100g * ratio),
                     MacroSnapTheme.macroFats,
                     isDark,
                   ),
                   _buildDishMacro(
-                    'Fib',
+                    'Fiber',
                     (dish.fiberPer100g * ratio),
                     MacroSnapTheme.neonGreen,
                     isDark,

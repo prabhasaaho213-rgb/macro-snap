@@ -1,4 +1,3 @@
-import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -43,8 +42,9 @@ class _OnboardingScreenState extends State<OnboardingScreen>
   bool _isCm = true;
   Goal _goal = Goal.loseWeight;
   ActivityLevel _activity = ActivityLevel.moderate;
+  DietPreference _diet = DietPreference.vegetarian;
 
-  static const _totalSteps = 8;
+  static const _totalSteps = 9;
 
   @override
   void initState() {
@@ -102,6 +102,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
       gender: _gender,
       goal: _goal,
       activity: _activity,
+      diet: _diet,
     );
     DietPlanService.instance.save(profile);
 
@@ -158,7 +159,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
               padding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
               child: ValueListenableBuilder<int>(
                 valueListenable: _page,
-                builder: (_, p, __) => Row(
+                builder: (_, p, _) => Row(
                   children: [
                     if (p > 0)
                       IconButton(
@@ -191,7 +192,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
             // Progress bar
             ValueListenableBuilder<int>(
               valueListenable: _page,
-              builder: (_, p, __) => Padding(
+              builder: (_, p, _) => Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
                 child: ClipRRect(
                   borderRadius: BorderRadius.circular(4),
@@ -224,7 +225,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
               padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
               child: ValueListenableBuilder<int>(
                 valueListenable: _page,
-                builder: (_, p, __) => SizedBox(
+                builder: (_, p, _) => SizedBox(
                   width: double.infinity,
                   height: 56,
                   child: FilledButton(
@@ -276,6 +277,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
       case 5: return _buildHeightDial(textColor, subText, isDark);
       case 6: return _buildGoal(textColor, subText, isDark);
       case 7: return _buildActivity(textColor, subText, isDark);
+      case 8: return _buildDietPreference(textColor, subText, isDark);
       default: return const SizedBox();
     }
   }
@@ -411,6 +413,100 @@ class _OnboardingScreenState extends State<OnboardingScreen>
             Expanded(child: _genderOption('👨', 'Male', Gender.male, isDark, textColor)),
             const SizedBox(width: 16),
             Expanded(child: _genderOption('👩', 'Female', Gender.female, isDark, textColor)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDietPreference(Color textColor, Color subText, bool isDark) {
+    return _animateIn(
+      _buildQuestion(
+        'Are you vegetarian or non-vegetarian?',
+        textColor,
+        Column(
+          children: [
+            Text(
+              'This personalises your AI diet plans and meal suggestions.',
+              textAlign: TextAlign.center,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(fontSize: 14, color: subText, height: 1.5),
+            ),
+            const SizedBox(height: 20),
+            Row(
+              children: [
+                Expanded(
+                  child: _dietOption(
+                    '🥦',
+                    'Vegetarian',
+                    DietPreference.vegetarian,
+                    isDark,
+                    textColor,
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: _dietOption(
+                    '🍗',
+                    'Non-Vegetarian',
+                    DietPreference.nonVegetarian,
+                    isDark,
+                    textColor,
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _dietOption(String emoji, String label, DietPreference value, bool isDark, Color textColor) {
+    final selected = _diet == value;
+    return GestureDetector(
+      onTap: () {
+        HapticFeedback.selectionClick();
+        setState(() => _diet = value);
+      },
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeOutCubic,
+        padding: const EdgeInsets.symmetric(vertical: 36),
+        decoration: BoxDecoration(
+          color: selected
+              ? MacroSnapTheme.neonGreen.withValues(alpha: 0.12)
+              : (isDark ? const Color(0xFF1A1A22) : Colors.white),
+          borderRadius: BorderRadius.circular(24),
+          border: Border.all(
+            color: selected ? MacroSnapTheme.neonGreen : Colors.transparent,
+            width: 2,
+          ),
+          boxShadow: selected
+              ? [
+                  BoxShadow(
+                    color: MacroSnapTheme.neonGreen.withValues(alpha: 0.15),
+                    blurRadius: 20,
+                    spreadRadius: 2,
+                  ),
+                ]
+              : null,
+        ),
+        child: Column(
+          children: [
+            AnimatedScale(
+              scale: selected ? 1.15 : 1.0,
+              duration: const Duration(milliseconds: 300),
+              curve: Curves.easeOutCubic,
+              child: Text(emoji, style: const TextStyle(fontSize: 48)),
+            ),
+            const SizedBox(height: 12),
+            Text(label, style: TextStyle(
+              fontSize: 15,
+              fontWeight: FontWeight.w700,
+              color: textColor,
+            )),
           ],
         ),
       ),
