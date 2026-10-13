@@ -7,7 +7,6 @@ import 'package:macro_snap/screens/habits_tab.dart';
 import 'package:macro_snap/screens/home_screen.dart';
 import 'package:macro_snap/screens/main_shell.dart';
 import 'package:macro_snap/screens/scan_screen.dart';
-import 'package:macro_snap/screens/updates_tab.dart';
 import 'package:macro_snap/services/habit_store.dart';
 
 /// Pumps MainShell and settles the initial async work (subscription check,
@@ -151,24 +150,26 @@ void main() {
     await flushEntranceTimers(tester);
   });
 
-  testWidgets('swipe left on the last tab (Updates) stays on Updates',
+  testWidgets('swipe left on the last tab (Habits) stays on Habits',
       (tester) async {
     await pumpShell(tester);
 
-    // Three left swipes: Home → Scan → Habits → Updates.
-    for (var i = 0; i < 3; i++) {
+    // Two left swipes: Home → Scan → Habits. Updates no longer owns a tab —
+    // it lives behind Settings — so Habits is now the last one.
+    for (var i = 0; i < 2; i++) {
       await tester.fling(find.byType(MainShell), const Offset(-300, 0), 1000);
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 450));
     }
-    expect(find.byType(UpdatesTab), findsOneWidget);
+    expect(find.byType(HabitsTab), findsOneWidget);
+    expect(find.byType(ScanScreen), findsNothing);
 
     // Already at the last tab — swiping further left must be a no-op.
     await tester.fling(find.byType(MainShell), const Offset(-300, 0), 1000);
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 450));
-    expect(find.byType(UpdatesTab), findsOneWidget,
-        reason: 'swiping left past the last tab must stay on the Updates tab');
+    expect(find.byType(HabitsTab), findsOneWidget,
+        reason: 'swiping left past the last tab must stay on the Habits tab');
 
     await flushEntranceTimers(tester);
   });

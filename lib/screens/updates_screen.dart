@@ -19,34 +19,41 @@ class _UpdateEntry {
   final bool isLatest;
 }
 
-/// "Updates" tab — shows the installed version, recent release notes and a
+/// "What's New" page — shows the installed version, recent release notes and a
 /// button that jumps straight to the Play Store listing to check for or
 /// install the newest build. Changelog entries are maintained here.
-class UpdatesTab extends StatefulWidget {
-  const UpdatesTab({super.key});
+///
+/// This used to be the fourth bottom-nav tab. It now lives behind Settings,
+/// because it is read-once content that does not deserve permanent navigation
+/// space. Settings puts a dot on its "What's New" row until the user has
+/// opened this page for the newest release.
+class UpdatesScreen extends StatefulWidget {
+  const UpdatesScreen({super.key});
 
-  /// The newest release listed below. MainShell compares this with the version
-  /// the user has already opened and puts a dot on the Updates tab when the
+  /// The newest release listed below. Settings compares this with the version
+  /// the user has already seen and puts a dot on the "What's New" row when the
   /// two differ — so a new release announces itself instead of waiting to be
-  /// found behind a tab.
+  /// found.
   static const String latestVersion = '1.4.85';
 
   /// SharedPreferences key holding the latest version the user has seen.
   static const String seenVersionKey = 'updates_seen_version';
 
   @override
-  State<UpdatesTab> createState() => _UpdatesTabState();
+  State<UpdatesScreen> createState() => _UpdatesScreenState();
 }
 
-class _UpdatesTabState extends State<UpdatesTab> {
+class _UpdatesScreenState extends State<UpdatesScreen> {
   static const List<_UpdateEntry> _changelog = [
     _UpdateEntry(
-      version: UpdatesTab.latestVersion,
+      version: UpdatesScreen.latestVersion,
       date: 'Latest',
       isLatest: true,
       notes: [
         'Veg Plan — a full vegetarian day plan sized to your calorie target',
         'All Veg Suggestions — every veg food in the app, tap to log it',
+        'Food Preference is now a Veg / Non-Veg toggle',
+        'Faster home screen — fixed clipped action tiles and calorie ring',
       ],
     ),
     _UpdateEntry(
@@ -62,7 +69,7 @@ class _UpdatesTabState extends State<UpdatesTab> {
       version: '1.4.83',
       date: 'Earlier',
       notes: [
-        'New Updates tab — see what\u2019s new right in the app',
+        'Release notes — see what\u2019s new right in the app',
       ],
     ),
     _UpdateEntry(
@@ -96,14 +103,14 @@ class _UpdatesTabState extends State<UpdatesTab> {
       final info = await PackageInfo.fromPlatform();
       if (mounted) setState(() => _installedVersion = info.version);
     } catch (_) {
-      // Version display is best-effort — never break the tab over it.
+      // Version display is best-effort — never break the page over it.
     }
-    // Opening this tab counts as having seen the newest release notes.
+    // Opening this page counts as having seen the newest release notes.
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString(
-        UpdatesTab.seenVersionKey,
-        UpdatesTab.latestVersion,
+        UpdatesScreen.seenVersionKey,
+        UpdatesScreen.latestVersion,
       );
     } catch (_) {
       // Best-effort - a failed write only means the dot appears once more.
@@ -113,40 +120,22 @@ class _UpdatesTabState extends State<UpdatesTab> {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    return SafeArea(
-      bottom: false,
-      child: ListView(
-        padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
-        children: [
-          // Header
-          Row(
-            children: [
-              Container(
-                width: 40,
-                height: 40,
-                decoration: BoxDecoration(
-                  color: MacroSnapTheme.neonGreen.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: const Icon(
-                  Icons.new_releases_rounded,
-                  color: MacroSnapTheme.neonGreen,
-                  size: 22,
-                ),
-              ),
-              const SizedBox(width: 12),
-              Text(
-                'Updates',
-                style: TextStyle(
-                  fontSize: 22,
-                  fontWeight: FontWeight.w900,
-                  color: isDark ? Colors.white : const Color(0xFF1A1A1A),
-                ),
-              ),
-            ],
+    return Scaffold(
+      backgroundColor: isDark
+          ? MacroSnapTheme.surfaceDark
+          : MacroSnapTheme.surfaceLight,
+      appBar: AppBar(
+        title: Text(
+          "What's New",
+          style: TextStyle(
+            fontWeight: FontWeight.w700,
+            color: isDark ? Colors.white : const Color(0xFF1A1A1A),
           ),
-          const SizedBox(height: 16),
-
+        ),
+      ),
+      body: ListView(
+        padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
+        children: [
           // Check for updates card
           Container(
             padding: const EdgeInsets.all(18),
@@ -230,8 +219,11 @@ class _UpdatesTabState extends State<UpdatesTab> {
                   style: TextStyle(
                     fontSize: 12,
                     fontWeight: FontWeight.w900,
+                    // Must match the pill's accent: neonPill is a tinted
+                    // background, so black text here would vanish on a dark
+                    // theme.
                     color: entry.isLatest
-                        ? Colors.black
+                        ? MacroSnapTheme.greenText(context)
                         : MacroSnapTheme.textSecondary(context),
                   ),
                 ),
@@ -256,7 +248,7 @@ class _UpdatesTabState extends State<UpdatesTab> {
                   const Icon(
                     Icons.check_circle_rounded,
                     size: 15,
-                    color: MacroSnapTheme.neonGreen,
+                    color: MacroSnapTheme.macroFiber,
                   ),
                   const SizedBox(width: 8),
                   Expanded(

@@ -209,10 +209,20 @@ class MacroSnapTheme {
 
   /// Accent pill — POP uses solid-fill badges (e.g. the orange "New" tag),
   /// not low-alpha tinted outlines.
+  /// Pill background for accent-coloured badges (scans remaining, meal
+  /// streak, kcal totals, "latest release" chip).
+  ///
+  /// This used to fill the pill with [color] while every call site painted its
+  /// icon and label in that same colour — so with the POP orange accent the
+  /// header scans badge, the streak pill and the kcal pill all rendered as
+  /// empty orange blobs (orange-on-orange). The pill is now a low-alpha tint
+  /// of [color] with a matching hairline, so accent-coloured content stays
+  /// legible on top in both light and dark themes.
   static BoxDecoration neonPill(Color color) {
     return BoxDecoration(
-      color: color,
+      color: color.withValues(alpha: 0.14),
       borderRadius: BorderRadius.circular(24),
+      border: Border.all(color: color.withValues(alpha: 0.35)),
     );
   }
 

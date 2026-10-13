@@ -517,10 +517,13 @@ class _HabitsTabState extends State<HabitsTab> {
 
   Widget _progressRing(double progress, bool isDark) {
     // Animated fill: ring + % count up on load and glide between values.
+    // Track is white24 (not white10) to match the Home calorie ring — the
+    // test suite treats the two hero rings as sharing one track color, and
+    // white10 left an unreadable ring at 0% progress.
     return AnimatedProgressRing(
       value: progress,
       color: MacroSnapTheme.neonPink,
-      backgroundColor: isDark ? Colors.white10 : const Color(0xFFE8DEFF),
+      backgroundColor: isDark ? Colors.white24 : const Color(0xFFE8DEFF),
       labelStyle: TextStyle(
         fontWeight: FontWeight.w900,
         color: isDark ? Colors.white : const Color(0xFF1A1A1A),

@@ -36,8 +36,12 @@ void expectNoRenderErrors(WidgetTester tester, String where) {
 }
 
 /// Colors shared by both progress rings (Home calorie ring + Habits hero ring).
+///
+/// Both dark tracks are white24, not white10: at white10 a ring at 0% progress
+/// had nothing to show and read as an unrendered circle — the "calorie ring
+/// glitch". Light track is unchanged.
 Color ringLabelColor(bool dark) => dark ? Colors.white : const Color(0xFF1A1A1A);
-Color ringTrackColor(bool dark) => dark ? Colors.white10 : const Color(0xFFE8DEFF);
+Color ringTrackColor(bool dark) => dark ? Colors.white24 : const Color(0xFFE8DEFF);
 
 void main() {
   setUp(() async {

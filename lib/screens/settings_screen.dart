@@ -18,6 +18,7 @@ import '../services/subscription_service.dart';
 import '../services/recent_food_service.dart';
 import 'subscription_screen.dart';
 import 'phone_login_screen.dart';
+import 'updates_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -34,6 +35,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
   String? _subscribedDate;
   String _lastSync = '';
   bool _syncing = false;
+
+  /// True while the newest release has not been opened from here yet —
+  /// drives the dot on the "What's New" row. (This used to live on the
+  /// bottom-nav Updates tab; the tab is gone, the badge moved with it.)
+  bool _hasUnseenUpdate = false;
 
   @override
   void initState() {
@@ -64,6 +70,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
       _subscribed = SubscriptionService.instance.isSubscribed;
       _subscribedDate = SubscriptionService.instance.subscribedAt;
       _lastSync = prefs.getString('last_sync') ?? '';
+      _hasUnseenUpdate =
+          (prefs.getString(UpdatesScreen.seenVersionKey) ?? '') !=
+          UpdatesScreen.latestVersion;
     });
     _isAdmin = await SubscriptionService.instance.isAdmin();
     if (mounted) setState(() {});
@@ -462,6 +471,29 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                 : 'Never backed up'),
                       () => _showBackupDialog(isDark),
                       isDark,
+                    ),
+                  ),
+                  const Divider(height: 24),
+                  AnimatedEntrance(
+                    delayMs: 215,
+                    child: _settingTile(
+                      Icons.new_releases_rounded,
+                      "What's New",
+                      _hasUnseenUpdate
+                          ? 'New in ${UpdatesScreen.latestVersion} — tap to see'
+                          : 'Release notes and update history',
+                      () async {
+                        await Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => const UpdatesScreen(),
+                          ),
+                        );
+                        // Opening the page clears the dot.
+                        if (mounted) setState(() => _hasUnseenUpdate = false);
+                      },
+                      isDark,
+                      showBadge: _hasUnseenUpdate,
                     ),
                   ),
                   const Divider(height: 24),
@@ -1091,20 +1123,45 @@ class _SettingsScreenState extends State<SettingsScreen> {
     String subtitle,
     VoidCallback? onTap,
     bool isDark,
+    {bool showBadge = false}
   ) {
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(12),
       child: Row(
         children: [
-          Container(
-            width: 40,
-            height: 40,
-            decoration: BoxDecoration(
-              color: MacroSnapTheme.neonGreen.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(15),
-            ),
-            child: Icon(icon, color: MacroSnapTheme.neonGreen, size: 20),
+          Stack(
+            clipBehavior: Clip.none,
+            children: [
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: MacroSnapTheme.neonGreen.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(15),
+                ),
+                child: Icon(icon, color: MacroSnapTheme.neonGreen, size: 20),
+              ),
+              if (showBadge)
+                Positioned(
+                  right: -1,
+                  top: -1,
+                  child: Container(
+                    width: 10,
+                    height: 10,
+                    decoration: BoxDecoration(
+                      color: MacroSnapTheme.macroFiber,
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                        color: isDark
+                            ? MacroSnapTheme.cardDark
+                            : Colors.white,
+                        width: 2,
+                      ),
+                    ),
+                  ),
+                ),
+            ],
           ),
           const SizedBox(width: 14),
           Expanded(

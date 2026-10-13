@@ -453,11 +453,17 @@ class _HomeScreenState extends State<HomeScreen>
                 // Progress ring (Habitly style) — animated fill: the ring
                 // and the % label count up from 0 on load and glide between
                 // values (adding a meal grows it smoothly, never a jump).
+                //
+                // The arc is the brand accent, not neonPink: the old dark
+                // rose (0xFFB0281F) sat almost invisibly on the violet hero
+                // gradient, and the white10 track was so faint that at 0% the
+                // ring looked like an unrendered circle. white24 keeps the
+                // track readable so the ring always reads as a ring.
                 AnimatedProgressRing(
                   value: progress,
-                  color: MacroSnapTheme.neonPink,
+                  color: MacroSnapTheme.neonGreen,
                   backgroundColor: isDark
-                      ? Colors.white10
+                      ? Colors.white24
                       : const Color(0xFFE8DEFF),
                   labelStyle: TextStyle(
                     fontWeight: FontWeight.w900,
@@ -890,6 +896,11 @@ class _HomeScreenState extends State<HomeScreen>
     );
   }
 
+  /// Uniform tile width for the Quick Actions row. Narrow enough that five
+  /// tiles fit a 320dp phone (the Wrap still wraps rather than overflowing if
+  /// the system font is scaled up), wide enough for "Barcode" at 11sp.
+  static const double _quickActionWidth = 72;
+
   Widget _quickAction(
     IconData icon,
     String label,
@@ -897,14 +908,21 @@ class _HomeScreenState extends State<HomeScreen>
     bool isDark,
     VoidCallback onTap,
   ) {
+    // Fixed width, not intrinsic: sizing the tile to its label made every
+    // action a different width ("Snap" narrow, "Veg Plan" wide) with the icon
+    // floating in a skinny pill and the label spilling past the tile edges —
+    // which is what made the row look broken. Every tile is now identical and
+    // the label ellipsises instead of overflowing.
     return ScaleOnPress(
       onTap: onTap,
       scaleAmount: 0.93,
       child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 10),
+        width: _quickActionWidth,
+        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 4),
         decoration: BoxDecoration(
           color: color.withValues(alpha: 0.1),
           borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: color.withValues(alpha: 0.25)),
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -913,6 +931,9 @@ class _HomeScreenState extends State<HomeScreen>
             const SizedBox(height: 6),
             Text(
               label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.center,
               style: TextStyle(
                 fontSize: 11,
                 fontWeight: FontWeight.w700,

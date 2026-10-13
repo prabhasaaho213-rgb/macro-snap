@@ -72,6 +72,42 @@ class _DietPlanScreenState extends State<DietPlanScreen> {
     super.dispose();
   }
 
+  /// One half of the Food Preference segmented toggle.
+  Widget _dietOption(DietPreference d) {
+    final selected = _diet == d;
+    return GestureDetector(
+      onTap: () => setState(() => _diet = d),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 6),
+        decoration: BoxDecoration(
+          color: selected
+              ? MacroSnapTheme.neonGreen.withValues(alpha: 0.15)
+              : Colors.transparent,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: selected
+                ? MacroSnapTheme.neonGreen.withValues(alpha: 0.6)
+                : Colors.transparent,
+          ),
+        ),
+        child: Text(
+          DietPlanService.dietLabel(d),
+          textAlign: TextAlign.center,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w700,
+            color: selected
+                ? MacroSnapTheme.greenText(context)
+                : MacroSnapTheme.textSecondary(context),
+          ),
+        ),
+      ),
+    );
+  }
+
   void _calculate() {
     final w = double.tryParse(_weightCtrl.text);
     final h = double.tryParse(_heightCtrl.text);
@@ -360,37 +396,39 @@ class _DietPlanScreenState extends State<DietPlanScreen> {
           ),
           const SizedBox(height: 12),
           // Food preference - drives the suggested meal plan below.
-          DropdownButtonFormField<DietPreference>(
-            initialValue: _diet,
-            decoration: InputDecoration(
-              labelText: 'Food Preference',
-              filled: true,
-              fillColor: isDark ? MacroSnapTheme.cardDark : Colors.white,
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(16),
-                borderSide: BorderSide.none,
-              ),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(16),
-                borderSide: BorderSide(
-                  color: MacroSnapTheme.borderSubtle(context),
+          // A two-option dropdown was the wrong control here: it hid which
+          // choice was active and had to be opened to read the setting. This
+          // is a real two-segment toggle that always shows the current
+          // preference and flips on a single tap.
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Food Preference',
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: MacroSnapTheme.textSecondary(context),
                 ),
               ),
-              contentPadding: const EdgeInsets.symmetric(
-                horizontal: 20,
-                vertical: 18,
-              ),
-            ),
-            isExpanded: true,
-            items: DietPreference.values
-                .map(
-                  (d) => DropdownMenuItem(
-                    value: d,
-                    child: Text(DietPlanService.dietLabel(d)),
+              const SizedBox(height: 8),
+              Container(
+                padding: const EdgeInsets.all(4),
+                decoration: BoxDecoration(
+                  color: isDark ? MacroSnapTheme.cardDark : Colors.white,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(
+                    color: MacroSnapTheme.borderSubtle(context),
                   ),
-                )
-                .toList(),
-            onChanged: (v) => setState(() => _diet = v!),
+                ),
+                child: Row(
+                  children: [
+                    for (final d in DietPreference.values)
+                      Expanded(child: _dietOption(d)),
+                  ],
+                ),
+              ),
+            ],
           ),
           const SizedBox(height: 20),
           GradientButton(
