@@ -34,7 +34,6 @@ class _ResultScreenState extends State<ResultScreen>
   bool _isAnalyzing = true;
   String? _error;
   NutritionResult? _result;
-  int _grams = 100;
   bool _showPerDish = false;
   String _analysisStage = 'Analyzing your meal...';
   String _analysisSub =
@@ -367,17 +366,6 @@ class _ResultScreenState extends State<ResultScreen>
     fatCtrl.dispose();
   }
 
-  /// Applies a new serving size: updates the slider value AND rebuilds the
-  /// [NutritionResult] with the new grams so every macro (calories, protein,
-  /// carbs, fats, fiber, sugar) rescales from its per-100g value.
-  void _setGrams(int g) {
-    setState(() {
-      _grams = g;
-      final r = _result;
-      if (r != null) _result = r.withGrams(g);
-    });
-  }
-
   /// Low confidence warning banner — shown when AI couldn't identify food.
   /// Offers retry (same photo) and manual entry options.
   Widget _buildLowConfidenceBanner(bool isDark) {
@@ -516,86 +504,6 @@ class _ResultScreenState extends State<ResultScreen>
             color: MacroSnapTheme.greenText(context),
             size: 44,
           ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildGramAdjuster(bool isDark) {
-    return GlassCard(
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        child: Row(
-          children: [
-            Icon(
-              Icons.scale_rounded,
-              size: 18,
-              color: MacroSnapTheme.textTertiary(context),
-            ),
-            const SizedBox(width: 8),
-            Flexible(
-              child: Text(
-                'Total Serving',
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600,
-                  color: MacroSnapTheme.textSecondary(context),
-                ),
-              ),
-            ),
-            const Spacer(),
-            GestureDetector(
-              onTap: () => _setGrams(_grams >= 50 ? _grams - 25 : 25),
-              child: Container(
-                padding: const EdgeInsets.all(6),
-                decoration: BoxDecoration(
-                  color: MacroSnapTheme.neonGreen.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: const Icon(
-                  Icons.remove_rounded,
-                  size: 18,
-                  color: MacroSnapTheme.neonGreen,
-                ),
-              ),
-            ),
-            const SizedBox(width: 12),
-            Text(
-              '$_grams',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.w800,
-                color: isDark ? Colors.white : const Color(0xFF1A1A1A),
-              ),
-            ),
-            const SizedBox(width: 4),
-            Text(
-              'g',
-              style: TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w500,
-                color: MacroSnapTheme.textTertiary(context),
-              ),
-            ),
-            const SizedBox(width: 12),
-            GestureDetector(
-              onTap: () => _setGrams(_grams <= 975 ? _grams + 25 : 1000),
-              child: Container(
-                padding: const EdgeInsets.all(6),
-                decoration: BoxDecoration(
-                  color: MacroSnapTheme.neonGreen.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: const Icon(
-                  Icons.add_rounded,
-                  size: 18,
-                  color: MacroSnapTheme.neonGreen,
-                ),
-              ),
-            ),
-          ],
         ),
       ),
     );
@@ -1055,9 +963,6 @@ class _ResultScreenState extends State<ResultScreen>
           if (_showLowConfidenceWarning && widget.existingMeal == null)
             _buildLowConfidenceBanner(isDark),
 
-          // View mode: the logged meal's totals are the source of truth, so
-          // there's no gram slider to rescale them.
-          if (widget.existingMeal == null) _buildGramAdjuster(isDark),
           if (hasMultiDish) ...[
             const SizedBox(height: 8),
             Row(
@@ -1235,8 +1140,8 @@ class _ResultScreenState extends State<ResultScreen>
                                 const SizedBox(height: 2),
                                 Text(
                                   widget.existingMeal == null
-                                      ? '${(r.confidence * 100).round()}% confidence · ${r.description}'
-                                      : r.description,
+                                      ? '${(r.confidence * 100).round()}% confidence · ${_stripGrams(r.description)}'
+                                      : _stripGrams(r.description),
                                   style: TextStyle(
                                     fontSize: 13,
                                     fontWeight: FontWeight.w400,
@@ -1321,6 +1226,13 @@ class _ResultScreenState extends State<ResultScreen>
     );
   }
 
+  /// Serving-weight parentheticals like "(6g)" or "(400 g)" are stripped
+  /// from every display on this screen: nutrition here always calculates
+  /// from the 100 g baseline, so a gram weight would contradict the numbers
+  /// shown next to it.
+  String _stripGrams(String text) =>
+      text.replaceAll(RegExp(r'\s*\(\s*\d+(?:\.\d+)?\s*g\s*\)'), '');
+
   Widget _buildDishCard(bool isDark, DishItem dish, int totalGrams) {
     final ratio = totalGrams / 100;
     final isBulk = dish.suitableFor == 'bulk';
@@ -1340,9 +1252,10 @@ class _ResultScreenState extends State<ResultScreen>
             children: [
               Row(
                 children: [
-                  // Full-width name: long dish names wrap onto a second line
-                  // inside the pill instead of being cut off.
-                  Expanded(
+                  // The pill hugs the name's length instead of stretching
+                  // full width, and long names wrap onto extra lines
+                  // instead of being cut off.
+                  Flexible(
                     child: Container(
                       padding: const EdgeInsets.symmetric(
                         horizontal: 10,
@@ -1384,10 +1297,10 @@ class _ResultScreenState extends State<ResultScreen>
                   ),
                 ],
               ),
-              if (dish.portionDescription.isNotEmpty) ...[
+              if (_stripGrams(dish.portionDescription).isNotEmpty) ...[
                 const SizedBox(height: 4),
                 Text(
-                  dish.portionDescription,
+                  _stripGrams(dish.portionDescription),
                   softWrap: true,
                   style: TextStyle(
                     fontSize: 12,

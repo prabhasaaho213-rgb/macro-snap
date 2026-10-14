@@ -49,6 +49,9 @@ jobs:
       - name: Build AAB (release)
         run: flutter build appbundle --release
 
+      - name: Build APK (release)
+        run: flutter build apk --release
+
       - name: Verify AAB
         run: |
           AAB_PATH="build/app/outputs/bundle/release/app-release.aab"
@@ -62,10 +65,15 @@ jobs:
       - name: Rename AAB
         run: cp build/app/outputs/bundle/release/app-release.aab macro-snap-${{ github.ref_name }}.aab
 
+      - name: Rename APK
+        run: cp build/app/outputs/flutter-apk/app-release.apk macro-snap-${{ github.ref_name }}.apk
+
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
-          files: macro-snap-${{ github.ref_name }}.aab
+          files: |
+            macro-snap-${{ github.ref_name }}.aab
+            macro-snap-${{ github.ref_name }}.apk
           draft: false
           prerelease: false
         env:

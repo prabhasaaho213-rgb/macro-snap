@@ -34,7 +34,7 @@ class UpdatesScreen extends StatefulWidget {
   /// the user has already seen and puts a dot on the "What's New" row when the
   /// two differ — so a new release announces itself instead of waiting to be
   /// found.
-  static const String latestVersion = '1.4.89';
+  static const String latestVersion = '1.4.90';
 
   /// SharedPreferences key holding the latest version the user has seen.
   static const String seenVersionKey = 'updates_seen_version';
@@ -50,6 +50,8 @@ class _UpdatesScreenState extends State<UpdatesScreen> {
       date: 'Latest',
       isLatest: true,
       notes: [
+        'Food-name background now fits the text instead of stretching full width',
+        'Serving-gram controls removed — nutrition always calculates at 100 g',
         'Rate Us now always opens the Google Play Store',
         'Every change now saves to the cloud automatically — no backup step',
         'Meet Guru \u2014 your in-app nutrition assistant',
