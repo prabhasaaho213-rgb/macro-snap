@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../core/theme.dart';
 import '../models/diet_profile.dart';
+import '../services/meal_sync_service.dart';
 
 /// Cal AI-style onboarding: collects user profile data before first use.
 ///
@@ -93,6 +94,8 @@ class _OnboardingScreenState extends State<OnboardingScreen>
     if (name.isNotEmpty) {
       await prefs.setString('name', name);
       userNameNotifier.value = name;
+      // Auto-save the name to the cloud too (no-op for guests).
+      MealSyncService.syncPreferences({'name': name});
     }
 
     final profile = DietProfile(
@@ -298,56 +301,68 @@ class _OnboardingScreenState extends State<OnboardingScreen>
 
   Widget _buildWelcome(Color textColor, Color subText, bool isDark) {
     return _animateIn(
-      Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 32),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            // Glowing circle icon
-            Container(
-              width: 120,
-              height: 120,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                gradient: RadialGradient(
-                  colors: [
-                    MacroSnapTheme.neonGreen.withValues(alpha: 0.2),
-                    MacroSnapTheme.neonGreen.withValues(alpha: 0.05),
-                    Colors.transparent,
-                  ],
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: MacroSnapTheme.neonGreen.withValues(alpha: 0.3),
-                    blurRadius: 40,
-                    spreadRadius: 10,
+      // Scrollable + minHeight: keeps the page vertically centered at normal
+      // font sizes, but lets it scroll instead of overflowing a RenderFlex
+      // at large accessibility font scales on small phones (regression-
+      // tested at 2x on 320dp).
+      LayoutBuilder(
+        builder: (context, constraints) => SingleChildScrollView(
+          child: ConstrainedBox(
+            constraints: BoxConstraints(minHeight: constraints.maxHeight),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 24),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+              // Glowing circle icon
+                  Container(
+                    width: 120,
+                    height: 120,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      gradient: RadialGradient(
+                        colors: [
+                          MacroSnapTheme.neonGreen.withValues(alpha: 0.2),
+                          MacroSnapTheme.neonGreen.withValues(alpha: 0.05),
+                          Colors.transparent,
+                        ],
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: MacroSnapTheme.neonGreen.withValues(alpha: 0.3),
+                          blurRadius: 40,
+                          spreadRadius: 10,
+                        ),
+                      ],
+                    ),
+                    child: const Center(child: Text('📸', style: TextStyle(fontSize: 52))),
+                  ),
+                  const SizedBox(height: 32),
+                  Text(
+                    'Welcome to\nMacroSnap',
+                    textAlign: TextAlign.center,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 30,
+                      fontWeight: FontWeight.w900,
+                      color: textColor,
+                      height: 1.2,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    "Let's set up your profile for personalized calorie and macro targets.",
+                    textAlign: TextAlign.center,
+                    maxLines: 3,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(fontSize: 15, color: subText, height: 1.5),
                   ),
                 ],
               ),
-              child: const Center(child: Text('📸', style: TextStyle(fontSize: 52))),
             ),
-            const SizedBox(height: 32),
-            Text(
-              'Welcome to\nMacroSnap',
-              textAlign: TextAlign.center,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                fontSize: 30,
-                fontWeight: FontWeight.w900,
-                color: textColor,
-                height: 1.2,
-              ),
-            ),
-            const SizedBox(height: 16),
-            Text(
-              "Let's set up your profile for personalized calorie and macro targets.",
-              textAlign: TextAlign.center,
-              maxLines: 3,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(fontSize: 15, color: subText, height: 1.5),
-            ),
-          ],
+          ),
         ),
       ),
     );

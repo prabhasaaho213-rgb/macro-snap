@@ -4,7 +4,6 @@ import '../core/app_nav.dart';
 import '../core/theme.dart';
 import '../services/rate_us_service.dart';
 import '../services/subscription_service.dart';
-import '../services/sync_status_service.dart';
 import '../widgets/notification_prompt.dart';
 import 'home_screen.dart';
 import 'habits_tab.dart';
@@ -20,14 +19,12 @@ class MainShell extends StatefulWidget {
 
 class _MainShellState extends State<MainShell> {
   int _currentIndex = 0;
-  bool _isGuest = true;
 
   @override
   void initState() {
     super.initState();
     _currentIndex = shellTabIndex.value;
     shellTabIndex.addListener(_onShellTabChanged);
-    _loadGuestStatus();
     // Launch prompts, ordered so dialogs never stack: subscription upsell
     // first, then the notification-permission ask if still denied.
     WidgetsBinding.instance.addPostFrameCallback(
@@ -56,16 +53,6 @@ class _MainShellState extends State<MainShell> {
   void dispose() {
     shellTabIndex.removeListener(_onShellTabChanged);
     super.dispose();
-  }
-
-  Future<void> _loadGuestStatus() async {
-    final prefs = await SharedPreferences.getInstance();
-    final phone = prefs.getString('phone') ?? '';
-    if (mounted) {
-      setState(() {
-        _isGuest = phone.isEmpty || phone.startsWith('guest_');
-      });
-    }
   }
 
   Future<void> _maybeShowLaunchPrompts() async {
@@ -268,119 +255,29 @@ class _MainShellState extends State<MainShell> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      // Live-wire the cloud-backup warning so a dead backend shows a
-      // dismissible banner on every tab instead of failing silently.
-      body: ListenableBuilder(
-        listenable: SyncStatusService.instance,
-        builder: (context, _) {
-          final isDark = Theme.of(context).brightness == Brightness.dark;
-          final syncDown = SyncStatusService.instance.backendUnreachable;
-          // Don't show backup warning for guests — they can't back up anyway.
-          return Column(
-            children: [
-              if (syncDown && !_isGuest) _syncWarningBanner(isDark),
-              Expanded(
-                child: GestureDetector(
-                  behavior: HitTestBehavior.translucent,
-                  // Swipe left/right anywhere on the tab body to move to the
-                  // adjacent tab (Home ⇄ Scan ⇄ Habits). Instant switch.
-                  onHorizontalDragEnd: (details) {
-                    final velocity = details.primaryVelocity ?? 0;
-                    if (velocity.abs() < 300) return;
-                    if (velocity < 0) {
-                      // Swipe left → next tab
-                      if (_currentIndex < _tabPages.length - 1) {
-                        _goToTab(_currentIndex + 1);
-                      }
-                    } else {
-                      // Swipe right → previous tab
-                      if (_currentIndex > 0) _goToTab(_currentIndex - 1);
-                    }
-                  },
-                  child: _buildTabContent(),
-                ),
-              ),
-            ],
-          );
+      body: GestureDetector(
+        behavior: HitTestBehavior.translucent,
+        // Swipe left/right anywhere on the tab body to move to the
+        // adjacent tab (Home ⇄ Scan ⇄ Habits). Instant switch.
+        onHorizontalDragEnd: (details) {
+          final velocity = details.primaryVelocity ?? 0;
+          if (velocity.abs() < 300) return;
+          if (velocity < 0) {
+            // Swipe left → next tab
+            if (_currentIndex < _tabPages.length - 1) {
+              _goToTab(_currentIndex + 1);
+            }
+          } else {
+            // Swipe right → previous tab
+            if (_currentIndex > 0) _goToTab(_currentIndex - 1);
+          }
         },
+        child: _buildTabContent(),
       ),
       bottomNavigationBar: _buildBottomNav(context),
     );
   }
 
-  /// Compact warning strip shown above the tabs whenever cloud backup can't
-  /// reach the backend. Dismissible; Retry re-probes the server.
-  Widget _syncWarningBanner(bool isDark) {
-    final detail = SyncStatusService.instance.lastDetail;
-    final fg = isDark ? Colors.white : const Color(0xFF4A2E00);
-    final sub = isDark ? Colors.white70 : const Color(0xFF7A5A1E);
-    return SafeArea(
-      bottom: false,
-      child: Container(
-        width: double.infinity,
-        padding: const EdgeInsets.fromLTRB(14, 8, 6, 8),
-        color: isDark ? const Color(0xFF2A1A00) : const Color(0xFFFFF3E0),
-        child: Row(
-          children: [
-            Container(
-              width: 34,
-              height: 34,
-              decoration: BoxDecoration(
-                color: MacroSnapTheme.neonOrange.withValues(alpha: 0.15),
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: const Icon(
-                Icons.cloud_off_rounded,
-                color: MacroSnapTheme.neonOrange,
-                size: 18,
-              ),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Cloud backup unavailable',
-                    style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w800,
-                      color: fg,
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    detail.isEmpty
-                        ? 'Your data is safe on this device, but it isn\'t reaching the cloud.'
-                        : detail,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(fontSize: 11, color: sub),
-                  ),
-                ],
-              ),
-            ),
-            IconButton(
-              tooltip: 'Retry',
-              visualDensity: VisualDensity.compact,
-              onPressed: () => SyncStatusService.instance.probeBackend(),
-              icon: const Icon(
-                Icons.refresh_rounded,
-                size: 20,
-                color: MacroSnapTheme.neonOrange,
-              ),
-            ),
-            IconButton(
-              tooltip: 'Dismiss',
-              visualDensity: VisualDensity.compact,
-              onPressed: () => SyncStatusService.instance.dismiss(),
-              icon: Icon(Icons.close_rounded, size: 20, color: sub),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
 
   Widget _buildBottomNav(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;

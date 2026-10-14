@@ -78,7 +78,7 @@ void main() {
     await tester.pump(const Duration(milliseconds: 300));
 
     expect(find.byType(ChatScreen), findsOneWidget);
-    expect(find.text('Nutrition Assistant'), findsOneWidget);
+    expect(find.text('Guru'), findsOneWidget);
     expect(find.textContaining('nutrition assistant'), findsOneWidget,
         reason: 'the greeting must advertise the food/protein focus');
   });

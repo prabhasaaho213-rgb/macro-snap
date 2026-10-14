@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../core/theme.dart';
@@ -27,19 +28,31 @@ class RateUsService {
   static const int _maxReminders = 3;
 
   /// Opens the Play Store page for MacroSnap.
-  /// Tries the native `market://` intent first, then falls back to the
-  /// web URL so it works on every device.
+  ///
+  /// The primary path is a native explicit intent pinned to the Play Store
+  /// package (see MainActivity.openPlayStore) — the plain `market://` scheme
+  /// is hijacked by OEM stores like V-Appstore on several devices, which
+  /// sent "Rate Us" to the wrong store. Falls back to launching the URLs
+  /// directly when the channel is unavailable (e.g. widget tests).
+  static const MethodChannel _launcher = MethodChannel('macrosnap/launcher');
+
   static Future<bool> openPlayStore() async {
     final market = Uri.parse('market://details?id=$_packageName');
     final web = Uri.parse(
         'https://play.google.com/store/apps/details?id=$_packageName');
 
-    // Launch the Play Store app DIRECTLY — deliberately not gated behind
-    // canLaunchUrl(). That probe still answers false on several OEM builds
-    // even with the manifest <queries> entry, which downgraded these buttons
-    // to a dead tap or the browser listing instead of the Play Store app.
-    // A failed market:// launch throws, and only then do we fall back to
-    // the web listing.
+    // 1) Native explicit intent (Play Store package only) — can't be
+    //    intercepted by V-Appstore / GetApps / etc.
+    try {
+      final opened = await _launcher.invokeMethod<bool>('openPlayStore');
+      if (opened == true) return true;
+    } on PlatformException catch (e) {
+      debugPrint('Play Store channel failed: $e');
+    } on MissingPluginException {
+      // Channel absent (tests / non-Android) — use url_launcher below.
+    }
+
+    // 2) url_launcher fallback: market:// first, then the web listing.
     try {
       final opened =
           await launchUrl(market, mode: LaunchMode.externalApplication);

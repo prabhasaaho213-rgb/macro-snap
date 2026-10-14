@@ -15,7 +15,6 @@ import '../services/meal_sync_service.dart';
 import '../services/habit_store.dart';
 import '../services/rate_us_service.dart';
 import '../services/subscription_service.dart';
-import '../services/recent_food_service.dart';
 import 'subscription_screen.dart';
 import 'phone_login_screen.dart';
 import 'updates_screen.dart';
@@ -33,8 +32,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   bool _subscribed = false;
   bool _isAdmin = false;
   String? _subscribedDate;
-  String _lastSync = '';
-  bool _syncing = false;
+
 
   /// True while the newest release has not been opened from here yet —
   /// drives the dot on the "What's New" row. (This used to live on the
@@ -69,7 +67,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
       _phone = prefs.getString('phone') ?? '';
       _subscribed = SubscriptionService.instance.isSubscribed;
       _subscribedDate = SubscriptionService.instance.subscribedAt;
-      _lastSync = prefs.getString('last_sync') ?? '';
       _hasUnseenUpdate =
           (prefs.getString(UpdatesScreen.seenVersionKey) ?? '') !=
           UpdatesScreen.latestVersion;
@@ -80,28 +77,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   bool get _isGuest => _phone.isEmpty || _phone.startsWith('guest_');
 
-  /// Whether the user needs a backup reminder (no sync in 7+ days).
-  bool get _needsBackupReminder {
-    if (_isGuest || _lastSync.isEmpty) return false;
-    try {
-      // Parse the sync time (format: 'dd/MM/yyyy HH:mm')
-      final parts = _lastSync.split(' ');
-      if (parts.length != 2) return false;
-      final dateParts = parts[0].split('/');
-      if (dateParts.length != 3) return false;
-      final day = int.parse(dateParts[0]);
-      final month = int.parse(dateParts[1]);
-      final year = int.parse(dateParts[2]);
-      final timeParts = parts[1].split(':');
-      final hour = int.parse(timeParts[0]);
-      final minute = int.parse(timeParts[1]);
-      final lastSyncDate = DateTime(year, month, day, hour, minute);
-      final daysSinceSync = DateTime.now().difference(lastSyncDate).inDays;
-      return daysSinceSync >= 7;
-    } catch (_) {
-      return false;
-    }
-  }
   String _phone = '';
   String _packageVersion = '1.4.66';
 
@@ -428,8 +403,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
             ),
             const SizedBox(height: 20),
-            // Backup reminder banner
-            if (_needsBackupReminder) _buildBackupReminder(isDark),
             // Settings list card
             GlassCard(
               padding: const EdgeInsets.all(16),
@@ -455,21 +428,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           habitFlowRoute(const SubscriptionScreen()),
                         );
                       },
-                      isDark,
-                    ),
-                  ),
-                  const Divider(height: 24),
-                  AnimatedEntrance(
-                    delayMs: 100,
-                    child: _settingTile(
-                      Icons.cloud_upload_rounded,
-                      'Cloud Backup',
-                      _syncing
-                          ? 'Syncing...'
-                          : (_lastSync.isNotEmpty
-                                ? 'Last sync: $_lastSync'
-                                : 'Never backed up'),
-                      () => _showBackupDialog(isDark),
                       isDark,
                     ),
                   ),
@@ -736,385 +694,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
       case ThemeMode.dark:
         return 'Always dark background';
     }
-  }
-
-  Future<void> _showBackupDialog(bool isDark) async {
-    final canSync = !_isGuest;
-
-    // Fetch current counts for the status display
-    final mealCount = MealStore.instance.allMeals.length;
-    final habitCount = HabitStore.instance.habits.length;
-
-    if (!mounted) return;
-    await showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: isDark ? MacroSnapTheme.cardDark : Colors.white,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-        contentPadding: const EdgeInsets.fromLTRB(24, 28, 24, 24),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            // Icon
-            Container(
-              width: 64,
-              height: 64,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                gradient: const LinearGradient(
-                  colors: [MacroSnapTheme.neonGreen, Color(0xFF00CC52)],
-                ),
-              ),
-              child: const Icon(
-                Icons.cloud_upload_rounded,
-                color: Colors.black,
-                size: 32,
-              ),
-            ),
-            const SizedBox(height: 18),
-            Text(
-              'Cloud Backup',
-              style: TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.w900,
-                color: isDark ? Colors.white : const Color(0xFF1A1A1A),
-              ),
-            ),
-            const SizedBox(height: 8),
-
-            // Status description
-            Text(
-              _syncing
-                  ? 'Syncing all data...'
-                  : canSync
-                  ? (_lastSync.isNotEmpty
-                        ? 'Data backed up safely'
-                        : 'Your data has never been backed up')
-                  : 'Sign in to enable cloud backup.',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 13,
-                height: 1.4,
-                color: MacroSnapTheme.textSecondary(context),
-              ),
-            ),
-
-            if (_syncing) ...[
-              const SizedBox(height: 16),
-              const SizedBox(
-                width: 24,
-                height: 24,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2,
-                  color: MacroSnapTheme.neonGreen,
-                ),
-              ),
-            ],
-
-            if (!_syncing && canSync) ...[
-              const SizedBox(height: 20),
-
-              // Meals backup status
-              _backupRow(
-                Icons.restaurant_rounded,
-                'Meals',
-                '$mealCount meal${mealCount == 1 ? '' : 's'} tracked',
-                isDark,
-              ),
-              const SizedBox(height: 10),
-
-              // Habits backup status
-              _backupRow(
-                Icons.favorite_rounded,
-                'Habits + Water',
-                '$habitCount habit${habitCount == 1 ? '' : 's'}${HabitStore.instance.waterGoal > 0 ? ' · ${HabitStore.instance.waterGoal} glasses goal' : ''}',
-                isDark,
-              ),
-
-              // Last sync time
-              if (_lastSync.isNotEmpty) ...[
-                const SizedBox(height: 14),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(
-                      Icons.schedule_rounded,
-                      size: 14,
-                      color: MacroSnapTheme.textTertiary(context),
-                    ),
-                    const SizedBox(width: 6),
-                    Text(
-                      'Last sync: $_lastSync',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: MacroSnapTheme.textTertiary(context),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ],
-
-            const SizedBox(height: 22),
-
-            // CTA Button
-            if (canSync && !_syncing)
-              SizedBox(
-                width: double.infinity,
-                height: 50,
-                child: FilledButton.icon(
-                  onPressed: () async {
-                    HapticFeedback.mediumImpact();
-                    setState(() => _syncing = true);
-                    Navigator.of(ctx).pop();
-                    await _performSync();
-                  },
-                  icon: const Icon(Icons.sync_rounded, size: 18),
-                  label: const Text(
-                    'SYNC ALL DATA',
-                    style: TextStyle(fontWeight: FontWeight.w900),
-                  ),
-                  style: FilledButton.styleFrom(
-                    backgroundColor: MacroSnapTheme.neonGreen,
-                    foregroundColor: Colors.black,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                  ),
-                ),
-              ),
-            if (!canSync)
-              SizedBox(
-                width: double.infinity,
-                height: 50,
-                child: FilledButton(
-                  style: FilledButton.styleFrom(
-                    backgroundColor: MacroSnapTheme.neonGreen,
-                    foregroundColor: Colors.black,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                  ),
-                  onPressed: () {
-                    Navigator.of(ctx).pop();
-                    _upgradeFromGuest();
-                  },
-                  // Shortened label + ellipsis safety: fits one line even on
-                  // the narrowest dialog widths.
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: const [
-                      Flexible(
-                        child: Text(
-                          'SIGN IN FOR BACKUP',
-                          maxLines: 1,
-                          softWrap: false,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(fontWeight: FontWeight.w900),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _backupRow(IconData icon, String label, String detail, bool isDark) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-      decoration: BoxDecoration(
-        color: isDark
-            ? MacroSnapTheme.neonGreen.withValues(alpha: 0.06)
-            : MacroSnapTheme.neonGreen.withValues(alpha: 0.06),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(
-          color: MacroSnapTheme.neonGreen.withValues(alpha: 0.12),
-        ),
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 32,
-            height: 32,
-            decoration: BoxDecoration(
-              color: MacroSnapTheme.neonGreen.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Icon(icon, color: MacroSnapTheme.neonGreen, size: 16),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  label,
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w700,
-                    color: isDark ? Colors.white : const Color(0xFF1A1A1A),
-                  ),
-                ),
-                Text(
-                  detail,
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w500,
-                    color: MacroSnapTheme.textTertiary(context),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const Icon(
-            Icons.check_circle_rounded,
-            color: MacroSnapTheme.neonGreen,
-            size: 18,
-          ),
-        ],
-      ),
-    );
-  }
-
-  Future<void> _performSync() async {
-    try {
-      // 1. Sync meals
-      final meals = MealStore.instance.allMeals;
-      await MealSyncService.syncAllMeals(meals);
-
-      // 2. Sync habits + water
-      final habitStore = HabitStore.instance;
-      await MealSyncService.syncHabits(
-        habitsJson: habitStore.habits.map((h) => h.toJson()).toList(),
-        waterLog: Map<String, int>.from(habitStore.waterLog),
-        waterGoal: habitStore.waterGoal,
-      );
-
-      // 3. Sync diet profile
-      final dietProfile = DietPlanService.instance.profile;
-      if (dietProfile != null) {
-        await MealSyncService.syncDietProfile(dietProfile.toJson());
-      }
-
-      // 4. Sync recent foods
-      final recentFoods = RecentFoodService.instance.foods;
-      await MealSyncService.syncRecentFoods(
-        recentFoods.map((f) => f.toJson()).toList(),
-      );
-
-      // 5. Sync user preferences (theme, name)
-      final prefs = await SharedPreferences.getInstance();
-      await MealSyncService.syncPreferences({
-        'themeMode': prefs.getString('theme_mode') ?? 'system',
-        'name': prefs.getString('name') ?? '',
-      });
-
-      // 6. Save sync timestamp
-      final now = DateTime.now();
-      final syncTime =
-          '${now.day}/${now.month}/${now.year} ${now.hour}:${now.minute.toString().padLeft(2, '0')}';
-      await prefs.setString('last_sync', syncTime);
-
-      if (mounted) {
-        setState(() {
-          _lastSync = syncTime;
-          _syncing = false;
-        });
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              '✅ Backed up ${meals.length} meals + ${habitStore.habits.length} habits + ${recentFoods.length} recent foods',
-            ),
-            behavior: SnackBarBehavior.floating,
-            backgroundColor: MacroSnapTheme.neonGreen,
-          ),
-        );
-      }
-    } catch (_) {
-      if (mounted) {
-        setState(() => _syncing = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Sync failed. Check your connection.'),
-            behavior: SnackBarBehavior.floating,
-            backgroundColor: MacroSnapTheme.neonPink,
-          ),
-        );
-      }
-    }
-  }
-
-  /// Backup reminder banner — shown when last sync was 7+ days ago.
-  Widget _buildBackupReminder(bool isDark) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 16),
-      child: GestureDetector(
-        onTap: () => _showBackupDialog(isDark),
-        child: Container(
-          width: double.infinity,
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: isDark ? const Color(0xFF2A1A00) : const Color(0xFFFFF8E1),
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(
-              color: MacroSnapTheme.neonOrange.withValues(alpha: 0.3),
-            ),
-          ),
-          child: Row(
-            children: [
-              Container(
-                width: 40,
-                height: 40,
-                decoration: BoxDecoration(
-                  color: MacroSnapTheme.neonOrange.withValues(alpha: 0.15),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: const Icon(
-                  Icons.cloud_upload_rounded,
-                  color: MacroSnapTheme.neonOrange,
-                  size: 20,
-                ),
-              ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Backup your data',
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w700,
-                        color: isDark ? Colors.white : const Color(0xFF1A1A1A),
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      'Last backup was over 7 days ago. Tap to sync now.',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: MacroSnapTheme.textTertiary(context),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              Icon(
-                Icons.chevron_right_rounded,
-                color: MacroSnapTheme.textQuaternary(context),
-                size: 20,
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
   }
 
   Widget _settingTile(

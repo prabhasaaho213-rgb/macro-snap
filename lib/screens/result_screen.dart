@@ -1340,8 +1340,8 @@ class _ResultScreenState extends State<ResultScreen>
             children: [
               Row(
                 children: [
-                  // Full-width name: long dish names get their own line and
-                  // ellipsise instead of wrapping into the portion text.
+                  // Full-width name: long dish names wrap onto a second line
+                  // inside the pill instead of being cut off.
                   Expanded(
                     child: Container(
                       padding: const EdgeInsets.symmetric(
@@ -1354,8 +1354,7 @@ class _ResultScreenState extends State<ResultScreen>
                       ),
                       child: Text(
                         dish.name,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
+                        softWrap: true,
                         style: TextStyle(
                           fontSize: 13,
                           fontWeight: FontWeight.w700,
@@ -1389,8 +1388,7 @@ class _ResultScreenState extends State<ResultScreen>
                 const SizedBox(height: 4),
                 Text(
                   dish.portionDescription,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
+                  softWrap: true,
                   style: TextStyle(
                     fontSize: 12,
                     color: MacroSnapTheme.textTertiary(context),

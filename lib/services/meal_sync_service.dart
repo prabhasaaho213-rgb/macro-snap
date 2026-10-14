@@ -299,6 +299,48 @@ class MealSyncService {
   }
 
   // ═══════════════════════════════════════════════════════════════
+  // RECIPES
+  // ═══════════════════════════════════════════════════════════════
+
+  /// Sync the user's custom recipes to Firestore (one recipes doc per user).
+  static Future<bool> syncRecipes(List<Map<String, dynamic>> recipesJson) async {
+    final uid = await _uid();
+    if (_isGuestUid(uid)) return false;
+    try {
+      await _db.collection('recipes').doc(uid).set({
+        'recipes': recipesJson,
+        'updatedAt': DateTime.now(),
+      });
+      SyncStatusService.instance.reportSuccess();
+      return true;
+    } catch (e) {
+      debugPrint('MealSyncService.syncRecipes failed: $e');
+      SyncStatusService.instance.reportFailure('Recipe sync failed');
+      return false;
+    }
+  }
+
+  /// Fetch custom recipes from Firestore.
+  /// Returns null when the user has never backed up (or on failure).
+  static Future<List<Map<String, dynamic>>?> fetchRecipes() async {
+    final uid = await _uid();
+    if (_isGuestUid(uid)) return null;
+    try {
+      final doc = await _db
+          .collection('recipes')
+          .doc(uid)
+          .get()
+          .timeout(const Duration(seconds: 15));
+      if (!doc.exists) return null;
+      SyncStatusService.instance.reportSuccess();
+      return (doc.data()?['recipes'] as List?)?.cast<Map<String, dynamic>>();
+    } catch (e) {
+      debugPrint('MealSyncService.fetchRecipes failed: $e');
+      SyncStatusService.instance.reportFailure('Recipe restore failed');
+      return null;
+    }
+  }
+
   // USER PREFERENCES (theme, name, etc.)
   // ═══════════════════════════════════════════════════════════════
 

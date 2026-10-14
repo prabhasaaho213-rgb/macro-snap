@@ -76,11 +76,14 @@
             <action android:name="android.intent.action.VIEW"/>
             <data android:scheme="https"/>
         </intent>
-        <!-- Play Store app - the Rate us buttons open this. -->
+        <!-- Play Store app - the Rate us buttons open this. The package
+             entry is what lets the explicit-intent path reach Play Store on
+             OEM builds (V-Appstore etc.) that also claim the market scheme. -->
         <intent>
             <action android:name="android.intent.action.VIEW"/>
             <data android:scheme="market"/>
         </intent>
+        <package android:name="com.android.vending"/>
         <intent>
             <action android:name="android.intent.action.VIEW"/>
             <data android:scheme="upi"/>

@@ -75,7 +75,8 @@ void main() {
         size,
       );
 
-      final offset = await verticalOffsetFraction(tester, 'Macro Dashboard');
+      final offset =
+          await verticalOffsetFraction(tester, 'Welcome to\nMacroSnap');
       expect(offset.abs(), lessThan(0.15),
           reason: 'intro title centered on $name, actual offset: '
               '${(offset * 100).toStringAsFixed(1)}% of height');

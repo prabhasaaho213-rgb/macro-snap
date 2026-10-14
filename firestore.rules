@@ -49,6 +49,26 @@ service cloud.firestore {
       allow read, write: if signedIn() && isOwner(uid);
     }
 
+    // ─── dietProfiles/{uid} — diet profile (goal, activity, measurements) ─
+    match /dietProfiles/{uid} {
+      allow read, write: if signedIn() && isOwner(uid);
+    }
+
+    // ─── recentFoods/{uid} — recently logged/searched foods ────────────
+    match /recentFoods/{uid} {
+      allow read, write: if signedIn() && isOwner(uid);
+    }
+
+    // ─── recipes/{uid} — custom recipes ────────────────────────────────
+    match /recipes/{uid} {
+      allow read, write: if signedIn() && isOwner(uid);
+    }
+
+    // ─── userPreferences/{uid} — theme, display name, etc. ─────────────
+    match /userPreferences/{uid} {
+      allow read, write: if signedIn() && isOwner(uid);
+    }
+
     // ─── subscriptions/{subId} — Razorpay subscription lifecycle ────────
     // Written ONLY by the backend webhook via Admin SDK. Read = owner only.
     match /subscriptions/{subId} {

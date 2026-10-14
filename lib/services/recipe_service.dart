@@ -1,9 +1,11 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
 import '../models/recipe.dart';
 import 'account_partition.dart';
+import 'meal_sync_service.dart';
 
 class RecipeService extends ChangeNotifier {
   static final RecipeService instance = RecipeService._();
@@ -32,6 +34,44 @@ class RecipeService extends ChangeNotifier {
       _recipes = [];
     }
     notifyListeners();
+    // Cloud restore merges missing recipes in the background so a slow
+    // network never delays the recipes screen from opening.
+    unawaited(_restoreFromCloud());
+  }
+
+  /// Merge recipes saved in the cloud that this device doesn't have yet
+  /// (covers reinstalls and new devices). Fire-and-forget from [load].
+  Future<void> _restoreFromCloud() async {
+    try {
+      final cloudRecipes = await MealSyncService.fetchRecipes();
+      if (cloudRecipes == null || cloudRecipes.isEmpty) return;
+      final localIds = _recipes.map((r) => r.id).toSet();
+      bool added = false;
+      for (final r in cloudRecipes) {
+        final recipe = Recipe.fromJson(r);
+        if (!localIds.contains(recipe.id)) {
+          _recipes.add(recipe);
+          added = true;
+        }
+      }
+      if (added) {
+        await _save();
+        notifyListeners();
+      }
+    } catch (e) {
+      debugPrint('RecipeService._restoreFromCloud failed: $e');
+    }
+  }
+
+  /// Fire-and-forget cloud sync of the full recipe list.
+  void _syncToCloud() {
+    try {
+      MealSyncService.syncRecipes(
+        _recipes.map((r) => r.toJson()).toList(),
+      );
+    } catch (e) {
+      debugPrint('RecipeService._syncToCloud failed: $e');
+    }
   }
 
   /// One-shot migration of the legacy (pre-partitioning) `recipes` key into
@@ -65,6 +105,7 @@ class RecipeService extends ChangeNotifier {
     final id = const Uuid().v4();
     _recipes.add(Recipe(id: id, name: name, servings: servings, ingredients: ingredients));
     await _save();
+    _syncToCloud();
     return id;
   }
 
@@ -75,12 +116,14 @@ class RecipeService extends ChangeNotifier {
       _recipes[idx].servings = servings;
       _recipes[idx].ingredients = ingredients;
       await _save();
+      _syncToCloud();
     }
   }
 
   Future<void> delete(String id) async {
     _recipes.removeWhere((r) => r.id == id);
     await _save();
+    _syncToCloud();
   }
 
   Recipe? getById(String id) {

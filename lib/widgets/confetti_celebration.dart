@@ -42,7 +42,7 @@ class ConfettiCelebration extends StatefulWidget {
 class _ConfettiCelebrationState extends State<ConfettiCelebration>
     with SingleTickerProviderStateMixin {
   late AnimationController _controller;
-  late List<_Particle> _particles;
+  final List<_Particle> _particles = [];
   final _random = Random();
 
   // Confetti palette — vibrant colors
@@ -67,11 +67,23 @@ class _ConfettiCelebrationState extends State<ConfettiCelebration>
       duration: widget.duration,
     );
 
-    _particles = List.generate(widget.particleCount, (_) => _createParticle());
-
     _controller.forward().then((_) {
       if (mounted) Navigator.of(context).pop();
     });
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Particle geometry needs the screen size, which is an inherited-widget
+    // lookup — so it must happen here, NOT in initState (MediaQuery.of in
+    // initState throws "dependOnInheritedWidgetOfExactType called before
+    // initState completed" in tests and on slow frames).
+    if (_particles.isEmpty) {
+      _particles.addAll(
+        List.generate(widget.particleCount, (_) => _createParticle()),
+      );
+    }
   }
 
   _Particle _createParticle() {
@@ -131,11 +143,14 @@ class _ConfettiCelebrationState extends State<ConfettiCelebration>
               final currentY = p.y + p.vy * t * 60 + 0.5 * p.gravity * (t * 60) * (t * 60);
               final currentRotation = p.rotation + p.rotationSpeed * t * 60;
 
-              // Fade out in last 30%
-              final fade = t > 0.7 ? (1.0 - (t - 0.7) / 0.3) : 1.0;
+              // Fade out in last 30% (clamped — at t == 1.0 the raw formula
+              // can dip a hair below 0 and Opacity asserts opacity >= 0).
+              final fade =
+                  t > 0.7 ? (1.0 - (t - 0.7) / 0.3).clamp(0.0, 1.0) : 1.0;
 
               // Scale down at the end
-              final scale = t > 0.8 ? (1.0 - (t - 0.8) / 0.2 * 0.5) : 1.0;
+              final scale =
+                  t > 0.8 ? (1.0 - (t - 0.8) / 0.2 * 0.5).clamp(0.0, 1.0) : 1.0;
 
               return Positioned(
                 left: currentX - p.size / 2,
@@ -145,7 +160,7 @@ class _ConfettiCelebrationState extends State<ConfettiCelebration>
                   child: Transform.scale(
                     scale: scale,
                     child: Opacity(
-                      opacity: p.opacity * fade,
+                      opacity: (p.opacity * fade).clamp(0.0, 1.0),
                       child: _buildShape(p),
                     ),
                   ),

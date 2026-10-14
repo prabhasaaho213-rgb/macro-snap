@@ -13,7 +13,7 @@ class _ChatMessage {
   const _ChatMessage({required this.role, required this.text});
 }
 
-/// In-app nutrition assistant, opened from the Home screen's floating
+/// In-app nutrition assistant "Guru", opened from the Home screen's floating
 /// button. It only answers food / nutrition / protein questions — the
 /// restriction is enforced by the backend's system instruction, so it holds
 /// no matter how the user phrases a request.
@@ -26,9 +26,9 @@ class ChatScreen extends StatefulWidget {
 
 class _ChatScreenState extends State<ChatScreen> {
   static const _greeting =
-      'Hi! I\u2019m the MacroSnap nutrition assistant. Ask me anything about '
-      'food, calories, protein or meal ideas \u2014 for example \u201CHow much '
-      'protein is in 100g of paneer?\u201D';
+      'Hi! I\u2019m Guru, your MacroSnap nutrition assistant. Ask me anything '
+      'about food, calories, protein or meal ideas \u2014 for example \u201CHow '
+      'much protein is in 100g of paneer?\u201D';
 
   final _input = TextEditingController();
   final _scroll = ScrollController();
@@ -125,7 +125,7 @@ class _ChatScreenState extends State<ChatScreen> {
           ),
           onPressed: () => Navigator.pop(context),
         ),
-        title: const Text('Nutrition Assistant'),
+        title: const Text('Guru'),
       ),
       body: Column(
         children: [

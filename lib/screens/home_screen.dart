@@ -163,7 +163,7 @@ class _HomeScreenState extends State<HomeScreen>
             context,
             MaterialPageRoute(builder: (_) => const ChatScreen()),
           ),
-          tooltip: 'Ask the nutrition assistant',
+          tooltip: 'Ask Guru',
           backgroundColor: MacroSnapTheme.neonPink,
           child: const Icon(Icons.chat_bubble_rounded,
               color: Colors.white, size: 24),
