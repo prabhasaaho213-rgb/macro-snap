@@ -1,7 +1,7 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:http/http.dart' as http;
+import '../services/auth_http.dart';
 import '../core/theme.dart';
 import '../models/diet_profile.dart';
 import '../services/gemini_service.dart';
@@ -154,7 +154,7 @@ class _DietPlanScreenState extends State<DietPlanScreen> {
       _aiPlan = null;
     });
     try {
-      final resp = await http.post(
+      final resp = await AuthHttp.post(
         Uri.parse('${GeminiService.serverUrl}/generate-diet-plan'),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({
@@ -170,7 +170,30 @@ class _DietPlanScreenState extends State<DietPlanScreen> {
       );
       final data = jsonDecode(resp.body) as Map<String, dynamic>;
       if (resp.statusCode != 200) {
-        throw Exception(data['error'] ?? 'Failed to generate');
+        // A non-2xx body carries `message` (human-readable, e.g. the 429
+        // rate-limit text) and, failing that, `error` (a machine code). Prefer
+        // the message so the user never reads a bare `pro_required`.
+        final serverMessage =
+            (data['message'] ?? data['error'])?.toString();
+        if (data['error'] == 'pro_required') {
+          // The server says this account is not Pro. That happens when the local
+          // flag is stale — a free plan that expired since this screen loaded —
+          // so re-read it (which also fixes the button below) and send them to
+          // the plans instead of leaving a dead end with a red error.
+          await _loadProfile();
+          if (!mounted) return;
+          setState(() {
+            _generating = false;
+            _aiError = serverMessage ??
+                'The AI meal plan is a Pro feature. Upgrade to build your plan.';
+          });
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const SubscriptionScreen()),
+          );
+          return;
+        }
+        throw Exception(serverMessage ?? 'Failed to generate');
       }
       if (mounted) {
         setState(() {

@@ -9,8 +9,10 @@ import '../services/meal_store.dart';
 import '../services/recent_food_service.dart';
 import '../services/scan_gate.dart';
 import '../widgets/animations.dart';
+import '../widgets/calorie_reveal.dart';
 import '../widgets/glass_card.dart';
 import '../widgets/gradient_button.dart';
+import '../widgets/scan_animation.dart';
 
 class ResultScreen extends StatefulWidget {
   final String imagePath;
@@ -34,7 +36,20 @@ class _ResultScreenState extends State<ResultScreen>
   bool _isAnalyzing = true;
   String? _error;
   NutritionResult? _result;
+
+  /// Current total serving in grams. Defaults to 100 g, which is also the
+  /// baseline the AI reports per-100g values against. The user can adjust it
+  /// and every item's nutrients rescale from its per-100g value.
+  int _grams = 100;
   bool _showPerDish = false;
+
+  /// True while the detected dish names are popping onto the photo (phase 2 of
+  /// the scan animation). The results UI only appears once the reveal ends.
+  bool _revealing = false;
+
+  /// Keeps the calorie reveal's state — and so its spin — alive across the
+  /// "Show per Dish" rebuilds instead of replaying it.
+  final GlobalKey _calorieKey = GlobalKey();
   String _analysisStage = 'Analyzing your meal...';
   String _analysisSub =
       'Our AI is identifying each dish\nand calculating nutrition';
@@ -82,7 +97,8 @@ class _ResultScreenState extends State<ResultScreen>
 
   void _animateStages() {
     Future.delayed(const Duration(seconds: 4), () {
-      if (mounted && _isAnalyzing) {
+      // Never overwrite the reveal's own captions.
+      if (mounted && _isAnalyzing && !_revealing) {
         setState(() {
           _analysisStage = 'Still working...';
           _analysisSub =
@@ -91,7 +107,7 @@ class _ResultScreenState extends State<ResultScreen>
       }
     });
     Future.delayed(const Duration(seconds: 10), () {
-      if (mounted && _isAnalyzing) {
+      if (mounted && _isAnalyzing && !_revealing) {
         setState(() {
           _analysisStage = 'Taking longer than expected';
           _analysisSub = 'The server may be busy. Please retry in a moment.';
@@ -121,18 +137,40 @@ class _ResultScreenState extends State<ResultScreen>
           result.dishes.any((d) => d.name.toLowerCase() == 'unknown');
 
       if (isUnidentified) {
-        // Low confidence / unidentified — show warning, don't count scan
-        if (mounted) {
-          setState(() {
-            _result = result;
-            _isAnalyzing = false;
-            _showLowConfidenceWarning = true;
-          });
-          _animController.forward();
+        // Low confidence / unidentified — the scan is NOT counted. The server
+        // refunds its reservation for exactly these cases (confidence < 0.5 or
+        // an "Unknown" dish), so mirror the numbers it just returned.
+        //
+        // Skipping this used to leave the local count stale: the badge showed
+        // the scan as free while the server had already spent it, the two
+        // drifted apart, and a later scan 403'd with no warning. Recording the
+        // server's answer in BOTH branches keeps them in step.
+        if (result.serverScansKnown) {
+          await ScanGate.recordServerCounts(
+            used: result.scansUsed,
+            limit: result.scansLimit,
+            resetAt: result.serverResetAt,
+          );
         }
+        if (!mounted) return;
+        setState(() {
+          _result = result;
+          _isAnalyzing = false;
+          _showLowConfidenceWarning = true;
+        });
+        _animController.forward();
       } else {
-        // Good identification — count the scan
+        // Good identification — the scan counts. The SERVER is the authority
+        // (it has already incremented its own per-IST-day counter), so mirror
+        // the numbers it reported; the local counter stays a display estimate.
         await ScanGate.incrementScan();
+        if (result.serverScansKnown) {
+          await ScanGate.recordServerCounts(
+            used: result.scansUsed,
+            limit: result.scansLimit,
+            resetAt: result.serverResetAt,
+          );
+        }
         // Re-check after the async count — the screen may have been
         // closed while the count was being persisted.
         if (!mounted) return;
@@ -153,9 +191,23 @@ class _ResultScreenState extends State<ResultScreen>
           ));
         }
 
+        // The analysis is done but the "magic trick" is not: pop the detected
+        // dish names onto the photo one by one, and only then show the results.
         setState(() {
           _result = result;
+          _revealing = true;
+          _analysisStage = result.dishes.length == 1
+              ? 'Found it!'
+              : 'Found ${result.dishes.length} items!';
+          _analysisSub = 'Calculating your macros...';
+        });
+        await Future.delayed(
+          ScanAnimationView.revealDuration(result.dishes.length),
+        );
+        if (!mounted) return;
+        setState(() {
           _isAnalyzing = false;
+          _revealing = false;
         });
         _animController.forward();
       }
@@ -163,9 +215,21 @@ class _ResultScreenState extends State<ResultScreen>
       // Scan limit reached is not a recognition failure — show the clear
       // upsell message.
       if (e.toString().contains('Scan limit')) {
+        // The server refused the scan: today's free allowance is gone. Record
+        // it as used-up so the UI immediately shows 0 scans left.
+        await ScanGate.markLimitReached();
+        if (!mounted) return;
+        setState(() {
+          _error = 'Your ${ScanGate.freeLimitPerDay} free scans for today are used.\n'
+              'They reset at midnight.';
+          _isAnalyzing = false;
+        });
+        return;
+      }
+      if (e.toString().contains('sign in')) {
         if (mounted) {
           setState(() {
-            _error = 'Free scans used up.\nSubscribe for unlimited scans.';
+            _error = 'Please sign in to use AI scans.';
             _isAnalyzing = false;
           });
         }
@@ -366,6 +430,17 @@ class _ResultScreenState extends State<ResultScreen>
     fatCtrl.dispose();
   }
 
+  /// Applies a new total serving size: updates the slider value AND rebuilds
+  /// the [NutritionResult] with the new grams so every macro (calories,
+  /// protein, carbs, fats, fiber, sugar) rescales from its per-100g value.
+  void _setGrams(int g) {
+    setState(() {
+      _grams = g;
+      final r = _result;
+      if (r != null) _result = r.withGrams(g);
+    });
+  }
+
   /// Low confidence warning banner — shown when AI couldn't identify food.
   /// Offers retry (same photo) and manual entry options.
   Widget _buildLowConfidenceBanner(bool isDark) {
@@ -504,6 +579,88 @@ class _ResultScreenState extends State<ResultScreen>
             color: MacroSnapTheme.greenText(context),
             size: 44,
           ),
+        ),
+      ),
+    );
+  }
+
+  /// Total-serving gram adjuster. Defaults to 100 g; the user can raise or
+  /// lower it and every item's nutrients rescale from their per-100g values.
+  Widget _buildGramAdjuster(bool isDark) {
+    return GlassCard(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        child: Row(
+          children: [
+            Icon(
+              Icons.scale_rounded,
+              size: 18,
+              color: MacroSnapTheme.textTertiary(context),
+            ),
+            const SizedBox(width: 8),
+            Flexible(
+              child: Text(
+                'Total Serving',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: MacroSnapTheme.textSecondary(context),
+                ),
+              ),
+            ),
+            const Spacer(),
+            GestureDetector(
+              onTap: () => _setGrams(_grams >= 50 ? _grams - 25 : 25),
+              child: Container(
+                padding: const EdgeInsets.all(6),
+                decoration: BoxDecoration(
+                  color: MacroSnapTheme.neonGreen.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Icon(
+                  Icons.remove_rounded,
+                  size: 18,
+                  color: MacroSnapTheme.neonGreen,
+                ),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Text(
+              '$_grams',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w800,
+                color: isDark ? Colors.white : const Color(0xFF1A1A1A),
+              ),
+            ),
+            const SizedBox(width: 4),
+            Text(
+              'g',
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w500,
+                color: MacroSnapTheme.textTertiary(context),
+              ),
+            ),
+            const SizedBox(width: 12),
+            GestureDetector(
+              onTap: () => _setGrams(_grams <= 975 ? _grams + 25 : 1000),
+              child: Container(
+                padding: const EdgeInsets.all(6),
+                decoration: BoxDecoration(
+                  color: MacroSnapTheme.neonGreen.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Icon(
+                  Icons.add_rounded,
+                  size: 18,
+                  color: MacroSnapTheme.neonGreen,
+                ),
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -691,7 +848,26 @@ class _ResultScreenState extends State<ResultScreen>
     );
   }
 
+  /// The scan view sits OUTSIDE the shimmer: ShimmerLoading paints a white
+  /// sweep across everything inside it, which would wash the photo out.
   Widget _buildLoadingState(bool isDark) {
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
+          child: ScanAnimationView(
+            imagePath: widget.imagePath,
+            labels: _revealing && _result != null
+                ? _result!.dishes.map((d) => d.name).toList()
+                : null,
+          ),
+        ),
+        Expanded(child: _buildSkeletons(isDark)),
+      ],
+    );
+  }
+
+  Widget _buildSkeletons(bool isDark) {
     return ShimmerLoading(
       isLoading: true,
       child: SingleChildScrollView(
@@ -699,10 +875,6 @@ class _ResultScreenState extends State<ResultScreen>
         padding: const EdgeInsets.all(20),
         child: Column(
           children: [
-            // Image skeleton
-            const SkeletonPlaceholder(height: 220),
-            const SizedBox(height: 12),
-
             // Gram adjuster skeleton
             const SkeletonPlaceholder(height: 40),
             const SizedBox(height: 16),
@@ -822,7 +994,7 @@ class _ResultScreenState extends State<ResultScreen>
 
   Widget _buildError(bool isDark) {
     final isNoUrl = _error == 'no_url';
-    final isScanLimit = _error?.contains('Free scans') == true;
+    final isScanLimit = _error?.toLowerCase().contains('free scans') == true;
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(32),
@@ -847,7 +1019,7 @@ class _ResultScreenState extends State<ResultScreen>
               isNoUrl
                   ? 'Server Not Set'
                   : isScanLimit
-                      ? 'Free Scans Used'
+                      ? 'Free Scans Used Today'
                       : 'Could Not Identify',
               style: TextStyle(
                 fontSize: 20,
@@ -962,6 +1134,10 @@ class _ResultScreenState extends State<ResultScreen>
           // Low confidence warning banner (like Cal AI / MyFitnessPal)
           if (_showLowConfidenceWarning && widget.existingMeal == null)
             _buildLowConfidenceBanner(isDark),
+
+          // Total-serving gram adjuster (defaults to 100 g). View mode keeps
+          // the logged meal's totals as the source of truth, so it's hidden.
+          if (widget.existingMeal == null) _buildGramAdjuster(isDark),
 
           if (hasMultiDish) ...[
             const SizedBox(height: 8),
@@ -1226,12 +1402,13 @@ class _ResultScreenState extends State<ResultScreen>
     );
   }
 
-  /// Serving-weight parentheticals like "(6g)" or "(400 g)" are stripped
-  /// from every display on this screen: nutrition here always calculates
-  /// from the 100 g baseline, so a gram weight would contradict the numbers
-  /// shown next to it.
-  String _stripGrams(String text) =>
-      text.replaceAll(RegExp(r'\s*\(\s*\d+(?:\.\d+)?\s*g\s*\)'), '');
+  /// Serving-weight parentheticals like "(6g)", "(400 g)" or "(approx. 10g)"
+  /// are stripped from every display on this screen: per-item gram weights
+  /// are hidden, and nutrition is always calculated from the adjustable
+  /// total-serving baseline (default 100 g) shown in the gram adjuster.
+  String _stripGrams(String text) => text.replaceAll(
+      RegExp(r'\s*\([^)]*\b\d+(?:\.\d+)?\s*g\b[^)]*\)', caseSensitive: false),
+      '');
 
   Widget _buildDishCard(bool isDark, DishItem dish, int totalGrams) {
     final ratio = totalGrams / 100;
@@ -1443,8 +1620,12 @@ class _ResultScreenState extends State<ResultScreen>
   Widget _buildTotalCalories(bool isDark, NutritionResult r) {
     return Column(
       children: [
-        Text(
-          '${r.calories}',
+        CalorieReveal(
+          key: _calorieKey,
+          calories: r.calories,
+          protein: r.protein,
+          // A saved meal was logged long ago — show its number instantly.
+          animate: widget.existingMeal == null,
           style: TextStyle(
             fontSize: 56,
             fontWeight: FontWeight.w800,

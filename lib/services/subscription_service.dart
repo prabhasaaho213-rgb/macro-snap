@@ -1,7 +1,7 @@
 import 'dart:convert';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
-import 'package:http/http.dart' as http;
+import 'auth_http.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'firebase_identity.dart';
 import 'meal_store.dart';
@@ -22,12 +22,17 @@ class SubscriptionService extends ChangeNotifier {
   static const String _subscribedAtKey = 'subscribed_at';
   static const String _trialEndsAtKey = 'trial_ends_at';
 
+  /// ISO end date of a server-granted Pro window (referral reward).
+  /// Display-only: the server decides, this only mirrors the date it reported.
+  static const String _proUntilKey = 'pro_until';
+
   /// The owner account — always gets Pro for free, forever.
   static const String adminEmail = 'prabhasaaho213@gmail.com';
 
   bool _subscribed = false;
   bool _paid = false;
   String? _subscribedAt;
+  String? _proUntil;
   DateTime? _trialEndsAt;
 
   /// True while the account is inside its one-time 30-day free plan and has
@@ -45,6 +50,10 @@ class SubscriptionService extends ChangeNotifier {
 
   bool get isSubscribed => _subscribed;
   String? get subscribedAt => _subscribedAt;
+
+  /// ISO end date of the current Pro window (referral reward), as last
+  /// reported by the server. Null for plain paid Pro (no end date).
+  String? get proUntil => _proUntil;
 
   /// True when the currently signed-in email is the owner/admin account.
   /// The admin gets a permanent, free Pro subscription.
@@ -99,14 +108,17 @@ class SubscriptionService extends ChangeNotifier {
     }
     final paid = subscribedNow;
     if (!subscribedNow && trialEnd != null) subscribed = true;
+    final until = p.getString(_proUntilKey);
 
     if (subscribed != _subscribed ||
         at != _subscribedAt ||
         paid != _paid ||
+        until != _proUntil ||
         trialEnd != _trialEndsAt) {
       _subscribed = subscribed;
       _subscribedAt = at;
       _paid = paid;
+      _proUntil = until;
       _trialEndsAt = trialEnd;
       notifyListeners();
     }
@@ -132,18 +144,19 @@ class SubscriptionService extends ChangeNotifier {
   /// app only mirrors the server-issued end date. Offline, the persisted
   /// date keeps the countdown honest and never re-grants anything.
   Future<void> _verifyTrial() async {
-    if (_subscribed) return; // paying users don't need it
+    // Paying users don't need it. Trial-derived Pro does NOT skip this
+    // check: the server must get the last word, or a stale local marker
+    // (another account on this device, or an account deleted elsewhere)
+    // would keep showing Pro after the backend refused to re-grant it.
+    if (_paid) return;
     final p = await SharedPreferences.getInstance();
     final phone = p.getString('phone') ?? '';
     final email = p.getString('email') ?? '';
     if (phone.isEmpty && email.isEmpty) return; // guest — no identity
     try {
-      final uri = Uri.parse('${GeminiService.serverUrl}/trial/status')
-          .replace(queryParameters: {
-        if (phone.isNotEmpty) 'phone': phone,
-        if (email.isNotEmpty) 'email': email,
-      });
-      final res = await http.get(uri).timeout(const Duration(seconds: 8));
+      // Identity comes from the token — no identifier goes in the URL.
+      final uri = Uri.parse('${GeminiService.serverUrl}/trial/status');
+      final res = await AuthHttp.get(uri).timeout(const Duration(seconds: 8));
       if (res.statusCode != 200) return;
       final data = jsonDecode(res.body) as Map<String, dynamic>;
       if (data['active'] == true && data['endsAt'] is String) {
@@ -156,7 +169,12 @@ class SubscriptionService extends ChangeNotifier {
             notifyListeners();
           }
         }
-      } else if (data['expired'] == true) {
+      } else if (data['expired'] == true || data['active'] == false) {
+        // expired      -> the countdown finished.
+        // active:false -> the server has NO trial for this identity — it
+        //   never claimed one, or its account was deleted and the backend
+        //   refused to re-grant it (deletion tombstone). Either way, drop
+        //   the stale local marker so it can never show Pro again.
         await p.remove(_trialEndsAtKey);
         if (_trialEndsAt != null) {
           _trialEndsAt = null;
@@ -178,8 +196,10 @@ class SubscriptionService extends ChangeNotifier {
   ///
   /// Called at app startup and after sign-in so a paying user who reinstalls
   /// or switches devices gets Pro restored without opening the subscription
-  /// screen. Never deactivates locally — transient network failures must not
-  /// strip a user's paid status.
+  /// screen. A network failure never deactivates — but a SUCCESSFUL
+  /// `subscribed: false` answer with no active trial is authoritative and
+  /// clears the saved Pro flag, so a cancelled subscription or an expired
+  /// referral window stops showing the Pro look right away.
   Future<void> verifyServerSubscription() async {
     // The admin's lifetime Pro is local-only; don't override it.
     if (await isAdmin()) return;
@@ -222,16 +242,35 @@ class SubscriptionService extends ChangeNotifier {
       return; // Guest — nothing to verify.
     }
     try {
-      final uri = Uri.parse('${GeminiService.serverUrl}/subscription/status')
-          .replace(queryParameters: {
-            if (phone != null && phone.isNotEmpty) 'phone': phone,
-            if (email != null && email.isNotEmpty) 'email': email,
-          });
-      final res = await http.get(uri).timeout(const Duration(seconds: 8));
+      final uri = Uri.parse('${GeminiService.serverUrl}/subscription/status');
+      final res = await AuthHttp.get(uri).timeout(const Duration(seconds: 8));
       if (res.statusCode != 200) return;
       final data = jsonDecode(res.body) as Map<String, dynamic>;
-      if (data['subscribed'] == true && !_subscribed) {
-        await activate();
+      if (data['subscribed'] == true) {
+        // Remember the end date of a server-granted window (referral
+        // reward) so Settings can show when Pro ends; null clears a
+        // stale one.
+        final until = data['pro_until'] is String
+            ? data['pro_until'] as String
+            : null;
+        if (until != null) {
+          await p.setString(_proUntilKey, until);
+        } else {
+          await p.remove(_proUntilKey);
+        }
+        final proUntilChanged = _proUntil != until;
+        _proUntil = until;
+        if (!_subscribed) {
+          await activate();
+        } else if (proUntilChanged) {
+          notifyListeners();
+        }
+      } else if (!trialActive) {
+        // The server answered SUCCESSFULLY: this account is free and has
+        // no active trial (cancelled subscription, expired referral
+        // window). Non-200 answers return earlier and network errors land
+        // in the catch below, so a bad connection never downgrades anyone.
+        await _deactivate();
       }
     } catch (_) {
       // Offline or server unreachable — keep the local state as-is, but
@@ -260,6 +299,29 @@ class SubscriptionService extends ChangeNotifier {
     // Refresh scan counts. Reminder scheduling is NOT here —
     // NotificationService listens to this notifier and applies the plan on
     // every state change.
+    try {
+      MealStore.instance.changeNotifier.value++;
+    } catch (e) { debugPrint("Error: $e"); }
+  }
+
+  /// Clears the locally saved Pro flag after the server has AUTHORITATIVELY
+  /// said the account is free (cancelled subscription, expired referral
+  /// window). Only reached from a successful 200 /subscription/status
+  /// answer — network failures keep the local state untouched.
+  Future<void> _deactivate() async {
+    if (!_subscribed && _proUntil == null) return;
+    final p = await SharedPreferences.getInstance();
+    await p.remove(_subscribedKey);
+    await p.remove(_subscribedAtKey);
+    await p.remove(_proUntilKey);
+    _subscribed = false;
+    _paid = false;
+    _subscribedAt = null;
+    _proUntil = null;
+    notifyListeners();
+
+    // Same side effect as activate(): scan counts and the Pro-only
+    // notification plan must refresh down to the free tier.
     try {
       MealStore.instance.changeNotifier.value++;
     } catch (e) { debugPrint("Error: $e"); }

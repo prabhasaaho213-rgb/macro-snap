@@ -28,6 +28,16 @@ class MacroSnapTheme {
   static const Color neonYellow = Color(0xFFF4A340); // amber, kept name
   static const Color neonRed = Color(0xFFE8481C);
 
+  /// The ONE brand CTA gradient — burnt-orange into a lighter orange.
+  /// Every button / icon circle / highlight that still used the leftover
+  /// orange→neon-green pair (0xFF00CC52, from the pre-redesign palette)
+  /// must use this instead, so gradients never mix the old green in.
+  static const LinearGradient accentGradient = LinearGradient(
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+    colors: [Color(0xFFF4511E), Color(0xFFFF7A45)],
+  );
+
   // ─── Semantic Macro Color Aliases ──────────────────────────
   /// Calories → coin orange (the brand accent)
   static const Color macroCalories = neonOrange;
@@ -74,33 +84,21 @@ class MacroSnapTheme {
       ? Colors.white38
       : const Color(0xFFCBD5E1);
 
-  /// Green used for TEXT (not fills/icons). Neon green (#00FF66) has terrible
-  /// contrast on white/light cards, so light mode swaps it for a darker,
-  /// readable green while dark mode keeps the bright neon accent.
+  /// Green used for TEXT (not fills/icons). Always GREEN in both themes:
+  /// after the orange redesign [neonGreen] became the orange accent, so
+  /// following it here made the same text flip orange (dark) ↔ green
+  /// (light). Instead keep the hue stable and only adjust the shade —
+  /// deep green on light cards, a brighter green on near-black cards.
   static Color greenText(BuildContext context) =>
       Theme.of(context).brightness == Brightness.dark
-      ? neonGreen
+      ? const Color(0xFF3DDC84)
       : const Color(0xFF008A43);
-
-  /// Card background color (themed)
-  static Color cardBackground(BuildContext context) =>
-      Theme.of(context).brightness == Brightness.dark ? cardDark : Colors.white;
 
   /// Subtle border color
   static Color borderSubtle(BuildContext context) =>
       Theme.of(context).brightness == Brightness.dark
       ? Colors.white10
       : const Color(0xFFE2E8F0);
-
-  /// Convenience: list of all macro colors for cycling
-  static const List<Color> macroColors = [
-    neonPink,
-    neonOrange,
-    neonCyan,
-    neonGreen,
-    neonPurple,
-    neonYellow,
-  ];
 
   // ─── Background & Surface Colors ───────────────────────────
   static const Color surfaceDark = Color(0xFF0A0A0A);
@@ -183,17 +181,32 @@ class MacroSnapTheme {
     );
   }
 
-  /// Mission-style emoji icon container — a vivid tinted tile with a
-  /// strong colored border and glow so emoji glyphs pop with rich color
-  /// instead of looking washed out.
+  /// Mission-style emoji icon container — a flat tile tinted with the
+  /// caller's accent, so each icon reads as its own colored chip instead of
+  /// disappearing into the card behind it.
+  ///
+  /// Deliberately still FLAT: no gradient and no boxShadow/blur. The old glow
+  /// smeared while cards were swiped (hence the RepaintBoundary around this
+  /// tile in habits_tab.dart) and glyph shadows painted a ghost reflection
+  /// under the emoji. Contrast comes from the accent tint and an accent-tinted
+  /// hairline border — never from a shadow.
   static BoxDecoration emojiContainer(Color color) {
-    // POP's utility tiles ("Pay friends", "Check balance") are flat black
-    // pills with a thin gray border — the icon glyph itself carries the
-    // color, not the tile background. No glow/shadow.
+    // The tile used to ignore `color` entirely and paint cardDarkLight
+    // (#1C1C1C) on a cardDark (#141414) card — an 8-step RGB difference, so
+    // neither the tile nor the habit's own accent was visible. Blend the
+    // accent over a slightly lifted base instead: the white lift separates
+    // the tile from the card, the accent supplies the hue.
+    final base = Color.alphaBlend(
+      Colors.white.withValues(alpha: 0.06),
+      cardDarkLight,
+    );
     return BoxDecoration(
-      color: cardDarkLight,
+      color: Color.alphaBlend(color.withValues(alpha: 0.20), base),
       borderRadius: BorderRadius.circular(18),
-      border: Border.all(color: cardDarkBorder, width: 1),
+      border: Border.all(
+        color: Color.alphaBlend(color.withValues(alpha: 0.55), cardDarkBorder),
+        width: 1,
+      ),
     );
   }
 
@@ -201,7 +214,7 @@ class MacroSnapTheme {
   ///
   /// Shadows on emoji glyphs previously painted a dark "ghost reflection"
   /// under the emoji (visible when swiping cards or on tinted chips). Every
-  /// emoji surface in the app now renders flat; the vivid tinted tile behind
+  /// emoji surface in the app now renders flat; the accent-tinted tile behind
   /// it ([emojiContainer]) provides the depth instead.
   static TextStyle emojiStyle({double fontSize = 25}) {
     return TextStyle(fontSize: fontSize);
@@ -530,32 +543,4 @@ class MacroSnapTheme {
           );
   }
 
-  static BoxDecoration glassShine(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    return BoxDecoration(
-      gradient: LinearGradient(
-        begin: Alignment.topLeft,
-        end: Alignment.bottomRight,
-        colors: isDark
-            ? const [
-                Color(0xFF050508),
-                Color(0xFF181830),
-                Color(0xFF11151E),
-                Color(0xFF181830),
-              ]
-            : [
-                Colors.white,
-                const Color(0xFFF8FAFC),
-                const Color(0xFFF8FAFC),
-                Colors.white.withValues(alpha: 0.5),
-              ],
-      ),
-      borderRadius: BorderRadius.circular(28),
-      border: Border.all(
-        color: isDark
-            ? const Color(0xFF353550)
-            : Colors.black.withValues(alpha: 0.04),
-      ),
-    );
-  }
 }

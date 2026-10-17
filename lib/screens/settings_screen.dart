@@ -1,6 +1,8 @@
 import 'dart:async';
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import '../services/auth_http.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_sign_in/google_sign_in.dart';
@@ -15,6 +17,7 @@ import '../services/meal_sync_service.dart';
 import '../services/habit_store.dart';
 import '../services/rate_us_service.dart';
 import '../services/subscription_service.dart';
+import '../services/gemini_service.dart';
 import 'subscription_screen.dart';
 import 'phone_login_screen.dart';
 import 'updates_screen.dart';
@@ -32,6 +35,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   bool _subscribed = false;
   bool _isAdmin = false;
   String? _subscribedDate;
+  String? _proUntil;
 
 
   /// True while the newest release has not been opened from here yet —
@@ -67,6 +71,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       _phone = prefs.getString('phone') ?? '';
       _subscribed = SubscriptionService.instance.isSubscribed;
       _subscribedDate = SubscriptionService.instance.subscribedAt;
+      _proUntil = SubscriptionService.instance.proUntil;
       _hasUnseenUpdate =
           (prefs.getString(UpdatesScreen.seenVersionKey) ?? '') !=
           UpdatesScreen.latestVersion;
@@ -149,6 +154,152 @@ class _SettingsScreenState extends State<SettingsScreen> {
     if (context.mounted) {
       Navigator.pushAndRemoveUntil(
         context,
+        MaterialPageRoute(builder: (_) => const PhoneLoginScreen()),
+        (route) => false,
+      );
+    }
+  }
+
+  /// In-app self-service account deletion.
+  ///
+  /// 1. Shows a confirmation dialog explaining this is permanent.
+  /// 2. Calls the backend `POST /account/delete`, which wipes all cloud data
+  ///    (Postgres + Firestore) but keeps a tombstone of the identifier + its
+  ///    original trial start — so re-registering can never re-claim the free
+  ///    trial (no delete -> re-login trial-abuse loop).
+  /// 3. Wipes this device's local data and signs out, returning to login.
+  Future<void> _deleteAccount(BuildContext context, bool isDark) async {
+    if (_isGuest) {
+      // Guests have no server account to delete — just clear local data.
+      final confirmed = await _confirmDeleteDialog(
+        context,
+        isDark,
+        title: 'Clear All Data?',
+        body:
+            'This removes all meals, habits and settings stored on this device. '
+            'This cannot be undone.',
+      );
+      if (confirmed != true || !context.mounted) return;
+      await _wipeLocalAndSignOut(context);
+      return;
+    }
+
+    final confirmed = await _confirmDeleteDialog(
+      context,
+      isDark,
+      title: 'Delete Account?',
+      body:
+          'This permanently deletes your account and ALL associated data: '
+          'meals, habits, diet plans, subscription and personal info. '
+          'This cannot be undone.\n\n'
+          'Note: your phone / email will be remembered so it cannot be used '
+          'to claim the free trial again.',
+    );
+    if (confirmed != true || !context.mounted) return;
+
+    // Show a blocking progress dialog while we delete.
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const Center(child: CircularProgressIndicator()),
+    );
+
+    var serverOk = false;
+    try {
+      // The token identifies the account being deleted — nothing else is sent.
+      final uri = Uri.parse('${GeminiService.serverUrl}/account/delete');
+      final res = await AuthHttp.post(
+        uri,
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode(const <String, dynamic>{}),
+      ).timeout(const Duration(seconds: 20));
+      serverOk = res.statusCode == 200;
+    } catch (e) {
+      debugPrint('Delete account server call failed: $e');
+    }
+
+    if (!context.mounted) return;
+    Navigator.of(context).pop(); // dismiss progress dialog
+
+    if (!serverOk) {
+      // Backend unreachable — do NOT wipe locally, so the user can retry or
+      // still use the app. Tell them it failed.
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Could not reach the server to delete your account. '
+              'Please check your connection and try again.',
+            ),
+          ),
+        );
+      }
+      return;
+    }
+
+    await _wipeLocalAndSignOut(context);
+  }
+
+  Future<bool?> _confirmDeleteDialog(
+    BuildContext context,
+    bool isDark, {
+    required String title,
+    required String body,
+  }) {
+    return showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: isDark ? MacroSnapTheme.cardDark : Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Text(title),
+        content: Text(body, style: const TextStyle(fontSize: 13, height: 1.5)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: FilledButton.styleFrom(
+              backgroundColor: MacroSnapTheme.neonPink,
+            ),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Wipes every local store + prefs for the active account, signs out of
+  /// Firebase/Google, and returns to the login screen.
+  Future<void> _wipeLocalAndSignOut(BuildContext context) async {
+    try {
+      // Firebase Auth has no instance-level deleteUser(); the correct API is
+      // delete() on the currently signed-in user.
+      await FirebaseAuth.instance.currentUser?.delete();
+    } catch (e) {
+      // delete() needs a recent login; fall back to plain signOut.
+      debugPrint('Firebase delete user failed: $e');
+      try {
+        await FirebaseAuth.instance.signOut();
+      } catch (e2) {
+        debugPrint('Error: $e2');
+      }
+    }
+    try {
+      await GoogleSignIn().signOut();
+    } catch (e) {
+      debugPrint('Error: $e');
+    }
+    // Clear ALL local preferences (this device's partition + globals).
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.clear();
+    } catch (e) {
+      debugPrint('Error: $e');
+    }
+    if (context.mounted) {
+      Navigator.of(context).pushAndRemoveUntil(
         MaterialPageRoute(builder: (_) => const PhoneLoginScreen()),
         (route) => false,
       );
@@ -306,11 +457,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               width: double.infinity,
               padding: const EdgeInsets.all(20),
               decoration: BoxDecoration(
-                gradient: const LinearGradient(
-                  colors: [MacroSnapTheme.neonGreen, Color(0xFF00CC52)],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
+                gradient: MacroSnapTheme.accentGradient,
                 borderRadius: BorderRadius.circular(24),
               ),
               child: Column(
@@ -420,7 +567,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       _isAdmin
                           ? 'Lifetime Pro · free forever'
                           : (_subscribed && _subscribedDate != null
-                                ? 'Subscribed since ${_subscribedDate!.substring(0, 10)}'
+                                ? (_proUntil != null
+                                      ? 'Pro until ${_proUntil!.substring(0, 10)}'
+                                      : 'Subscribed since ${_subscribedDate!.substring(0, 10)}')
                                 : 'Unlock AI meal plans & more'),
                       () {
                         Navigator.push(
@@ -530,17 +679,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       Icons.delete_forever_outlined,
                       'Delete Account',
                       'Permanently delete your data',
-                      () async {
-                        final uri = Uri.parse(
-                          'https://prabhasaaho213-rgb.github.io/macro-snap-source-1.4.5/delete-account.html',
-                        );
-                        if (await canLaunchUrl(uri)) {
-                          await launchUrl(
-                            uri,
-                            mode: LaunchMode.externalApplication,
-                          );
-                        }
-                      },
+                      () => _deleteAccount(context, isDark),
                       isDark,
                     ),
                   ),

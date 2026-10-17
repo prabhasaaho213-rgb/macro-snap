@@ -1,9 +1,8 @@
-import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:http/http.dart' as http;
 import '../core/theme.dart';
-import '../services/gemini_service.dart';
+import '../services/guru_service.dart';
+import 'subscription_screen.dart';
 
 enum _Role { user, assistant }
 
@@ -14,9 +13,10 @@ class _ChatMessage {
 }
 
 /// In-app nutrition assistant "Guru", opened from the Home screen's floating
-/// button. It only answers food / nutrition / protein questions — the
-/// restriction is enforced by the backend's system instruction, so it holds
-/// no matter how the user phrases a request.
+/// button. It answers food / nutrition / protein questions — about the user's
+/// own logged day (via the snapshot [GuruService] attaches) as well as general
+/// nutrition — but nothing else: the restriction is enforced by the backend's
+/// system instruction, so it holds no matter how the user phrases a request.
 class ChatScreen extends StatefulWidget {
   const ChatScreen({super.key});
 
@@ -34,6 +34,10 @@ class _ChatScreenState extends State<ChatScreen> {
   final _scroll = ScrollController();
   final List<_ChatMessage> _messages = [];
   bool _busy = false;
+
+  /// Set when the backend answered 403 `pro_required`. The composer is then
+  /// replaced by the upgrade card — no further turn can be sent.
+  bool _proRequired = false;
 
   @override
   void initState() {
@@ -65,17 +69,16 @@ class _ChatScreenState extends State<ChatScreen> {
         for (final m in _messages.take(_messages.length - 1))
           {'role': m.role == _Role.user ? 'user' : 'model', 'text': m.text},
       ];
-      final resp = await http
-          .post(
-            Uri.parse('${GeminiService.serverUrl}/chat'),
-            headers: {'Content-Type': 'application/json'},
-            body: jsonEncode({'message': text, 'history': history}),
-          )
-          .timeout(const Duration(seconds: 45));
-      final data = jsonDecode(resp.body) as Map<String, dynamic>;
-      final reply = resp.statusCode == 200 && data['reply'] is String
+      // GuruService attaches the personalized snapshot of this user's day
+      // (meals, macro totals, targets, habits, water) to the request.
+      final data = await GuruService.send(message: text, history: history);
+      // A non-2xx body carries `message` (the human-readable line, e.g. the 429
+      // rate-limit text) and, failing that, `error` (a machine code). Prefer
+      // the message so the user never reads a bare code like `rate_limited`.
+      final reply = data['reply'] is String
           ? data['reply'] as String
-          : (data['error']?.toString() ??
+          : (data['message']?.toString() ??
+              data['error']?.toString() ??
               'Something went wrong. Please try again.');
       if (mounted) {
         setState(() {
@@ -83,6 +86,18 @@ class _ChatScreenState extends State<ChatScreen> {
           _busy = false;
         });
       }
+    } on GuruProRequiredException catch (e) {
+      // The Pro gate closed on us mid-conversation (e.g. the free plan just
+      // expired). Explain it in the thread and lock the composer.
+      if (mounted) {
+        setState(() {
+          _messages.add(_ChatMessage(role: _Role.assistant, text: e.message));
+          _proRequired = true;
+          _busy = false;
+        });
+      }
+      _scrollToEnd();
+      return;
     } catch (_) {
       if (mounted) {
         setState(() {
@@ -140,8 +155,68 @@ class _ChatScreenState extends State<ChatScreen> {
               },
             ),
           ),
-          _buildInputBar(isDark),
+          _proRequired ? _buildUpsellBar(isDark) : _buildInputBar(isDark),
         ],
+      ),
+    );
+  }
+
+  /// Shown in place of the composer once the backend has refused with
+  /// 403 `pro_required`: Guru needs Pro, so point at the plans instead of
+  /// letting the user type into a box that can never answer.
+  Widget _buildUpsellBar(bool isDark) {
+    return SafeArea(
+      top: false,
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+        decoration: BoxDecoration(
+          color: isDark ? MacroSnapTheme.surfaceDark : MacroSnapTheme.surfaceLight,
+          border: Border(
+            top: BorderSide(
+              color: isDark ? Colors.white10 : const Color(0xFFE5E5E5),
+            ),
+          ),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.lock_outline_rounded,
+                    size: 18, color: Color(0xFF7C3AED)),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Guru is a Pro feature. Upgrade to keep chatting.',
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: MacroSnapTheme.textSecondary(context),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                      builder: (_) => const SubscriptionScreen()),
+                ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF7C3AED),
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                ),
+                child: const Text('See plans'),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

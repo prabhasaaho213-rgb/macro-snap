@@ -1,7 +1,7 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:http/http.dart' as http;
+import '../services/auth_http.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../core/theme.dart';
 import '../services/gemini_service.dart';
@@ -49,13 +49,10 @@ class NicknameStore {
   /// simply proceeds to the first-time prompt.
   static Future<String?> restoreFromServer(String emailOrPhone) async {
     try {
-      final res = await http
-          .get(
-            Uri.parse('${GeminiService.serverUrl}/user/profile').replace(
-              queryParameters: {'email': emailOrPhone, 'phone': emailOrPhone},
-            ),
-          )
-          .timeout(const Duration(seconds: 6));
+      // The token identifies the caller, so no identifier goes in the URL.
+      final res = await AuthHttp.get(
+        Uri.parse('${GeminiService.serverUrl}/user/profile'),
+      ).timeout(const Duration(seconds: 6));
       if (res.statusCode != 200) return null;
       final data = jsonDecode(res.body) as Map<String, dynamic>;
       final name = data['name'] as String?;

@@ -98,9 +98,7 @@ class _MainShellState extends State<MainShell> {
               height: 56,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                gradient: const LinearGradient(
-                  colors: [MacroSnapTheme.neonGreen, Color(0xFF00CC52)],
-                ),
+                gradient: MacroSnapTheme.accentGradient,
               ),
               child: const Icon(
                 Icons.auto_awesome_rounded,
@@ -132,9 +130,20 @@ class _MainShellState extends State<MainShell> {
               isDark,
             ),
             const SizedBox(height: 12),
+            // "Cloud backup & restore" used to sit here, but it is not locked:
+            // /meals/sync and /habits/sync accept any signed-in user, so every
+            // account already gets it. Listing it sold something free, so it is
+            // gone. The two rows below replace it — they ARE enforced by the
+            // server, which refuses a free user with 403 pro_required.
             _proFeature(
-              Icons.cloud_upload_rounded,
-              'Cloud backup & restore',
+              Icons.smart_toy_rounded,
+              'Guru \u2014 your AI nutrition assistant',
+              isDark,
+            ),
+            const SizedBox(height: 12),
+            _proFeature(
+              Icons.restaurant_menu_rounded,
+              'AI meal plan built for your goals',
               isDark,
             ),
             const SizedBox(height: 12),
@@ -354,9 +363,7 @@ class _NavItem extends StatelessWidget {
           decoration: BoxDecoration(
             shape: BoxShape.circle,
             gradient: isSelected
-                ? const LinearGradient(
-                    colors: [MacroSnapTheme.neonGreen, Color(0xFF00CC52)],
-                  )
+                ? MacroSnapTheme.accentGradient
                 : LinearGradient(
                     colors: [
                       (isDark ? Colors.white : MacroSnapTheme.neonGreen)

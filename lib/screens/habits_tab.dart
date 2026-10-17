@@ -1557,7 +1557,7 @@ class _HabitsTabState extends State<HabitsTab> {
     final nameCtrl = TextEditingController(text: existing?.name ?? '');
     var emoji = existing?.emoji ?? '✨';
     var frequency = existing?.frequency ?? 'Daily';
-    var color = existing?.colorValue ?? 0xFF00FF66;
+    var color = existing?.colorValue ?? Habit.defaultColorValue;
     var weeklyDay = existing?.weeklyDay ?? DateTime.now().weekday;
     var reminderEnabled = existing?.reminderEnabled ?? false;
     var reminderHour = existing?.reminderHour ?? 20;
@@ -1728,7 +1728,7 @@ class _HabitsTabState extends State<HabitsTab> {
                   spacing: 8,
                   children:
                       [
-                            0xFF00FF66,
+                            Habit.defaultColorValue,
                             0xFFFF007F,
                             0xFF6C3BFF,
                             0xFFFF9500,

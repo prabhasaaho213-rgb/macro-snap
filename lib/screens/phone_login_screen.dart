@@ -4,7 +4,7 @@ import 'dart:math';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/gestures.dart';
-import 'package:http/http.dart' as http;
+import '../services/auth_http.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -133,14 +133,11 @@ class _PhoneLoginScreenState extends State<PhoneLoginScreen>
         }
       }
       try {
-        await http.post(
+        // The token identifies the account — only the chosen nickname travels.
+        await AuthHttp.post(
           Uri.parse('${GeminiService.serverUrl}/register'),
           headers: {'Content-Type': 'application/json'},
-          body: jsonEncode({
-            'phone': email,
-            'email': email,
-            'name': nickname ?? name,
-          }),
+          body: jsonEncode({'name': nickname ?? name}),
         );
       } catch (e) { debugPrint("Error: $e"); }
 

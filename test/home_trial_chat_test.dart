@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:macro_snap/screens/chat_screen.dart';
 import 'package:macro_snap/screens/home_screen.dart';
+import 'package:macro_snap/screens/subscription_screen.dart';
 import 'package:macro_snap/services/meal_store.dart';
 import 'package:macro_snap/services/subscription_service.dart';
 
@@ -66,9 +67,11 @@ void main() {
     expect(find.textContaining('Free plan'), findsNothing);
   });
 
-  testWidgets('fixed chat button opens the nutrition assistant',
+  testWidgets('fixed chat button opens the nutrition assistant for Pro',
       (tester) async {
-    SharedPreferences.setMockInitialValues({});
+    // Guru is a Pro feature (the backend 403s a free user), so the button only
+    // opens the assistant for a subscribed / in-trial account.
+    SharedPreferences.setMockInitialValues({'subscribed': true});
     await pumpHome(tester);
 
     final fab = find.byType(FloatingActionButton);
@@ -81,5 +84,37 @@ void main() {
     expect(find.text('Guru'), findsOneWidget);
     expect(find.textContaining('nutrition assistant'), findsOneWidget,
         reason: 'the greeting must advertise the food/protein focus');
+  });
+
+  testWidgets('a free user tapping the chat button is sent to the plans, not '
+      'the assistant', (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    await pumpHome(tester);
+
+    await tester.tap(find.byType(FloatingActionButton));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+
+    expect(find.byType(ChatScreen), findsNothing,
+        reason: 'a free user must never reach a chat the backend would refuse');
+    expect(find.byType(SubscriptionScreen), findsOneWidget,
+        reason: 'the button must route them to the upgrade path instead');
+  });
+
+  testWidgets('a user inside the free plan still gets Guru', (tester) async {
+    // The one-time 30-day free plan counts as Pro on both sides: the backend
+    // reports subscribed=true for an active trial, so the app must match.
+    SharedPreferences.setMockInitialValues({
+      'trial_ends_at':
+          DateTime.now().add(const Duration(days: 5)).toIso8601String(),
+    });
+    await pumpHome(tester);
+
+    await tester.tap(find.byType(FloatingActionButton));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+
+    expect(find.byType(ChatScreen), findsOneWidget,
+        reason: 'an active free plan counts as Pro, exactly like the server');
   });
 }

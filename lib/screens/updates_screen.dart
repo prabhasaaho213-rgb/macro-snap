@@ -34,7 +34,7 @@ class UpdatesScreen extends StatefulWidget {
   /// the user has already seen and puts a dot on the "What's New" row when the
   /// two differ — so a new release announces itself instead of waiting to be
   /// found.
-  static const String latestVersion = '1.4.90';
+  static const String latestVersion = '1.4.93';
 
   /// SharedPreferences key holding the latest version the user has seen.
   static const String seenVersionKey = 'updates_seen_version';
@@ -49,6 +49,31 @@ class _UpdatesScreenState extends State<UpdatesScreen> {
       version: UpdatesScreen.latestVersion,
       date: 'Latest',
       isLatest: true,
+      notes: [
+        'Pro now turns off when the server says it\u2019s over \u2014 cancelled subscriptions and expired referral rewards no longer show the Pro look',
+        'Settings shows when your Pro window ends',
+      ],
+    ),
+    _UpdateEntry(
+      version: '1.4.92',
+      date: 'Earlier',
+      notes: ['Habit icons now have brighter accent tiles and borders'],
+    ),
+    _UpdateEntry(
+      version: '1.4.91',
+      date: 'Earlier',
+      notes: [
+        'Guru (Ask Guru) is now part of Pro \u2014 the chat button opens with your plan',
+        'The AI meal plan is now part of Pro too \u2014 free users see the plans screen',
+        'The Pro list now matches what Pro actually unlocks',
+        'Photos the AI can\u2019t identify no longer use one of your free scans',
+        'Fixed the scan counter showing the wrong number of scans left',
+        'Sign-in email must now be verified before it unlocks Pro',
+      ],
+    ),
+    _UpdateEntry(
+      version: '1.4.90',
+      date: 'Earlier',
       notes: [
         'Food-name background now fits the text instead of stretching full width',
         'Serving-gram controls removed — nutrition always calculates at 100 g',

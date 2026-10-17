@@ -74,6 +74,9 @@ class _ScanScreenState extends State<ScanScreen>
   }
 
   Future<void> _loadScans() async {
+    // Ask the server for the authoritative count first (best-effort) so the
+    // badge shows today's real allowance, not a stale local estimate.
+    await ScanGate.refreshFromServer();
     final remaining = await ScanGate.getScansRemaining();
     if (mounted) setState(() => _scansLeft = remaining);
   }
@@ -254,11 +257,11 @@ class _ScanScreenState extends State<ScanScreen>
                   color: MacroSnapTheme.neonOrange, size: 32),
             ),
             const SizedBox(height: 16),
-            Text('Free scans used up',
+            Text('Free scans used up today',
                 style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800,
                     color: isDark ? Colors.white : const Color(0xFF1A1A1A))),
             const SizedBox(height: 8),
-            Text('You get 3 free AI scans per month.\nGo Pro for unlimited scans.',
+            Text('You get ${ScanGate.freeLimitPerDay} free AI scans per day.\nCome back tomorrow or go Pro for unlimited scans.',
                 textAlign: TextAlign.center,
                 style: TextStyle(fontSize: 14,
                     color: MacroSnapTheme.textSecondary(context), height: 1.4)),
@@ -559,6 +562,34 @@ class _ScanScreenState extends State<ScanScreen>
             ),
           ),
 
+          // Small hint above the action bar: how many free scans are left
+          // today (unlimited/Pro users see nothing).
+          if (_scansLeft < 99)
+            Positioned(
+              left: 0, right: 0, bottom: 118,
+              child: Center(
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: Colors.black.withValues(alpha: 0.35),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Text(
+                    _scansLeft == 0
+                        ? 'No free scans left today'
+                        : '$_scansLeft of ${ScanGate.freeLimitPerDay} scans left today',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      color: _scansLeft == 0
+                          ? MacroSnapTheme.neonPink
+                          : Colors.white,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+
           // Bottom action bar
           Positioned(
             left: 0, right: 0, bottom: 0,
@@ -595,9 +626,7 @@ class _ScanScreenState extends State<ScanScreen>
                           margin: const EdgeInsets.all(4),
                           decoration: const BoxDecoration(
                             shape: BoxShape.circle,
-                            gradient: LinearGradient(
-                              colors: [MacroSnapTheme.neonGreen, Color(0xFF00CC52)],
-                            ),
+                            gradient: MacroSnapTheme.accentGradient,
                           ),
                           child: const Icon(Icons.camera_alt_rounded,
                               color: Colors.black, size: 28),

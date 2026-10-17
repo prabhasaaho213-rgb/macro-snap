@@ -1,6 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
-import 'package:http/http.dart' as http;
+import 'auth_http.dart';
 import 'firebase_identity.dart';
 import 'gemini_service.dart';
 
@@ -81,9 +81,11 @@ class SyncStatusService extends ChangeNotifier {
 
     // ── Backend fallback for guests (AI + payments) ────────────────────
     try {
-      final resp = await http
-          .get(Uri.parse('${GeminiService.serverUrl}/'))
-          .timeout(const Duration(seconds: 8));
+      // Authenticated like every other backend call (the root health check),
+      // so a signed-in guest path is exercised with a token too.
+      final resp = await AuthHttp.get(
+        Uri.parse('${GeminiService.serverUrl}/'),
+      ).timeout(const Duration(seconds: 8));
       if (resp.statusCode == 200) {
         reportSuccess();
         return true;

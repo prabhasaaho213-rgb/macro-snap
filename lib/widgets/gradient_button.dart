@@ -25,11 +25,7 @@ class GradientButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final effectiveGradient =
-        gradient ??
-        const LinearGradient(
-          colors: [MacroSnapTheme.neonGreen, Color(0xFF00CC52)],
-        );
+    final effectiveGradient = gradient ?? MacroSnapTheme.accentGradient;
     final isDisabled = disabled || loading || onPressed == null;
     return SizedBox(
       width: width ?? double.infinity,

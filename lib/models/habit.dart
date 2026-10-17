@@ -12,6 +12,11 @@ String weekdayLabel(int weekday) {
 }
 
 class Habit {
+  /// Default habit color — the brand burnt-orange. The old default was the
+  /// retired neon green (0xFF00FF66) from the pre-redesign palette, which
+  /// no longer exists anywhere in the app's theme.
+  static const int defaultColorValue = 0xFFF4511E;
+
   final String id;
   String name;
   String emoji;
@@ -171,7 +176,7 @@ class Habit {
         id: j['id'] as String,
         name: j['name'] as String,
         emoji: j['emoji'] as String? ?? '✨',
-        colorValue: j['colorValue'] as int? ?? 0xFF00FF66,
+        colorValue: j['colorValue'] as int? ?? defaultColorValue,
         frequency: j['frequency'] as String? ?? 'Daily',
         completedDates: List<String>.from(j['completedDates'] ?? const []),
         skippedDates: List<String>.from(j['skippedDates'] ?? const []),

@@ -13,6 +13,7 @@ import '../models/diet_profile.dart';
 import '../services/share_service.dart';
 
 import '../widgets/animations.dart';
+import '../widgets/calorie_trend_card.dart';
 import '../widgets/confetti_celebration.dart';
 import 'diet_plan_screen.dart';
 import 'scan_screen.dart';
@@ -44,6 +45,11 @@ class _HomeScreenState extends State<HomeScreen>
   int _trialDaysLeft = 0;
   bool _previousGoalMet = false; // Track to detect transition to goal-met
 
+  /// Whether Guru is unlocked for this account (paid Pro, or inside the
+  /// one-time free plan). The backend enforces the same rule on /chat — this
+  /// only decides whether the button opens the assistant or the plans.
+  bool _guruUnlocked = false;
+
   @override
   void initState() {
     super.initState();
@@ -59,6 +65,9 @@ class _HomeScreenState extends State<HomeScreen>
     MealStore.instance.changeNotifier.addListener(_onDataChanged);
     userNameNotifier.addListener(_onNameChanged);
     SubscriptionService.instance.addListener(_onSubscriptionChanged);
+    // Reflect the subscription state the app already loaded, so the button is
+    // correct on the first frame; _loadAll() and the listener keep it current.
+    _guruUnlocked = SubscriptionService.instance.isSubscribed;
     _loadAll();
   }
 
@@ -90,6 +99,7 @@ class _HomeScreenState extends State<HomeScreen>
     setState(() {
       _trialActive = SubscriptionService.instance.trialActive;
       _trialDaysLeft = SubscriptionService.instance.trialDaysLeft;
+      _guruUnlocked = SubscriptionService.instance.isSubscribed;
     });
   }
 
@@ -113,6 +123,9 @@ class _HomeScreenState extends State<HomeScreen>
     final name = prefs.getString('name') ?? '';
     final streak = await MealStreakService.getCurrent();
     final best = await MealStreakService.getBest();
+    // Best-effort: the server is the authority on the free-scan allowance, so
+    // ask it before falling back to the local estimate for the badge.
+    await ScanGate.refreshFromServer();
     final scans = await ScanGate.getScansRemaining();
 
     if (mounted) {
@@ -123,6 +136,7 @@ class _HomeScreenState extends State<HomeScreen>
         _scansLeft = scans;
         _trialActive = SubscriptionService.instance.trialActive;
         _trialDaysLeft = SubscriptionService.instance.trialDaysLeft;
+        _guruUnlocked = SubscriptionService.instance.isSubscribed;
       });
       userNameNotifier.value = name;
       _animController.forward();
@@ -161,12 +175,24 @@ class _HomeScreenState extends State<HomeScreen>
         child: FloatingActionButton(
           onPressed: () => Navigator.push(
             context,
-            MaterialPageRoute(builder: (_) => const ChatScreen()),
+            MaterialPageRoute(
+              builder: (_) => _guruUnlocked
+                  // Pro (paid or in the free plan): Guru answers.
+                  ? const ChatScreen()
+                  // Free user: the backend would refuse every turn, so open the
+                  // plans instead of a chat that cannot reply.
+                  : const SubscriptionScreen(),
+            ),
           ),
-          tooltip: 'Ask Guru',
+          tooltip: _guruUnlocked ? 'Ask Guru' : 'Ask Guru \u2014 Pro',
           backgroundColor: MacroSnapTheme.neonPink,
-          child: const Icon(Icons.chat_bubble_rounded,
-              color: Colors.white, size: 24),
+          child: Icon(
+            _guruUnlocked
+                ? Icons.chat_bubble_rounded
+                : Icons.lock_outline_rounded,
+            color: Colors.white,
+            size: 24,
+          ),
         ),
       ),
       body: SafeArea(
@@ -200,6 +226,16 @@ class _HomeScreenState extends State<HomeScreen>
                   child: AnimatedEntrance(
                     delayMs: 150,
                     child: _buildMacroBars(context, isDark),
+                  ),
+                ),
+                SliverToBoxAdapter(
+                  child: AnimatedEntrance(
+                    delayMs: 175,
+                    child: CalorieTrendCard(
+                      goalCalories:
+                          DietPlanService.instance.profile?.targetCalories ??
+                          2000,
+                    ),
                   ),
                 ),
                 SliverToBoxAdapter(

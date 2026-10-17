@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'dart:convert';
-import 'package:http/http.dart' as http;
+import '../services/auth_http.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../core/theme.dart';
 import '../widgets/gradient_button.dart';
@@ -59,14 +59,16 @@ class _SubscriptionScreenState extends State<SubscriptionScreen>
         _isAdmin = isAdmin;
       });
     }
-    if (phone != null && !subscribed) await _checkPaymentStatus(phone);
+    if (phone != null && !subscribed) await _checkPaymentStatus();
     if (mounted) setState(() => _checking = false);
   }
 
-  Future<void> _checkPaymentStatus(String phone) async {
+  Future<void> _checkPaymentStatus() async {
     try {
-      final res = await http.get(
-        Uri.parse('${GeminiService.serverUrl}/payment/status/$phone'),
+      // Phase 2: no identifier in the URL — the token identifies the caller,
+      // so the status returned is always this user's own.
+      final res = await AuthHttp.get(
+        Uri.parse('${GeminiService.serverUrl}/me/payment/status'),
       );
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body);
@@ -222,11 +224,8 @@ class _SubscriptionScreenState extends State<SubscriptionScreen>
           _activateFromServer();
         }
       });
-      await RazorpayService.startCheckout(
-        phone: _phone!,
-        name: 'MacroSnap User',
-        email: '',
-      );
+      // Identity (phone/email) comes from the verified token on the server.
+      await RazorpayService.startCheckout(name: 'MacroSnap User');
     } catch (e) {
       _showError('Could not start payment: $e');
       if (mounted) setState(() => _submitting = false);
@@ -334,10 +333,22 @@ class _SubscriptionScreenState extends State<SubscriptionScreen>
                 'Review everything you ate, searchable by date',
                 isDark,
               ),
+              // "Cloud Backup" used to be listed here, but nothing locks it:
+              // /meals/sync and /habits/sync accept any signed-in user, so it
+              // is already free for everyone. A benefit that is not actually
+              // gated reads as a false promise, so it has been removed and
+              // replaced by the two features the server really does refuse
+              // (403 pro_required).
               _buildFeatureRow(
-                Icons.cloud_rounded,
-                'Cloud Backup',
-                'Your data stays safe across devices',
+                Icons.smart_toy_rounded,
+                'Guru Assistant',
+                'Ask about your own day — meals, macros, targets',
+                isDark,
+              ),
+              _buildFeatureRow(
+                Icons.restaurant_menu_rounded,
+                'AI Meal Plan',
+                'A full day of meals built around your goal',
                 isDark,
               ),
               _buildFeatureRow(

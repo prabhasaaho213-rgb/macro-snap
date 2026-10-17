@@ -18,12 +18,29 @@ service cloud.firestore {
     function isOwner(uid) {
       return request.auth.uid == uid;
     }
+    function hasPro(uid) {
+      let userPath = /databases/$(database)/documents/users/$(uid);
+      return (request.auth.token.email == 'prabhasaaho213@gmail.com'
+          && request.auth.token.email_verified == true)
+        || (exists(userPath) && (
+          get(userPath).data.subscribed == true
+          || (get(userPath).data.pro_until_at is timestamp
+            && get(userPath).data.pro_until_at > request.time)
+          || (get(userPath).data.trial_ends_at is timestamp
+            && get(userPath).data.trial_ends_at > request.time)
+        ));
+    }
 
     // ─── users/{uid} — profile, subscription flag, scan counters ────────
-    // A user may read/write only their own profile. The backend's Razorpay
-    // webhook/verify writes `subscribed` via the Admin SDK (rules bypass).
+    // READ-ONLY for clients. The app only ever reads this document; every
+    // field that matters is an entitlement (`subscribed`, `trial_started_at`,
+    // `scanCount`/`scanDay`, `referralCode`) and is written by the backend's
+    // Admin SDK, which bypasses these rules. A client-side write is denied
+    // outright, so nobody can grant themselves Pro or reset their own scan
+    // counter (`subscribed: true` on your own doc is rejected).
     match /users/{uid} {
-      allow read, write: if signedIn() && isOwner(uid);
+      allow read: if signedIn() && isOwner(uid);
+      allow write: if false;
     }
 
     // ─── userIndex/{identifier} — identifier → uid mapping ──────────────
@@ -37,16 +54,26 @@ service cloud.firestore {
     }
 
     // ─── meals/{mealId} — one doc per meal, `uid` field = owner ─────────
+    // The `uid` field must equal the caller's uid on CREATE **and** UPDATE:
+    // checking only the stored copy would let a user move their meal to
+    // another account (or claim someone else's meal) with an update.
     match /meals/{mealId} {
       allow create: if signedIn()
         && request.resource.data.uid == request.auth.uid;
-      allow read, update, delete: if signedIn()
+      allow update: if signedIn()
+        && resource.data.uid == request.auth.uid
+        && request.resource.data.uid == request.auth.uid;
+      allow read, delete: if signedIn()
         && resource.data.uid == request.auth.uid;
     }
 
     // ─── habitData/{uid} — one doc per user: habits[], waterLog, waterGoal ─
     match /habitData/{uid} {
-      allow read, write: if signedIn() && isOwner(uid);
+      allow read: if signedIn() && isOwner(uid);
+      allow create, update: if signedIn() && isOwner(uid)
+        && request.resource.data.habits is list
+        && (request.resource.data.habits.size() <= 3 || hasPro(uid));
+      allow delete: if signedIn() && isOwner(uid);
     }
 
     // ─── dietProfiles/{uid} — diet profile (goal, activity, measurements) ─
@@ -67,6 +94,15 @@ service cloud.firestore {
     // ─── userPreferences/{uid} — theme, display name, etc. ─────────────
     match /userPreferences/{uid} {
       allow read, write: if signedIn() && isOwner(uid);
+    }
+
+    // ─── deletedAccounts/{identifier} — deletion tombstones ────────────
+    // Written ONLY by the backend via the Admin SDK (rules bypass) when an
+    // account deletes itself, and NEVER wiped. It remembers the identifier
+    // and its consumed trial so delete -> re-register can never re-claim
+    // the free trial. Clients must never read or write it.
+    match /deletedAccounts/{identifier} {
+      allow read, write: if false;
     }
 
     // ─── subscriptions/{subId} — Razorpay subscription lifecycle ────────

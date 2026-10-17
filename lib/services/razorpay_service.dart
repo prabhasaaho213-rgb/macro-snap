@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
+import 'auth_http.dart';
 import 'package:razorpay_flutter/razorpay_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'gemini_service.dart';
@@ -41,20 +41,16 @@ class RazorpayService {
   /// auto-charged monthly by Razorpay either way; the backend webhook
   /// (subscription.charged) activates Pro in Firestore, which we poll for.
   static Future<void> startCheckout({
-    required String phone,
     required String name,
-    required String email,
   }) async {
     try {
-      // 1. Create recurring subscription on backend
-      final subResponse = await http.post(
+      // 1. Create recurring subscription on backend. The payer's identity
+      // (phone/email) comes from the verified token there — only the display
+      // name travels in the body.
+      final subResponse = await AuthHttp.post(
         Uri.parse('${GeminiService.serverUrl}/payment/create-subscription'),
         headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({
-          'phone': phone,
-          'name': name,
-          'email': email,
-        }),
+        body: jsonEncode({'name': name}),
       );
 
       if (subResponse.statusCode != 200) {
@@ -74,28 +70,27 @@ class RazorpayService {
         throw Exception('Could not open the payment page');
       }
 
-      unawaited(_pollForActivation(phone));
+      unawaited(_pollForActivation());
     } catch (e) {
       _lastSubscriptionId = null;
       rethrow;
     }
   }
 
-  /// Polls /subscription/status (Firestore-backed) until the user is
+  /// Polls /me/payment/status (Firestore-backed) until the user is
   /// subscribed, then triggers the success callback. Silently gives up after
   /// the timeout — the webhook still activates Pro in the background, so a
   /// slow webhook only delays the on-screen confirmation.
-  static Future<void> _pollForActivation(
-    String identifier, {
+  static Future<void> _pollForActivation({
     Duration timeout = const Duration(minutes: 3),
   }) async {
     final deadline = DateTime.now().add(timeout);
     try {
       while (DateTime.now().isBefore(deadline)) {
-        final resp = await http.get(Uri.parse(
-          '${GeminiService.serverUrl}/subscription/status'
-          '?phone=${Uri.encodeQueryComponent(identifier)}',
-        ));
+        // Phase 2: the caller's own status, identified by the token alone.
+        final resp = await AuthHttp.get(
+          Uri.parse('${GeminiService.serverUrl}/me/payment/status'),
+        );
         if (resp.statusCode == 200) {
           final data = jsonDecode(resp.body);
           if (data is Map && data['subscribed'] == true) {
@@ -122,7 +117,7 @@ class RazorpayService {
               _lastSubscriptionId;
       // Verify payment on backend (subscription signature is
       // HMAC(subscription_id|payment_id))
-      final verifyResponse = await http.post(
+      final verifyResponse = await AuthHttp.post(
         Uri.parse('${GeminiService.serverUrl}/payment/verify'),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({

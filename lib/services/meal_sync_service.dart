@@ -150,12 +150,6 @@ class MealSyncService {
     }
   }
 
-  /// Total meal count stored in Firestore for the current user.
-  static Future<int> mealCount() async {
-    final meals = await fetchMeals();
-    return meals.length;
-  }
-
   // ═══════════════════════════════════════════════════════════════
   // HABITS & WATER
   // ═══════════════════════════════════════════════════════════════

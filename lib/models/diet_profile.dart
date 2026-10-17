@@ -37,21 +37,6 @@ class DietProfile {
     this.avatar = '😎',
   });
 
-  static const List<String> avatars = [
-    '😎',
-    '🥳',
-    '🤠',
-    '🤓',
-    '🧐',
-    '😇',
-    '🤩',
-    '😋',
-    '🤪',
-    '🦊',
-    '🐼',
-    '🐱',
-  ];
-
   double get bmr {
     if (gender == Gender.male) {
       return 10 * weightKg + 6.25 * heightCm - 5 * age + 5;

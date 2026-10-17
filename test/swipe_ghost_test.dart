@@ -255,19 +255,42 @@ void main() {
     );
   });
 
-  // ─── POP REDESIGN TILE STYLE ───────────────────────────────
-  test('emojiContainer tile is flat black with a hairline border', () {
+  // ─── EMOJI TILE: ACCENT-TINTED, STILL FLAT ─────────────────
+  test('emojiContainer tile is accent-tinted but flat (no glow)', () {
     const c = Color(0xFF00FF66);
     final deco = MacroSnapTheme.emojiContainer(c);
 
-    // POP style: flat black pill, no gradient / glow — the glyph itself
-    // carries the color.
+    // Still flat: no gradient and no glow/shadow. A shadow paints a dark
+    // "ghost reflection" under the glyph, and a glow smears during swipes
+    // (the RepaintBoundary around the tile covers the rest).
     expect(deco.gradient, isNull);
     expect(deco.boxShadow, isNull);
-    expect(deco.color, MacroSnapTheme.cardDarkLight);
 
+    // The caller's accent now reaches the tile: for this green accent the
+    // green channel outruns the red one, and the tile is neither the old
+    // neutral color nor the card it sits on.
+    final tile = deco.color!;
+    expect(tile.g, greaterThan(tile.r),
+        reason: 'accent hue must reach the tile');
+    expect(tile, isNot(MacroSnapTheme.cardDarkLight));
+    expect(tile, isNot(MacroSnapTheme.cardDark));
+
+    // The tile must visibly separate from the card. It used to differ by only
+    // 8 RGB steps (#1C1C1C on #141414), which made habit icons look invisible.
+    // NOTE: Color.r/.g/.b are normalized 0..1 channels — scale by 255 before
+    // comparing against a threshold expressed in RGB steps.
+    final card = MacroSnapTheme.cardDark;
+    final separation = ((tile.r - card.r).abs() +
+            (tile.g - card.g).abs() +
+            (tile.b - card.b).abs()) *
+        255;
+    expect(separation, greaterThanOrEqualTo(30),
+        reason: 'tile must not blend into the card behind it');
+
+    // Accent-tinted hairline border instead of the neutral gray one.
     final border = deco.border! as Border;
-    expect(border.top.color, MacroSnapTheme.cardDarkBorder);
+    expect(border.top.width, 1);
+    expect(border.top.color, isNot(MacroSnapTheme.cardDarkBorder));
   });
 
   test('emojiStyle is flat — no ghost shadows on the glyph', () {
