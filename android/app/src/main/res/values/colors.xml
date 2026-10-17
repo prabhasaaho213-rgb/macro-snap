@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Colour of the Android window behind Flutter. It must match the app's
+         own background: whenever the Flutter surface is briefly not painted
+         (window recreation, route hand-off) the user sees this instead of a
+         hard black frame. -->
+    <color name="window_background">#FFF3EEFF</color>
+</resources>

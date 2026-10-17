@@ -70,9 +70,13 @@ class MealStore {
         } else {
           final data = jsonDecode(raw);
           if (data is List) {
+            // Parse per record: a single corrupt entry is skipped instead of
+            // aborting the loop (which used to reset the whole history).
             _meals = data
-                .whereType<Map<String, dynamic>>()
-                .map((e) => MealRecord.fromJson(e))
+                .whereType<Map>()
+                .map((e) => MealRecord.tryFromJson(
+                    Map<String, dynamic>.from(e)))
+                .whereType<MealRecord>()
                 .toList();
           }
         }

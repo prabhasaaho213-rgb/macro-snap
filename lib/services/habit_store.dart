@@ -55,11 +55,15 @@ class HabitStore extends ChangeNotifier {
       if (raw != null && raw.isNotEmpty) {
         final decoded = jsonDecode(raw);
         if (decoded is List) {
+          // Per-entry parsing: skipping one bad habit is far better than the
+          // old all-or-nothing behaviour, where a single malformed entry hit
+          // the catch and cleared every habit the user had.
           habits
             ..clear()
             ..addAll(decoded
                 .whereType<Map>()
-                .map((e) => Habit.fromJson(Map<String, dynamic>.from(e))));
+                .map((e) => Habit.tryFromJson(Map<String, dynamic>.from(e)))
+                .whereType<Habit>());
         }
       }
     } catch (_) {
@@ -156,9 +160,12 @@ class HabitStore extends ChangeNotifier {
         bool changed = false;
 
         // Restore habits not already present locally
-        final cloudHabits = (cloud['habits'] as List<Map<String, dynamic>>)
-            .map((e) => Habit.fromJson(e))
-            .toList();
+        final cloudHabits = (cloud['habits'] as List?)
+                ?.whereType<Map>()
+                .map((e) => Habit.tryFromJson(Map<String, dynamic>.from(e)))
+                .whereType<Habit>()
+                .toList() ??
+            const <Habit>[];
         final localIds = habits.map((h) => h.id).toSet();
         for (final habit in cloudHabits) {
           if (!localIds.contains(habit.id)) {

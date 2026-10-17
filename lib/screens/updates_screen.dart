@@ -34,7 +34,7 @@ class UpdatesScreen extends StatefulWidget {
   /// the user has already seen and puts a dot on the "What's New" row when the
   /// two differ — so a new release announces itself instead of waiting to be
   /// found.
-  static const String latestVersion = '1.4.94';
+  static const String latestVersion = '1.4.95';
 
   /// SharedPreferences key holding the latest version the user has seen.
   static const String seenVersionKey = 'updates_seen_version';
@@ -49,6 +49,17 @@ class _UpdatesScreenState extends State<UpdatesScreen> {
       version: UpdatesScreen.latestVersion,
       date: 'Latest',
       isLatest: true,
+      notes: [
+        'No more black pause when switching tabs - Home, Scan and Habits stay loaded',
+        'The streak flame is brighter, with a live glow',
+        'Headlines are upright again (they no longer lean)',
+        'Haptic feedback on tab switches and Settings rows',
+        'One damaged saved item no longer wipes your meal history or habits',
+      ],
+    ),
+    _UpdateEntry(
+      version: '1.4.94',
+      date: 'Earlier',
       notes: [
         'Scans now open at the weight of the food in the photo, so calories and protein match the portion',
         'Brighter orange progress rings',

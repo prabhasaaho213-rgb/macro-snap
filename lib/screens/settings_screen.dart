@@ -8,6 +8,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:package_info_plus/package_info_plus.dart';
+import '../core/haptics.dart';
 import '../core/theme.dart';
 import '../models/diet_profile.dart';
 import '../widgets/glass_card.dart';
@@ -65,6 +66,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
       if (info.version.isNotEmpty) _packageVersion = info.version;
     } catch (e) { debugPrint("Error: $e"); }
     final prefs = await SharedPreferences.getInstance();
+    // _load() does several awaits; the screen can be popped before it
+    // finishes, and setState() on a disposed State throws.
+    if (!mounted) return;
     setState(() {
       _name = prefs.getString('name') ?? 'User';
       _email = prefs.getString('email') ?? '';
@@ -403,6 +407,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString('name', newName);
       userNameNotifier.value = newName;
+      if (!mounted) return;
       setState(() => _name = newName);
       // Auto-sync name to cloud.
       MealSyncService.syncPreferences({'name': newName});
@@ -854,7 +859,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
     {bool showBadge = false}
   ) {
     return InkWell(
-      onTap: onTap,
+      // Settings rows had no haptics at all — every row now gives a tick, and
+      // a disabled row stays silent.
+      onTap: onTap == null
+          ? null
+          : () {
+              Haptics.tap();
+              onTap();
+            },
       borderRadius: BorderRadius.circular(12),
       child: Row(
         children: [

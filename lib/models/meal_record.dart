@@ -49,6 +49,20 @@ class MealRecord {
     serving: json['serving'] as String? ?? '',
   );
 
+  /// Parses one stored/cloud record, returning null instead of throwing when
+  /// it is malformed (missing id/date, wrong types, a truncated write).
+  ///
+  /// Stores parse lists record-by-record through this: one bad row used to
+  /// throw out of the whole list, and the surrounding catch reset the user's
+  /// entire meal history to empty.
+  static MealRecord? tryFromJson(Map<String, dynamic> json) {
+    try {
+      return MealRecord.fromJson(json);
+    } catch (_) {
+      return null;
+    }
+  }
+
   bool get isToday =>
     date.year == DateTime.now().year &&
     date.month == DateTime.now().month &&

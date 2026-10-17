@@ -88,11 +88,15 @@ Future<void> main() async {
         final cloudPrefs = await MealSyncService.fetchPreferences();
         if (cloudPrefs != null) {
           // Only restore if local doesn't have a value set by the user.
-          if (!prefs.containsKey('theme_mode') && cloudPrefs['themeMode'] != null) {
-            await prefs.setString('theme_mode', cloudPrefs['themeMode'] as String);
+          // Type-check instead of a blind cast: a non-string from the cloud
+          // used to throw and abort the whole preference restore.
+          final cloudTheme = cloudPrefs['themeMode'];
+          if (!prefs.containsKey('theme_mode') && cloudTheme is String) {
+            await prefs.setString('theme_mode', cloudTheme);
           }
-          if (!prefs.containsKey('name') && cloudPrefs['name'] != null) {
-            await prefs.setString('name', cloudPrefs['name'] as String);
+          final cloudName = cloudPrefs['name'];
+          if (!prefs.containsKey('name') && cloudName is String) {
+            await prefs.setString('name', cloudName);
           }
         }
       }, 'Preferences cloud restore'));

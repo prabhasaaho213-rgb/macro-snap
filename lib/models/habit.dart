@@ -172,6 +172,16 @@ class Habit {
         'createdAt': createdAt.toIso8601String(),
       };
 
+  /// Parses one habit, returning null instead of throwing when the entry is
+  /// malformed. One corrupt row must not cost the user every other habit.
+  static Habit? tryFromJson(Map<String, dynamic> j) {
+    try {
+      return Habit.fromJson(j);
+    } catch (_) {
+      return null;
+    }
+  }
+
   factory Habit.fromJson(Map<String, dynamic> j) => Habit(
         id: j['id'] as String,
         name: j['name'] as String,

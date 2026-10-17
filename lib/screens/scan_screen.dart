@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:camera/camera.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:permission_handler/permission_handler.dart';
+import '../core/app_nav.dart';
 import '../core/theme.dart';
 import '../services/scan_gate.dart';
 import '../services/meal_store.dart';
@@ -48,6 +49,23 @@ class _ScanScreenState extends State<ScanScreen>
     WidgetsBinding.instance.addPostFrameCallback((_) => _initCamera());
     // Refresh scan count when data changes (e.g. after subscribing)
     MealStore.instance.changeNotifier.addListener(_onDataChanged);
+    // The camera is paused while another tab is on screen instead of the tab
+    // being torn down, so coming back resumes the preview instantly instead of
+    // re-opening the camera (which showed black for a second or two).
+    scanTabVisible.addListener(_onScanVisibilityChanged);
+  }
+
+  void _onScanVisibilityChanged() {
+    final controller = _controller;
+    final hasCamera = controller != null && controller.value.isInitialized;
+    if (!scanTabVisible.value) {
+      if (hasCamera) controller.pausePreview();
+      return;
+    }
+    // The tab now stays mounted, so re-read the allowance on return — it used
+    // to refresh only because the whole screen was rebuilt each visit.
+    _loadScans();
+    if (hasCamera) controller.resumePreview();
   }
 
   void _onDataChanged() {
@@ -59,6 +77,7 @@ class _ScanScreenState extends State<ScanScreen>
     _previewTimer?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     MealStore.instance.changeNotifier.removeListener(_onDataChanged);
+    scanTabVisible.removeListener(_onScanVisibilityChanged);
     _controller?.dispose();
     super.dispose();
   }
@@ -120,6 +139,11 @@ class _ScanScreenState extends State<ScanScreen>
           _cameraError = false;
           _cameraPermanentlyDenied = false;
         });
+        // The tab may have been left while the camera was still opening.
+        if (!scanTabVisible.value) controller.pausePreview();
+      } else {
+        // Screen went away mid-initialize — don't leak the camera.
+        await controller.dispose();
       }
     } catch (e) {
       if (mounted) setState(() => _cameraError = true);
@@ -426,6 +450,10 @@ class _ScanScreenState extends State<ScanScreen>
                       child: Image.file(
                         File(_capturedImagePath!),
                         fit: BoxFit.cover,
+                        // Keep the preview area dark if the temp file vanished
+                        // between capture and paint.
+                        errorBuilder: (_, _, _) =>
+                            const ColoredBox(color: MacroSnapTheme.surfaceDark),
                       ),
                     ),
                     // Dark overlay + hint text

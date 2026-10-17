@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../core/app_nav.dart';
+import '../core/haptics.dart';
 import '../core/theme.dart';
 import '../services/rate_us_service.dart';
 import '../services/subscription_service.dart';
@@ -20,10 +21,18 @@ class MainShell extends StatefulWidget {
 class _MainShellState extends State<MainShell> {
   int _currentIndex = 0;
 
+  /// Tabs that have been opened at least once. They stay mounted from then on
+  /// (see [_buildTabContent]) so switching back is instant: no re-created
+  /// State, no camera re-open, no entrance animations replaying from zero —
+  /// all of which used to read as a second or two of black on every switch.
+  final Set<int> _mountedTabs = {0};
+
   @override
   void initState() {
     super.initState();
     _currentIndex = shellTabIndex.value;
+    _mountedTabs.add(_currentIndex);
+    scanTabVisible.value = _currentIndex == 1;
     shellTabIndex.addListener(_onShellTabChanged);
     // Launch prompts, ordered so dialogs never stack: subscription upsell
     // first, then the notification-permission ask if still denied.
@@ -39,10 +48,17 @@ class _MainShellState extends State<MainShell> {
   /// Single entry point for tab changes (bottom-nav taps, swipes, notification
   /// taps). Tab switches are instant — no transition animation.
   void _goToTab(int index) {
+    // Every tab change ticks, including a tap on the tab already showing, so
+    // the bar never feels dead. Light impact (not selectionClick) — the
+    // selection tick was too faint to notice on most phones.
+    Haptics.light();
     if (index == _currentIndex) return;
     setState(() {
       _currentIndex = index;
+      _mountedTabs.add(index);
     });
+    // Lets the Scan tab pause its camera while the user is elsewhere.
+    scanTabVisible.value = index == 1;
   }
 
   void _onShellTabChanged() {
@@ -244,49 +260,67 @@ class _MainShellState extends State<MainShell> {
   }
 
   /// Cached tab pages so switching tabs doesn't re-create screens.
-  late final List<Widget> _tabPages = [
-    const HomeScreen(),
-    PopScope(
-      canPop: false,
-      onPopInvokedWithResult: (didPop, _) {
-        if (!didPop) _goToTab(0);
-      },
-      child: const ScanScreen(),
-    ),
-    const HabitsTab(),
+  late final List<Widget> _tabPages = const [
+    HomeScreen(),
+    ScanScreen(),
+    HabitsTab(),
   ];
 
-  /// Build the current tab content — plain instant switch, no transition.
+  /// Keeps every visited tab mounted and paints only the selected one.
+  ///
+  /// `Offstage` keeps the State alive while hiding it (and `find.byType`
+  /// skips it, matching the old "one page at a time" behaviour), and
+  /// `TickerMode` stops hidden tabs from animating in the background.
   Widget _buildTabContent() {
-    return _tabPages[_currentIndex.clamp(0, _tabPages.length - 1)];
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        for (var i = 0; i < _tabPages.length; i++)
+          if (_mountedTabs.contains(i))
+            Offstage(
+              offstage: i != _currentIndex,
+              child: TickerMode(
+                enabled: i == _currentIndex,
+                child: _tabPages[i],
+              ),
+            ),
+      ],
+    );
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: GestureDetector(
-        behavior: HitTestBehavior.translucent,
-        // Swipe left/right anywhere on the tab body to move to the
-        // adjacent tab (Home ⇄ Scan ⇄ Habits). Instant switch.
-        onHorizontalDragEnd: (details) {
-          final velocity = details.primaryVelocity ?? 0;
-          if (velocity.abs() < 300) return;
-          if (velocity < 0) {
-            // Swipe left → next tab
-            if (_currentIndex < _tabPages.length - 1) {
-              _goToTab(_currentIndex + 1);
+    return PopScope(
+      // Back on the Scan tab returns Home (as before); on Home/Habits it
+      // leaves the app. Only the visible tab may claim the back gesture.
+      canPop: _currentIndex != 1,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) _goToTab(0);
+      },
+      child: Scaffold(
+        body: GestureDetector(
+          behavior: HitTestBehavior.translucent,
+          // Swipe left/right anywhere on the tab body to move to the
+          // adjacent tab (Home ⇄ Scan ⇄ Habits). Instant switch.
+          onHorizontalDragEnd: (details) {
+            final velocity = details.primaryVelocity ?? 0;
+            if (velocity.abs() < 300) return;
+            if (velocity < 0) {
+              // Swipe left → next tab
+              if (_currentIndex < _tabPages.length - 1) {
+                _goToTab(_currentIndex + 1);
+              }
+            } else {
+              // Swipe right → previous tab
+              if (_currentIndex > 0) _goToTab(_currentIndex - 1);
             }
-          } else {
-            // Swipe right → previous tab
-            if (_currentIndex > 0) _goToTab(_currentIndex - 1);
-          }
-        },
-        child: _buildTabContent(),
+          },
+          child: _buildTabContent(),
+        ),
+        bottomNavigationBar: _buildBottomNav(context),
       ),
-      bottomNavigationBar: _buildBottomNav(context),
     );
   }
-
 
   Widget _buildBottomNav(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;

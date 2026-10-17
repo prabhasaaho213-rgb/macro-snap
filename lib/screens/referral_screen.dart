@@ -53,8 +53,13 @@ class _ReferralScreenState extends State<ReferralScreen> {
     setState(() { _applying = true; _applyResult = null; });
     try {
       await ReferralService.applyCode(code);
+      // The user can leave this screen while the code is being applied; a
+      // bare setState after the await would then throw (red screen in debug,
+      // swallowed error in release).
+      if (!mounted) return;
       setState(() { _applyResult = 'success'; _applying = false; });
     } catch (e) {
+      if (!mounted) return;
       setState(() { _applyResult = e.toString().replaceFirst('Exception: ', ''); _applying = false; });
     }
   }

@@ -77,8 +77,19 @@ class MealSyncService {
           .where('uid', isEqualTo: uid)
           .get()
           .timeout(const Duration(seconds: 15));
-      final meals = snap.docs.map(_mealFromDoc).toList()
-        ..sort((a, b) => b.date.compareTo(a.date));
+      // Parse each doc on its own: one malformed cloud document used to throw
+      // out of the whole map, fail the fetch, and report "Meal restore
+      // failed" — silently dropping every other meal as well. Now the bad doc
+      // is logged and skipped.
+      final meals = <MealRecord>[];
+      for (final doc in snap.docs) {
+        try {
+          meals.add(_mealFromDoc(doc));
+        } catch (e) {
+          debugPrint('Skipping malformed meal doc ${doc.id}: $e');
+        }
+      }
+      meals.sort((a, b) => b.date.compareTo(a.date));
       SyncStatusService.instance.reportSuccess();
       return meals;
     } catch (e) {

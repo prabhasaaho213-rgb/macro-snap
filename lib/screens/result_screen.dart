@@ -1129,6 +1129,18 @@ class _ResultScreenState extends State<ResultScreen>
                         height: 220,
                         width: double.infinity,
                         fit: BoxFit.cover,
+                        // The photo lives in the OS temp dir; if Android has
+                        // cleared it, show a neutral block instead of throwing
+                        // a FileImage error into the widget tree.
+                        errorBuilder: (_, _, _) => Container(
+                          height: 220,
+                          width: double.infinity,
+                          color: MacroSnapTheme.borderSubtle(context),
+                          child: Icon(
+                            Icons.image_not_supported_outlined,
+                            color: MacroSnapTheme.textTertiary(context),
+                          ),
+                        ),
                       ),
                     ),
                   )

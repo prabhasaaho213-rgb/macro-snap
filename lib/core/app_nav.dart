@@ -11,6 +11,14 @@ final GlobalKey<NavigatorState> appNavigatorKey = GlobalKey<NavigatorState>();
 /// [MainShell] reads it in initState and listens for changes.
 final ValueNotifier<int> shellTabIndex = ValueNotifier<int>(0);
 
+/// True while the Scan tab is the one on screen in [MainShell].
+///
+/// [ScanScreen] watches this to pause the camera preview when the tab is
+/// hidden and resume it on return. Pausing is near-instant; the alternative
+/// (letting the tab be destroyed and re-creating the [CameraController] on
+/// every visit) showed a second or two of black while the camera re-opened.
+final ValueNotifier<bool> scanTabVisible = ValueNotifier<bool>(false);
+
 /// Switches the app shell to the given tab [index].
 ///
 /// The shell is the app's `home` route for authenticated users, so just

@@ -433,23 +433,20 @@ class MacroSnapTheme {
       textTheme: ThemeData.dark().textTheme
           .apply(fontFamily: 'Inter')
           .copyWith(
-            // POP's signature move: big hero numbers/headlines ("Save ₹100
-            // on card bill") render in an elegant italic, not bold sans —
-            // it's what makes the hero banner feel editorial instead of
-            // shouty. True serif needs a bundled font (see note below);
-            // this uses Inter italic as the closest available approximation.
+            // Headlines are upright. These used to be Inter italic (a "POP
+            // editorial" experiment), but on the login/splash headlines the
+            // slant read as a rendering glitch — "Welcome to MacroSnap"
+            // looked tilted. Keep the size/weight, drop the slant.
             displayLarge: const TextStyle(
               fontSize: 32,
-              fontWeight: FontWeight.w600,
-              fontStyle: FontStyle.italic,
+              fontWeight: FontWeight.w700,
               letterSpacing: -0.5,
               color: Colors.white,
               fontFamily: 'Inter',
             ),
             displayMedium: const TextStyle(
               fontSize: 28,
-              fontWeight: FontWeight.w600,
-              fontStyle: FontStyle.italic,
+              fontWeight: FontWeight.w700,
               letterSpacing: -0.3,
               color: Colors.white,
               fontFamily: 'Inter',

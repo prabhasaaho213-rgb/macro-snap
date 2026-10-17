@@ -10,13 +10,75 @@ import '../core/theme.dart';
 /// an overshoot spring whenever the tier changes. A glowing "Lv N" badge
 /// appears and pops in every 7 days of streak (7 → Lv 1, 14 → Lv 2, …)
 /// with a medium haptic on level-up.
+/// A single flame drawn as a gradient-filled icon with a live glow.
+///
+/// This replaced the literal 🔥 emoji: the emoji renders through the device's
+/// colour-emoji font, which on several Android builds is visibly dimmer and
+/// flatter than the rest of the UI (and it can't take a gradient or shadow).
+/// Drawing it ourselves keeps the flame hot — yellow core, orange body, pink
+/// tip — with a glow that pulses with the flicker, on every device.
+class _Flame extends StatelessWidget {
+  const _Flame({required this.size, required this.flicker});
+
+  final double size;
+  final double flicker;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: size * 1.1,
+      height: size * 1.1,
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          // Glow behind the flame; pulses between 35% and 65% opacity.
+          Container(
+            width: size * 0.78,
+            height: size * 0.78,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              boxShadow: [
+                BoxShadow(
+                  color: MacroSnapTheme.neonOrange
+                      .withValues(alpha: 0.35 + 0.30 * flicker),
+                  blurRadius: size * 0.55,
+                  spreadRadius: size * 0.10,
+                ),
+              ],
+            ),
+          ),
+          ShaderMask(
+            blendMode: BlendMode.srcIn,
+            shaderCallback: (bounds) => const LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                Color(0xFFFFE066), // bright yellow core
+                Color(0xFFFF8A3D),
+                Color(0xFFFF3D6E), // hot pink tip
+              ],
+              stops: [0.0, 0.55, 1.0],
+            ).createShader(bounds),
+            child: Icon(
+              Icons.local_fire_department_rounded,
+              size: size,
+              color: Colors.white,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class StreakFlame extends StatefulWidget {
   const StreakFlame({super.key, required this.streak, this.fontSize = 16});
 
   /// Best current streak in days (e.g. HabitStore.totalStreakPower).
   final int streak;
 
-  /// Font size of each 🔥 glyph.
+  /// Base size of each flame in logical pixels; the drawn icon is 1.35× this
+  /// so it carries the same visual weight the emoji used to.
   final double fontSize;
 
   @override
@@ -91,8 +153,10 @@ class _StreakFlameState extends State<StreakFlame>
                   final scale = 1 + 0.09 * flicker;
                   return Transform.scale(
                     scale: scale,
-                    child: Text('🔥',
-                        style: TextStyle(fontSize: widget.fontSize)),
+                    child: _Flame(
+                      size: widget.fontSize * 1.35,
+                      flicker: flicker,
+                    ),
                   );
                 },
               );

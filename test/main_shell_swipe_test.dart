@@ -174,6 +174,50 @@ void main() {
     await flushEntranceTimers(tester);
   });
 
+  // ─── TAB KEEP-ALIVE (no black re-init on every switch) ────
+
+  testWidgets('switching tabs keeps each tab mounted instead of rebuilding it',
+      (tester) async {
+    var cameraLookups = 0;
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(cameraChannel, (call) async {
+      if (call.method == 'availableCameras') {
+        cameraLookups++;
+        return <dynamic>[];
+      }
+      return null;
+    });
+
+    await pumpShell(tester);
+    final homeState = tester.state(find.byType(HomeScreen));
+
+    // Home → Scan.
+    await tester.fling(find.byType(MainShell), const Offset(-300, 0), 1000);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 450));
+
+    expect(find.byType(ScanScreen), findsOneWidget);
+    expect(find.byType(HomeScreen, skipOffstage: false), findsOneWidget,
+        reason: 'Home must stay mounted (offstage) while Scan is on screen');
+    expect(cameraLookups, 1,
+        reason: 'the Scan tab opens the camera once, on first visit');
+
+    // Scan → Home.
+    await tester.fling(find.byType(MainShell), const Offset(300, 0), 1000);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 450));
+
+    expect(tester.state(find.byType(HomeScreen)), same(homeState),
+        reason: 'returning must reuse the original State — rebuilding it '
+            'replays every entrance animation from zero, which is what '
+            'looked like a black screen on each switch');
+    expect(find.byType(ScanScreen, skipOffstage: false), findsOneWidget,
+        reason: 'the Scan tab stays mounted so the camera is never re-opened');
+    expect(cameraLookups, 1);
+
+    await flushEntranceTimers(tester);
+  });
+
   // ─── NOTIFICATION TAP → HABITS TAB (via shellTabIndex) ────
 
   testWidgets('openShellTab(2) switches the shell to the Habits tab',

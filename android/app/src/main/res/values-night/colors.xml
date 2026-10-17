@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Dark variant: MacroSnapTheme.surfaceDark (#0A0A0A), not pure black, so
+         an unpainted window frame blends with the app instead of flashing. -->
+    <color name="window_background">#FF0A0A0A</color>
+</resources>
