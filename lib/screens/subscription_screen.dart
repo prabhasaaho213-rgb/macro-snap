@@ -263,26 +263,26 @@ class _SubscriptionScreenState extends State<SubscriptionScreen>
               Container(
                 width: 80,
                 height: 80,
+                // Soft tint + hairline ring instead of a heavy solid block:
+                // the promo header should read as a badge, not a billboard.
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  gradient: const LinearGradient(
-                    colors: [
-                      MacroSnapTheme.neonGreen,
-                      MacroSnapTheme.neonGreen,
-                    ],
+                  color: MacroSnapTheme.neonOrange.withValues(alpha: 0.12),
+                  border: Border.all(
+                    color: MacroSnapTheme.neonOrange.withValues(alpha: 0.30),
                   ),
                   boxShadow: [
                     BoxShadow(
-                      color: MacroSnapTheme.neonGreen.withValues(alpha: 0.3),
-                      blurRadius: 20,
-                      offset: const Offset(0, 6),
+                      color: MacroSnapTheme.neonOrange.withValues(alpha: 0.10),
+                      blurRadius: 18,
+                      offset: const Offset(0, 4),
                     ),
                   ],
                 ),
-                child: const Icon(
+                child: Icon(
                   Icons.auto_awesome_rounded,
-                  color: Colors.black,
-                  size: 36,
+                  color: MacroSnapTheme.neonOrange,
+                  size: 32,
                 ),
               ),
               const SizedBox(height: 24),
@@ -314,6 +314,18 @@ class _SubscriptionScreenState extends State<SubscriptionScreen>
                   color: MacroSnapTheme.textTertiary(context),
                 ),
               ),
+              if (!_subscribed) ...[
+                const SizedBox(height: 12),
+                Text(
+                  'Choose a plan below to unlock everything \u2014 cancel anytime.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: MacroSnapTheme.neonOrange,
+                  ),
+                ),
+              ],
               const SizedBox(height: 32),
               _buildFeatureRow(
                 Icons.local_fire_department_rounded,
@@ -437,9 +449,9 @@ class _SubscriptionScreenState extends State<SubscriptionScreen>
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Icon(
+                      const Icon(
                         Icons.check_circle,
-                        color: MacroSnapTheme.neonGreen,
+                        color: MacroSnapTheme.successGreen,
                         size: 16,
                       ),
                       const SizedBox(width: 6),

@@ -130,6 +130,7 @@ class NutritionResult {
     final dishesList = (json['dishes'] as List<dynamic>?)
         ?.map((d) => DishItem.fromJson(d as Map<String, dynamic>))
         .toList() ?? [];
+    final rawGrams = (json['grams'] as num?)?.toInt();
     return NutritionResult(
       dishes: dishesList,
       description: json['description'] as String? ?? '',
@@ -140,6 +141,11 @@ class NutritionResult {
       // the numbers it reports be trusted over the local estimate.
       serverScansKnown: json.containsKey('scans_used') && json.containsKey('scans_limit'),
       serverResetAt: DateTime.tryParse(json['reset_at'] as String? ?? ''),
+      // Total weight of everything visible, estimated by the server and
+      // clamped there to 5–3000 g. Old servers don't send it → 100 g.
+      grams: rawGrams == null || rawGrams <= 0
+          ? 100
+          : rawGrams.clamp(5, 3000).toInt(),
     );
   }
 }

@@ -37,9 +37,10 @@ class _ResultScreenState extends State<ResultScreen>
   String? _error;
   NutritionResult? _result;
 
-  /// Current total serving in grams. Defaults to 100 g, which is also the
-  /// baseline the AI reports per-100g values against. The user can adjust it
-  /// and every item's nutrients rescale from its per-100g value.
+  /// Current total serving in grams. Starts at 100 g (the baseline the AI
+  /// reports per-100g values against) and is replaced by the weight the
+  /// analyzer estimated for the whole photo as soon as the result arrives.
+  /// The +/- adjuster always lets the user override it.
   int _grams = 100;
   bool _showPerDish = false;
 
@@ -155,6 +156,7 @@ class _ResultScreenState extends State<ResultScreen>
         if (!mounted) return;
         setState(() {
           _result = result;
+          _grams = result.grams;
           _isAnalyzing = false;
           _showLowConfidenceWarning = true;
         });
@@ -195,6 +197,9 @@ class _ResultScreenState extends State<ResultScreen>
         // dish names onto the photo one by one, and only then show the results.
         setState(() {
           _result = result;
+          // Start at the weight the AI saw in the photo (two eggs ≈ 100 g).
+          // The +/- adjuster still overrides it.
+          _grams = result.grams;
           _revealing = true;
           _analysisStage = result.dishes.length == 1
               ? 'Found it!'

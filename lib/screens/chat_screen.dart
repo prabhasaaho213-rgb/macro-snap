@@ -155,6 +155,8 @@ class _ChatScreenState extends State<ChatScreen> {
               },
             ),
           ),
+          if (_messages.length == 1 && !_proRequired && !_busy)
+            _buildSuggestions(isDark),
           _proRequired ? _buildUpsellBar(isDark) : _buildInputBar(isDark),
         ],
       ),
@@ -217,6 +219,37 @@ class _ChatScreenState extends State<ChatScreen> {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  /// Empty-state guidance: with only the greeting in the thread, offer a few
+  /// tappable openers instead of leaving the user staring at a blank composer.
+  Widget _buildSuggestions(bool isDark) {
+    const prompts = [
+      'How much protein in 100g paneer?',
+      'Healthy dinner under 400 kcal?',
+      'Am I hitting my protein today?',
+    ];
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+      child: Wrap(
+        spacing: 8,
+        runSpacing: 8,
+        children: [
+          for (final p in prompts)
+            ActionChip(
+              label: Text(p, style: const TextStyle(fontSize: 12)),
+              backgroundColor: isDark
+                  ? Colors.white.withValues(alpha: 0.06)
+                  : Colors.black.withValues(alpha: 0.04),
+              side: BorderSide(
+                color: MacroSnapTheme.borderSubtle(context),
+                width: 0.5,
+              ),
+              onPressed: () => _send(p),
+            ),
+        ],
       ),
     );
   }

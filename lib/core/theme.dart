@@ -19,14 +19,19 @@ class MacroSnapTheme {
   /// Primary accent — POPcoin orange. Used for CTAs, streaks, highlight
   /// numbers, badges. This is the ONE saturated color that should recur
   /// everywhere, the way POP uses its coin-orange.
-  static const Color neonGreen = Color(0xFFF4511E); // kept name for API compat
+  static const Color neonGreen = Color(0xFFFF6B2B); // kept name for API compat
   /// Deep violet — hero/card gradient family (POP's "curtain" background).
   static const Color neonPink = Color(0xFFB0281F); // kept name; now "danger/rose"
   static const Color neonPurple = Color(0xFF8B3FE8);
-  static const Color neonOrange = Color(0xFFF4511E);
+  static const Color neonOrange = Color(0xFFFF6B2B);
   static const Color neonCyan = Color(0xFF9B7BFF); // lighter violet, kept name
   static const Color neonYellow = Color(0xFFF4A340); // amber, kept name
   static const Color neonRed = Color(0xFFE8481C);
+
+  /// Semantic "done / success" green. [neonGreen] is the orange brand accent
+  /// (the name is kept for API compatibility), so completed states must use
+  /// this instead or they read as "active" rather than "done".
+  static const Color successGreen = Color(0xFF2FA45F);
 
   /// The ONE brand CTA gradient — burnt-orange into a lighter orange.
   /// Every button / icon circle / highlight that still used the leftover
@@ -35,7 +40,7 @@ class MacroSnapTheme {
   static const LinearGradient accentGradient = LinearGradient(
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
-    colors: [Color(0xFFF4511E), Color(0xFFFF7A45)],
+    colors: [Color(0xFFFF6B2B), Color(0xFFFFA45E)],
   );
 
   // ─── Semantic Macro Color Aliases ──────────────────────────

@@ -358,10 +358,22 @@ class _NavItem extends StatelessWidget {
       return GestureDetector(
         onTap: onTap,
         child: Container(
-          width: 52,
-          height: 52,
+          // 46 (was 52): the scan button still leads, but no longer dwarfs
+          // the Home/Habits tabs; the halo carries the emphasis instead.
+          width: 46,
+          height: 46,
           decoration: BoxDecoration(
             shape: BoxShape.circle,
+            boxShadow: isSelected
+                ? [
+                    BoxShadow(
+                      color: MacroSnapTheme.neonOrange.withValues(alpha: 0.30),
+                      blurRadius: 14,
+                      spreadRadius: 1,
+                      offset: const Offset(0, 3),
+                    ),
+                  ]
+                : null,
             gradient: isSelected
                 ? MacroSnapTheme.accentGradient
                 : LinearGradient(
@@ -387,7 +399,7 @@ class _NavItem extends StatelessWidget {
                 : (isDark
                       ? Colors.white54
                       : MacroSnapTheme.neonGreen.withValues(alpha: 0.6)),
-            size: 24,
+            size: 22,
           ),
         ),
       );

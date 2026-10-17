@@ -650,9 +650,12 @@ class _HabitsTabState extends State<HabitsTab> {
 
   // ─── SWIPE BACKGROUND ──────────────────────────────────────
   Widget _swipeActionBackground({required bool rightSwipe}) {
+    // Distinct states: complete is green, undo is red. Both sides used to
+    // resolve to the same orange (neonGreen is the brand accent), so the two
+    // actions read identically.
     final color = rightSwipe
-        ? MacroSnapTheme.neonGreen
-        : MacroSnapTheme.neonOrange;
+        ? MacroSnapTheme.successGreen
+        : MacroSnapTheme.neonRed;
     final icon = rightSwipe ? Icons.check_circle_rounded : Icons.undo_rounded;
     final label = rightSwipe ? 'Complete' : 'Undo';
     return Container(
@@ -672,12 +675,12 @@ class _HabitsTabState extends State<HabitsTab> {
             : MainAxisAlignment.start,
         children: [
           if (!rightSwipe) ...[
-            Icon(icon, color: Colors.black, size: 28),
+            Icon(icon, color: Colors.white, size: 28),
             const SizedBox(width: 10),
             Text(
               label,
               style: const TextStyle(
-                color: Colors.black,
+                color: Colors.white,
                 fontWeight: FontWeight.w900,
                 fontSize: 17,
               ),
@@ -686,13 +689,13 @@ class _HabitsTabState extends State<HabitsTab> {
             Text(
               label,
               style: const TextStyle(
-                color: Colors.black,
+                color: Colors.white,
                 fontWeight: FontWeight.w900,
                 fontSize: 17,
               ),
             ),
             const SizedBox(width: 10),
-            Icon(icon, color: Colors.black, size: 28),
+            Icon(icon, color: Colors.white, size: 28),
           ],
         ],
       ),
@@ -1214,7 +1217,7 @@ class _HabitsTabState extends State<HabitsTab> {
                 Icons.info_outline_rounded,
                 color: used >= limit
                     ? MacroSnapTheme.neonOrange
-                    : MacroSnapTheme.neonGreen,
+                    : MacroSnapTheme.successGreen,
                 size: 18,
               ),
               const SizedBox(width: 8),
@@ -1248,7 +1251,7 @@ class _HabitsTabState extends State<HabitsTab> {
                 : const Color(0xFFE8DEFF),
             color: used >= limit
                 ? MacroSnapTheme.neonOrange
-                : MacroSnapTheme.neonGreen,
+                : MacroSnapTheme.successGreen,
           ),
           const SizedBox(height: 10),
           Text(

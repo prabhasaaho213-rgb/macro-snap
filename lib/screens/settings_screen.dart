@@ -459,6 +459,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
               decoration: BoxDecoration(
                 gradient: MacroSnapTheme.accentGradient,
                 borderRadius: BorderRadius.circular(24),
+                // A soft lift so the Pro banner sits above the flat cards
+                // below it instead of reading as one more flat panel.
+                boxShadow: [
+                  BoxShadow(
+                    color: MacroSnapTheme.neonOrange.withValues(alpha: 0.28),
+                    blurRadius: 22,
+                    offset: const Offset(0, 10),
+                  ),
+                ],
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -514,9 +523,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                               if (_email.isNotEmpty)
                                 Text(
                                   _email,
-                                  style: const TextStyle(
-                                    color: Colors.black,
+                                  style: TextStyle(
+                                    color: Colors.black.withValues(alpha: 0.68),
                                     fontSize: 13,
+                                    height: 1.3,
                                   ),
                                 ),
                             ],
@@ -528,11 +538,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   const SizedBox(height: 16),
                   Container(
                     padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 6,
+                      horizontal: 14,
+                      vertical: 7,
                     ),
                     decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.35),
+                      color: Colors.white.withValues(alpha: 0.55),
                       borderRadius: BorderRadius.circular(20),
                     ),
                     child: Text(
