@@ -8,11 +8,13 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:package_info_plus/package_info_plus.dart';
+import 'package:permission_handler/permission_handler.dart';
 import '../core/haptics.dart';
 import '../core/theme.dart';
 import '../models/diet_profile.dart';
 import '../widgets/glass_card.dart';
 import '../widgets/animations.dart';
+import '../widgets/notification_prompt.dart';
 import '../services/meal_store.dart';
 import '../services/meal_sync_service.dart';
 import '../services/habit_store.dart';
@@ -43,6 +45,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
   /// drives the dot on the "What's New" row. (This used to live on the
   /// bottom-nav Updates tab; the tab is gone, the badge moved with it.)
   bool _hasUnseenUpdate = false;
+
+  /// Current OS notification permission. `null` means it could not be read
+  /// (platform channel unavailable) — the row stays tappable either way.
+  bool? _notificationsOn;
 
   @override
   void initState() {
@@ -82,6 +88,27 @@ class _SettingsScreenState extends State<SettingsScreen> {
     });
     _isAdmin = await SubscriptionService.instance.isAdmin();
     if (mounted) setState(() {});
+    _refreshNotificationStatus();
+  }
+
+  /// Reads the notification permission without blocking the screen.
+  Future<void> _refreshNotificationStatus() async {
+    bool? on;
+    try {
+      on = (await Permission.notification.status).isGranted;
+    } catch (_) {
+      on = null;
+    }
+    if (mounted) setState(() => _notificationsOn = on);
+  }
+
+  /// The way back to notifications after "Not now" (or a denial) — this is now
+  /// the only place the ask is guaranteed to be reachable, because startup no
+  /// longer fires the system dialog. Unlike the launch prompt it ignores the
+  /// three-day cooldown: the user came here on purpose.
+  Future<void> _changeNotificationPermission() async {
+    await maybeShowNotificationPrompt(context, force: true);
+    await _refreshNotificationStatus();
   }
 
   bool get _isGuest => _phone.isEmpty || _phone.startsWith('guest_');
@@ -616,6 +643,21 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       },
                       isDark,
                       showBadge: _hasUnseenUpdate,
+                    ),
+                  ),
+                  const Divider(height: 24),
+                  AnimatedEntrance(
+                    delayMs: 218,
+                    child: _settingTile(
+                      Icons.notifications_active_rounded,
+                      'Notifications',
+                      _notificationsOn == null
+                          ? 'Reminders for meals, habits and streaks'
+                          : (_notificationsOn!
+                                ? 'On — reminders for meals, habits and streaks'
+                                : 'Off — tap to turn reminders on'),
+                      _changeNotificationPermission,
+                      isDark,
                     ),
                   ),
                   const Divider(height: 24),

@@ -34,7 +34,7 @@ class UpdatesScreen extends StatefulWidget {
   /// the user has already seen and puts a dot on the "What's New" row when the
   /// two differ — so a new release announces itself instead of waiting to be
   /// found.
-  static const String latestVersion = '1.4.95';
+  static const String latestVersion = '1.4.96';
 
   /// SharedPreferences key holding the latest version the user has seen.
   static const String seenVersionKey = 'updates_seen_version';
@@ -49,6 +49,18 @@ class _UpdatesScreenState extends State<UpdatesScreen> {
       version: UpdatesScreen.latestVersion,
       date: 'Latest',
       isLatest: true,
+      notes: [
+        'Launching is instant - the app draws its splash right away instead of sitting on a black screen',
+        'The notification permission is now asked inside the app, not on top of a loading screen',
+        'Startup work runs in parallel, so the first screen arrives sooner',
+        'Subscriptions are paid inside the app - no more being sent to a browser, and Pro confirms with a celebration',
+        'New BMI calculator on Home - pre-filled with your height and weight, with your BMR, TDEE and calorie target alongside',
+        'Weight history is kept so Home can draw a trend line and show which way you are moving',
+      ],
+    ),
+    _UpdateEntry(
+      version: '1.4.95',
+      date: 'Earlier',
       notes: [
         'No more black pause when switching tabs - Home, Scan and Habits stay loaded',
         'The streak flame is brighter, with a live glow',

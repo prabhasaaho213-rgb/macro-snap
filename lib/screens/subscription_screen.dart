@@ -10,6 +10,7 @@ import '../services/gemini_service.dart';
 import '../services/razorpay_service.dart';
 import '../services/subscription_service.dart';
 import 'referral_screen.dart';
+import 'payment_result_screen.dart';
 
 class SubscriptionScreen extends StatefulWidget {
   const SubscriptionScreen({super.key});
@@ -18,16 +19,13 @@ class SubscriptionScreen extends StatefulWidget {
   State<SubscriptionScreen> createState() => _SubscriptionScreenState();
 }
 
-class _SubscriptionScreenState extends State<SubscriptionScreen>
-    with SingleTickerProviderStateMixin {
+class _SubscriptionScreenState extends State<SubscriptionScreen> {
   String? _phone;
   bool _subscribed = false;
   bool _isAdmin = false;
   bool _submitting = false;
   bool _checking = true;
   String? _subscribedDate;
-  AnimationController? _animController;
-  CurvedAnimation? _checkAnim;
 
   @override
   void initState() {
@@ -37,10 +35,6 @@ class _SubscriptionScreenState extends State<SubscriptionScreen>
 
   @override
   void dispose() {
-    RazorpayService.clearCallbacks();
-    _checkAnim?.dispose();
-    _animController?.stop();
-    _animController?.dispose();
     super.dispose();
   }
 
@@ -72,18 +66,18 @@ class _SubscriptionScreenState extends State<SubscriptionScreen>
       );
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body);
-        if (mounted) {
-          setState(() {
-            if (data['subscribed'] == true && !_subscribed) {
-              _activateFromServer();
-            }
-          });
+        if (data is Map && data['subscribed'] == true && !_subscribed) {
+          // A restore, not a purchase: no celebration.
+          await _activateFromServer(announce: false);
         }
       }
     } catch (e) { debugPrint("Error: $e"); }
   }
 
-  Future<void> _activateFromServer() async {
+  /// Switches the screen to Pro and (unless [announce] is false) plays the
+  /// full-screen celebration. [announce] is false when Pro was simply restored
+  /// on opening the screen — that is not a purchase the user just made.
+  Future<void> _activateFromServer({bool announce = true}) async {
     // Post-activation side effects (pro reminders + meal-store refresh) live
     // inside SubscriptionService.activate so they aren't duplicated here and
     // in RazorpayService.
@@ -91,111 +85,59 @@ class _SubscriptionScreenState extends State<SubscriptionScreen>
     final now =
         SubscriptionService.instance.subscribedAt ??
         DateTime.now().toIso8601String();
+    if (!mounted) return;
+    setState(() {
+      _subscribed = true;
+      _subscribedDate = now;
+    });
+    if (announce) await _showSuccess();
+  }
+
+  /// Full-screen celebration after a verified purchase. Awaited so the screen
+  /// can refresh its Pro state once the user dismisses it.
+  Future<void> _showSuccess() async {
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        fullscreenDialog: true,
+        builder: (_) => const PaymentSuccessScreen(),
+      ),
+    );
     if (mounted) {
+      await SubscriptionService.instance.load();
       setState(() {
-        _subscribed = true;
-        _subscribedDate = now;
+        _subscribed = SubscriptionService.instance.isSubscribed;
+        _subscribedDate = SubscriptionService.instance.subscribedAt;
       });
-      _showConfirmation();
     }
   }
 
-  void _showConfirmation() {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    _checkAnim?.dispose();
-    _animController?.stop();
-    _animController?.dispose();
-    _animController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 600),
+  /// Returns [PaymentAction.retry] when the user wants another attempt.
+  Future<PaymentAction?> _showFailure(String message) {
+    return Navigator.of(context).push<PaymentAction>(
+      MaterialPageRoute(
+        fullscreenDialog: true,
+        builder: (_) => PaymentFailureScreen(message: message),
+      ),
     );
-    _checkAnim = CurvedAnimation(
-      parent: _animController!,
-      curve: Curves.elasticOut,
-    );
-    _animController!.forward();
+  }
 
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (ctx) => PopScope(
-        canPop: false,
-        child: AnimatedBuilder(
-          animation: _checkAnim!,
-          builder: (_, _) => AlertDialog(
-            backgroundColor: Theme.of(context).brightness == Brightness.dark
-                ? MacroSnapTheme.cardDark
-                : Colors.white,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(28),
-            ),
-            content: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 20),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Transform.scale(
-                    scale: _checkAnim!.value,
-                    child: Container(
-                      width: 80,
-                      height: 80,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: MacroSnapTheme.neonGreen.withValues(alpha: 0.1),
-                      ),
-                      child: Icon(
-                        Icons.check_circle_rounded,
-                        color: MacroSnapTheme.neonGreen,
-                        size: 56,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-                  Text(
-                    'Welcome to Pro!',
-                    style: TextStyle(
-                      fontSize: 22,
-                      fontWeight: FontWeight.w800,
-                      color: isDark ? Colors.white : const Color(0xFF1A1A1A),
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    'Your subscription is now active',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: MacroSnapTheme.textSecondary(context),
-                    ),
-                  ),
-                  const SizedBox(height: 24),
-                  SizedBox(
-                    width: double.infinity,
-                    height: 48,
-                    child: FilledButton(
-                      onPressed: () => Navigator.of(ctx).pop(),
-                      style: FilledButton.styleFrom(
-                        backgroundColor: MacroSnapTheme.neonGreen,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                      ),
-                      child: const Text(
-                        'Start Using MacroSnap',
-                        style: TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
+  Future<void> _showPending(String message) async {
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        fullscreenDialog: true,
+        builder: (_) => PaymentPendingScreen(
+          message: message,
+          onCheckAgain: RazorpayService.refreshStatus,
         ),
       ),
     );
+    if (mounted) {
+      await SubscriptionService.instance.load();
+      setState(() {
+        _subscribed = SubscriptionService.instance.isSubscribed;
+        _subscribedDate = SubscriptionService.instance.subscribedAt;
+      });
+    }
   }
 
   void _showError(String msg) {
@@ -209,26 +151,40 @@ class _SubscriptionScreenState extends State<SubscriptionScreen>
     );
   }
 
+  /// Paying happens inside the app: Razorpay's native sheet opens over this
+  /// screen and the outcome comes back as one [PaymentResult], so the user is
+  /// never bounced into a browser mid-purchase.
   Future<void> _payWithRazorpay() async {
     if (_phone == null) return;
     setState(() => _submitting = true);
+    PaymentResult result;
     try {
-      RazorpayService.setErrorCallback((msg) {
-        if (mounted) _showError(msg);
-      });
-      RazorpayService.setSuccessCallback(() {
-        if (mounted) {
-          setState(() {
-            _submitting = false;
-          });
-          _activateFromServer();
-        }
-      });
       // Identity (phone/email) comes from the verified token on the server.
-      await RazorpayService.startCheckout(name: 'MacroSnap User');
+      result = await RazorpayService.purchase(name: 'MacroSnap User');
     } catch (e) {
-      _showError('Could not start payment: $e');
-      if (mounted) setState(() => _submitting = false);
+      result = PaymentResult.failed('Could not start the payment: $e');
+    }
+    if (!mounted) return;
+    setState(() => _submitting = false);
+
+    switch (result.outcome) {
+      case PaymentOutcome.success:
+        await _activateFromServer();
+        break;
+      case PaymentOutcome.cancelled:
+        _showError('Payment cancelled');
+        break;
+      case PaymentOutcome.pending:
+        await _showPending(
+          result.message ?? 'Confirming your payment with the bank.',
+        );
+        break;
+      case PaymentOutcome.failed:
+        final action = await _showFailure(
+          result.message ?? 'The payment did not go through.',
+        );
+        if (action == PaymentAction.retry && mounted) await _payWithRazorpay();
+        break;
     }
   }
 
@@ -551,7 +507,7 @@ class _SubscriptionScreenState extends State<SubscriptionScreen>
                         ),
                         const SizedBox(height: 8),
                         Text(
-                          'Secure payment • Auto-renews ₹29/month',
+                          'Secure in-app payment • Auto-renews ₹29/month',
                           textAlign: TextAlign.center,
                           style: TextStyle(
                             fontSize: 12,

@@ -13,6 +13,10 @@ const _keyLastPrompt = 'notif_prompt_last_shown';
 /// the permission state can't be determined). After a "Not now" it waits
 /// [kNotificationPromptCooldownDays] before asking again.
 ///
+/// [force] skips that cooldown for an explicit request — Settings taps
+/// "Notifications" to change this deliberately, so the three-day quiet
+/// period (meant for unsolicited launch prompts) must not apply.
+///
 /// The functions are injectable so widget tests can fake the platform.
 Future<void> maybeShowNotificationPrompt(
   BuildContext context, {
@@ -20,6 +24,7 @@ Future<void> maybeShowNotificationPrompt(
   Future<PermissionStatus> Function()? request,
   Future<void> Function()? openSettings,
   DateTime Function()? now,
+  bool force = false,
 }) async {
   final statusOfFn = statusOf ?? () => Permission.notification.status;
   final requestFn = request ?? () => Permission.notification.request();
@@ -36,7 +41,7 @@ Future<void> maybeShowNotificationPrompt(
 
   final prefs = await SharedPreferences.getInstance();
   final lastShown = prefs.getString(_keyLastPrompt);
-  if (lastShown != null) {
+  if (!force && lastShown != null) {
     final lastDate = DateTime.tryParse(lastShown);
     if (lastDate != null &&
         nowFn().difference(lastDate).inDays < kNotificationPromptCooldownDays) {

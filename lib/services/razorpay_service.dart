@@ -1,16 +1,53 @@
 import 'dart:async';
 import 'dart:convert';
-import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'auth_http.dart';
 import 'package:razorpay_flutter/razorpay_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'gemini_service.dart';
 import 'subscription_service.dart';
 
+/// How a purchase attempt ended.
+enum PaymentOutcome {
+  /// The backend verified the payment and Pro is active.
+  success,
+
+  /// The user closed checkout without paying — not an error worth alarming
+  /// them with.
+  cancelled,
+
+  /// The attempt did not go through.
+  failed,
+
+  /// Money may still be on its way: the hosted page was opened, or the bank /
+  /// webhook has not confirmed yet. Pro switches on by itself when it does.
+  pending,
+}
+
+class PaymentResult {
+  final PaymentOutcome outcome;
+  final String? message;
+
+  const PaymentResult(this.outcome, [this.message]);
+
+  const PaymentResult.success() : outcome = PaymentOutcome.success, message = null;
+  const PaymentResult.cancelled() : outcome = PaymentOutcome.cancelled, message = null;
+  const PaymentResult.pending([this.message]) : outcome = PaymentOutcome.pending;
+  const PaymentResult.failed(this.message) : outcome = PaymentOutcome.failed;
+}
+
 class RazorpayService {
   static final Razorpay _razorpay = Razorpay();
   static bool _initialized = false;
-  static String? _lastSubscriptionId;
+
+  /// The open checkout, if any. `null` means no purchase is in flight, so
+  /// late plugin callbacks (a sheet dismissed after the screen was left) are
+  /// dropped instead of reviving a stale flow.
+  static Completer<PaymentResult>? _pending;
+
+  /// The subscription currently being paid for — needed by the hosted-page
+  /// fallback and by the verify call when the SDK omits the id.
+  static String? _subscriptionId;
 
   /// Initialize Razorpay. Call this once in the app lifecycle.
   static void init() {
@@ -28,96 +65,132 @@ class RazorpayService {
     _initialized = false;
   }
 
-  /// Start the payment flow for the ₹29/month RECURRING subscription.
+  /// Collects the ₹29/month subscription **inside the app**.
   ///
-  /// Creates the Razorpay Subscription on the backend, then opens Razorpay's
-  /// HOSTED subscription page (the /v1/l/subscriptions/{id} URL) in the
-  /// system browser instead of the SDK checkout.
+  /// The backend creates the Razorpay subscription and hands back its id plus
+  /// the public key; [Razorpay.open] then slides Razorpay's native checkout
+  /// sheet over MacroSnap. The user never leaves the app, the payment happens
+  /// in-place, and the result arrives here — success, cancel or failure.
   ///
-  /// WHY: the razorpay_flutter SDK checkout throws Razorpay error VC
-  /// ("INCORRECT RECURRENCE PATTERN RULE") on this plan even though the
-  /// plan/subscription are valid — the hosted page is proven to work
-  /// (razorpay/razorpay-flutter#396, open since 2024). The subscription is
-  /// auto-charged monthly by Razorpay either way; the backend webhook
-  /// (subscription.charged) activates Pro in Firestore, which we poll for.
-  static Future<void> startCheckout({
+  /// Previously this opened `api.razorpay.com/v1/l/subscriptions/{id}` in the
+  /// system browser, which is why paying looked like being "redirected to
+  /// another page": the app was backgrounded mid-purchase and the user had to
+  /// find their way back.
+  ///
+  /// The Flutter SDK has a long-standing bug with recurring plans (error VC,
+  /// "INCORRECT RECURRENCE PATTERN RULE" — razorpay/razorpay-flutter#396).
+  /// If this device hits it, the flow degrades to the hosted page that is
+  /// known to work rather than failing the purchase outright; either way the
+  /// caller gets one [PaymentResult].
+  static Future<PaymentResult> purchase({required String name}) async {
+    final created = await _createSubscription(name: name);
+    final subscriptionId = created['subscription_id'];
+    if (subscriptionId is! String || subscriptionId.isEmpty) {
+      return const PaymentResult.failed('Could not start the payment.');
+    }
+    _subscriptionId = subscriptionId;
+
+    final key = created['razorpay_key'];
+    if (key is! String || key.isEmpty) {
+      // No publishable key from the server → the native sheet cannot open.
+      return _openHostedPage(subscriptionId);
+    }
+
+    final pending = Completer<PaymentResult>();
+    _pending = pending;
+    try {
+      _razorpay.open({
+        'key': key,
+        // Subscriptions are charged from the plan, so no amount/currency here:
+        // sending them alongside subscription_id is what triggers the SDK's
+        // recurrence-pattern rejection.
+        'subscription_id': subscriptionId,
+        'name': 'MacroSnap',
+        'description': 'MacroSnap Pro · ₹29/month',
+        'theme': {'color': '#FF6B2B'},
+        'send_sms_hash': true,
+        'retry': {'enabled': true, 'max_count': 2},
+      });
+    } catch (e) {
+      // Some SDK versions throw instead of reporting the recurrence bug.
+      debugPrint('Razorpay checkout could not open ($e) — using hosted page');
+      _pending = null;
+      return _openHostedPage(subscriptionId);
+    }
+    // Safety valve: some SDK builds close the sheet without firing either
+    // callback, which would leave the caller's button spinning forever.
+    return pending.future.timeout(
+      const Duration(minutes: 10),
+      onTimeout: () {
+        _pending = null;
+        _subscriptionId = null;
+        return const PaymentResult.pending(
+          'No confirmation yet. If money was deducted, Pro switches on by '
+          'itself within a few minutes.',
+        );
+      },
+    );
+  }
+
+  /// Re-asks the backend whether Pro is active yet. Used by the "pending"
+  /// screen: a bank confirmation can land seconds after the sheet closes.
+  static Future<bool> refreshStatus() async {
+    try {
+      final resp = await AuthHttp.get(
+        Uri.parse('${GeminiService.serverUrl}/me/payment/status'),
+      );
+      if (resp.statusCode != 200) return false;
+      final data = jsonDecode(resp.body);
+      if (data is Map && data['subscribed'] == true) {
+        await SubscriptionService.instance.activate();
+        return true;
+      }
+    } catch (e) {
+      debugPrint('Error checking payment status: $e');
+    }
+    return false;
+  }
+
+  /// True when a checkout error is the known recurring-plan SDK bug, i.e. a
+  /// reason to fall back to the hosted page instead of telling the user their
+  /// payment failed. Kept public so the mapping is testable without a device.
+  static bool looksLikeRecurrenceBug(String message) {
+    final m = message.toLowerCase();
+    return m.contains('recurrence') ||
+        m.contains('recurring') ||
+        m.contains('incorrect pattern');
+  }
+
+  // ─── Backend ───────────────────────────────────────────────────────────
+
+  /// Creates the recurring subscription for the token's user. Identity
+  /// (phone/email) is resolved server-side — only the display name travels.
+  static Future<Map<String, dynamic>> _createSubscription({
     required String name,
   }) async {
-    try {
-      // 1. Create recurring subscription on backend. The payer's identity
-      // (phone/email) comes from the verified token there — only the display
-      // name travels in the body.
-      final subResponse = await AuthHttp.post(
-        Uri.parse('${GeminiService.serverUrl}/payment/create-subscription'),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({'name': name}),
-      );
-
-      if (subResponse.statusCode != 200) {
-        throw Exception('Failed to create payment subscription');
-      }
-
-      final subData = jsonDecode(subResponse.body);
-      final subscriptionId = subData['subscription_id'] as String;
-      _lastSubscriptionId = subscriptionId;
-
-      // 2. Open the hosted subscription payment page in the system browser.
-      final uri = Uri.parse(
-        'https://api.razorpay.com/v1/l/subscriptions/$subscriptionId',
-      );
-      final opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
-      if (!opened) {
-        throw Exception('Could not open the payment page');
-      }
-
-      unawaited(_pollForActivation());
-    } catch (e) {
-      _lastSubscriptionId = null;
-      rethrow;
+    final res = await AuthHttp.post(
+      Uri.parse('${GeminiService.serverUrl}/payment/create-subscription'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({'name': name}),
+    );
+    if (res.statusCode != 200) {
+      throw Exception('Could not start the payment (${res.statusCode}).');
     }
+    final data = jsonDecode(res.body);
+    if (data is! Map<String, dynamic>) {
+      throw Exception('Unexpected response from the payment server.');
+    }
+    return data;
   }
 
-  /// Polls /me/payment/status (Firestore-backed) until the user is
-  /// subscribed, then triggers the success callback. Silently gives up after
-  /// the timeout — the webhook still activates Pro in the background, so a
-  /// slow webhook only delays the on-screen confirmation.
-  static Future<void> _pollForActivation({
-    Duration timeout = const Duration(minutes: 3),
-  }) async {
-    final deadline = DateTime.now().add(timeout);
+  /// Verifies the payment server-side, then switches Pro on.
+  static Future<void> _verifyAndActivate(PaymentSuccessResponse response) async {
+    final subscriptionId =
+        (response.data?['razorpay_subscription_id'] as String?) ??
+            _subscriptionId;
+    bool verified = false;
     try {
-      while (DateTime.now().isBefore(deadline)) {
-        // Phase 2: the caller's own status, identified by the token alone.
-        final resp = await AuthHttp.get(
-          Uri.parse('${GeminiService.serverUrl}/me/payment/status'),
-        );
-        if (resp.statusCode == 200) {
-          final data = jsonDecode(resp.body);
-          if (data is Map && data['subscribed'] == true) {
-            _lastSubscriptionId = null;
-            if (_onSuccessCallback != null) _onSuccessCallback!();
-            return;
-          }
-        }
-        await Future.delayed(const Duration(seconds: 4));
-      }
-    } catch (_) {
-      // Network hiccup while polling — the webhook still activates Pro.
-    }
-    _lastSubscriptionId = null;
-  }
-
-  /// Handle successful payment from Razorpay.
-  static void _handlePaymentSuccess(PaymentSuccessResponse response) async {
-    try {
-      // The SDK puts razorpay_subscription_id in the raw response map for
-      // subscription checkouts; fall back to the id we created it with.
-      final subscriptionId =
-          (response.data?['razorpay_subscription_id'] as String?) ??
-              _lastSubscriptionId;
-      // Verify payment on backend (subscription signature is
-      // HMAC(subscription_id|payment_id))
-      final verifyResponse = await AuthHttp.post(
+      final res = await AuthHttp.post(
         Uri.parse('${GeminiService.serverUrl}/payment/verify'),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({
@@ -126,70 +199,112 @@ class RazorpayService {
           'razorpay_signature': response.signature,
         }),
       );
-
-      if (verifyResponse.statusCode == 200) {
-        // Payment verified — activate subscription
-        await _activateSubscription();
-        // Notify the UI that payment succeeded
-        if (_onSuccessCallback != null) {
-          _onSuccessCallback!();
-        }
-      } else {
-        _showError('Payment verification failed. Please contact support.');
-      }
+      verified = res.statusCode == 200;
     } catch (e) {
-      _showError('Verification error. Your payment may still be processed.');
+      debugPrint('Payment verification error: $e');
+    }
+
+    if (verified) {
+      try {
+        await SubscriptionService.instance.activate();
+      } catch (e) {
+        debugPrint('Activation after payment failed: $e');
+      }
+      _finish(const PaymentResult.success());
+    } else {
+      // The money may still be fine — the webhook just has not landed yet.
+      _finish(const PaymentResult.pending(
+        'We could not confirm the payment yet. If money was deducted, Pro '
+        'switches on by itself within a few minutes.',
+      ));
     }
   }
 
-  /// Handle payment failure.
+  /// Opens the hosted subscription page as the fallback path and waits for
+  /// activation. Returns `pending` when the page was opened but nothing has
+  /// been confirmed yet (the webhook still activates Pro later).
+  static Future<PaymentResult> _openHostedPage(String subscriptionId) async {
+    final uri = Uri.parse(
+      'https://api.razorpay.com/v1/l/subscriptions/$subscriptionId',
+    );
+    final opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
+    if (!opened) {
+      return const PaymentResult.failed(
+        'Could not open the secure payment page. Please try again.',
+      );
+    }
+    final activated = await _pollForActivation();
+    if (activated) return const PaymentResult.success();
+    return const PaymentResult.pending(
+      'Finish the payment in the page we opened — Pro switches on as soon as '
+      'the bank confirms.',
+    );
+  }
+
+  /// Polls the backend (Firestore-backed) until the user is subscribed.
+  static Future<bool> _pollForActivation({
+    Duration timeout = const Duration(minutes: 3),
+  }) async {
+    final deadline = DateTime.now().add(timeout);
+    while (DateTime.now().isBefore(deadline)) {
+      try {
+        final resp = await AuthHttp.get(
+          Uri.parse('${GeminiService.serverUrl}/me/payment/status'),
+        );
+        if (resp.statusCode == 200) {
+          final data = jsonDecode(resp.body);
+          if (data is Map && data['subscribed'] == true) {
+            await SubscriptionService.instance.activate();
+            return true;
+          }
+        }
+      } catch (_) {
+        // Network hiccup while polling — keep trying until the deadline.
+      }
+      await Future.delayed(const Duration(seconds: 4));
+    }
+    return false;
+  }
+
+  // ─── Plugin callbacks ──────────────────────────────────────────────────
+
+  static void _handlePaymentSuccess(PaymentSuccessResponse response) {
+    unawaited(_verifyAndActivate(response));
+  }
+
   static void _handlePaymentError(PaymentFailureResponse response) {
-    _lastSubscriptionId = null;
-    String message = 'Payment cancelled';
-    if (response.code != 0) {
-      message = 'Payment failed: ${response.message ?? "Please try again"}';
+    final message = response.message ?? '';
+    final subscriptionId = _subscriptionId;
+
+    if (looksLikeRecurrenceBug(message) && subscriptionId != null) {
+      // Not the user's fault and not a failed payment — switch to the hosted
+      // page in place, keeping the same completer so the caller sees one
+      // continuous flow.
+      debugPrint('SDK recurrence bug hit — falling back to hosted page');
+      unawaited(_openHostedPage(subscriptionId).then(_finish));
+      return;
     }
-    _showError(message);
+
+    if (response.code == 0) {
+      _finish(const PaymentResult.cancelled());
+      return;
+    }
+    _finish(PaymentResult.failed(
+      message.isEmpty ? 'The payment did not go through.' : message,
+    ));
   }
 
-  /// Handle external wallet selection.
   static void _handleExternalWallet(ExternalWalletResponse response) {
-    _showError('${response.walletName} selected. Please complete the payment.');
+    // The sheet is still open (the user was handed off to a wallet app), so
+    // there is nothing to report yet — the success/error callback follows.
+    debugPrint('External wallet selected: ${response.walletName}');
   }
 
-  /// Activate the subscription after successful payment verification.
-  ///
-  /// Post-activation side effects (pro reminders + meal-store refresh) live
-  /// inside [SubscriptionService.activate] so they aren't duplicated here and
-  /// in the subscription screen.
-  static Future<void> _activateSubscription() async {
-    await SubscriptionService.instance.activate();
-    _lastSubscriptionId = null;
-  }
-
-  /// Show a snackbar error message (uses a global key approach).
-  static void _showError(String message) {
-    if (_onErrorCallback != null) {
-      _onErrorCallback!(message);
-    }
-  }
-
-  static void Function(String)? _onErrorCallback;
-  static VoidCallback? _onSuccessCallback;
-
-  /// Set a callback for showing error messages from the UI.
-  static void setErrorCallback(void Function(String) callback) {
-    _onErrorCallback = callback;
-  }
-
-  /// Set a callback for when payment succeeds and is verified.
-  static void setSuccessCallback(VoidCallback callback) {
-    _onSuccessCallback = callback;
-  }
-
-  /// Clear all callbacks.
-  static void clearCallbacks() {
-    _onErrorCallback = null;
-    _onSuccessCallback = null;
+  /// Completes the in-flight purchase exactly once and clears the flow state.
+  static void _finish(PaymentResult result) {
+    final pending = _pending;
+    _pending = null;
+    _subscriptionId = null;
+    if (pending != null && !pending.isCompleted) pending.complete(result);
   }
 }

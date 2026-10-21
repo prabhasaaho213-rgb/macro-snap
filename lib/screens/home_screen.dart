@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -10,9 +11,13 @@ import '../services/scan_gate.dart';
 import '../services/meal_streak_service.dart';
 import '../services/subscription_service.dart';
 import '../models/diet_profile.dart';
+import '../models/bmi.dart';
 import '../services/share_service.dart';
+import '../services/weight_store.dart';
 
 import '../widgets/animations.dart';
+import '../widgets/bmi_gauge.dart';
+import '../widgets/weight_trend_chart.dart';
 import '../widgets/calorie_trend_card.dart';
 import '../widgets/confetti_celebration.dart';
 import 'diet_plan_screen.dart';
@@ -22,6 +27,7 @@ import 'settings_screen.dart';
 import 'chat_screen.dart';
 import 'subscription_screen.dart';
 import 'recipe_list_screen.dart';
+import 'bmi_screen.dart';
 import 'barcode_scan_screen.dart';
 import 'result_screen.dart';
 
@@ -65,6 +71,9 @@ class _HomeScreenState extends State<HomeScreen>
     MealStore.instance.changeNotifier.addListener(_onDataChanged);
     userNameNotifier.addListener(_onNameChanged);
     SubscriptionService.instance.addListener(_onSubscriptionChanged);
+    // The BMI card draws the weight history, so a weigh-in recorded anywhere
+    // (the calculator, a future screen) repaints it.
+    WeightStore.instance.addListener(_onWeightChanged);
     // Reflect the subscription state the app already loaded, so the button is
     // correct on the first frame; _loadAll() and the listener keep it current.
     _guruUnlocked = SubscriptionService.instance.isSubscribed;
@@ -115,6 +124,19 @@ class _HomeScreenState extends State<HomeScreen>
     _loadScansOnly();
   }
 
+  void _onWeightChanged() {
+    if (mounted) setState(() {});
+  }
+
+  /// Paints Home from local data, then lets the server answer update the badge.
+  ///
+  /// This used to await [ScanGate.refreshFromServer] (an HTTP call with an
+  /// 8-second timeout) *before* the first `setState` and before
+  /// [_animController] started. On a slow or flaky connection that left the
+  /// screen blank — no name, no streak, no scan badge, no entrance animation —
+  /// for seconds, right after the launch splash had already disappeared.
+  /// Everything below the store loads is a warm prefs/file read, so the real
+  /// numbers are on screen immediately; the network is a follow-up.
   Future<void> _loadAll() async {
     await MealStore.instance.load();
     await DietPlanService.instance.load();
@@ -123,23 +145,39 @@ class _HomeScreenState extends State<HomeScreen>
     final name = prefs.getString('name') ?? '';
     final streak = await MealStreakService.getCurrent();
     final best = await MealStreakService.getBest();
-    // Best-effort: the server is the authority on the free-scan allowance, so
-    // ask it before falling back to the local estimate for the badge.
-    await ScanGate.refreshFromServer();
+    // Local estimate first (today's remainder, reset on the IST day boundary).
     final scans = await ScanGate.getScansRemaining();
 
-    if (mounted) {
-      setState(() {
-        _name = name;
-        _streak = streak;
-        _bestStreak = best;
-        _scansLeft = scans;
-        _trialActive = SubscriptionService.instance.trialActive;
-        _trialDaysLeft = SubscriptionService.instance.trialDaysLeft;
-        _guruUnlocked = SubscriptionService.instance.isSubscribed;
-      });
-      userNameNotifier.value = name;
-      _animController.forward();
+    if (!mounted) return;
+    setState(() {
+      _name = name;
+      _streak = streak;
+      _bestStreak = best;
+      _scansLeft = scans;
+      _trialActive = SubscriptionService.instance.trialActive;
+      _trialDaysLeft = SubscriptionService.instance.trialDaysLeft;
+      _guruUnlocked = SubscriptionService.instance.isSubscribed;
+    });
+    userNameNotifier.value = name;
+    _animController.forward();
+
+    // Best-effort: the server is the authority on the free-scan allowance, so
+    // reconcile the badge once the screen is already up.
+    unawaited(_refreshScansFromServer());
+  }
+
+  /// Asks the backend for the authoritative scan allowance without ever
+  /// gating the UI: offline, a timeout, or an old backend simply leaves the
+  /// local estimate in place.
+  Future<void> _refreshScansFromServer() async {
+    try {
+      if (!await ScanGate.refreshFromServer()) return;
+      final scans = await ScanGate.getScansRemaining();
+      if (mounted && scans != _scansLeft) {
+        setState(() => _scansLeft = scans);
+      }
+    } catch (e) {
+      debugPrint('Error refreshing scans: $e');
     }
   }
 
@@ -154,6 +192,7 @@ class _HomeScreenState extends State<HomeScreen>
     MealStore.instance.changeNotifier.removeListener(_onDataChanged);
     userNameNotifier.removeListener(_onNameChanged);
     SubscriptionService.instance.removeListener(_onSubscriptionChanged);
+    WeightStore.instance.removeListener(_onWeightChanged);
     _animController.stop();
     _animController.dispose();
     super.dispose();
@@ -226,6 +265,12 @@ class _HomeScreenState extends State<HomeScreen>
                   child: AnimatedEntrance(
                     delayMs: 150,
                     child: _buildMacroBars(context, isDark),
+                  ),
+                ),
+                SliverToBoxAdapter(
+                  child: AnimatedEntrance(
+                    delayMs: 165,
+                    child: _buildBmiCard(context, isDark),
                   ),
                 ),
                 SliverToBoxAdapter(
@@ -923,6 +968,208 @@ class _HomeScreenState extends State<HomeScreen>
           ],
         ),
       ),
+    );
+  }
+
+  // ─── BMI CARD ──────────────────────────────────────────
+  // A compact read of the user's own BMI (weight/height from the diet
+  // profile) that opens the full calculator. Kept on Home because weight is
+  // something people check far more often than they change their plan.
+  Widget _buildBmiCard(BuildContext context, bool isDark) {
+    final profile = DietPlanService.instance.profile;
+    final bmi = profile == null
+        ? null
+        : BmiCalculator.value(
+            weightKg: profile.weightKg,
+            heightCm: profile.heightCm,
+          );
+    final category = bmi == null ? null : BmiCalculator.categoryFor(bmi);
+    final accent = category?.color ?? MacroSnapTheme.neonCyan;
+    // The trend is the point of keeping a history: a single BMI number tells
+    // you where you are, the line tells you which way you're going.
+    final trend = WeightStore.instance.summary(days: 30);
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(22),
+        onTap: () async {
+          await Navigator.push(
+            context,
+            habitFlowRoute(const BmiScreen()),
+          );
+          // The calculator can save a new weight — repaint with it.
+          if (mounted) setState(() {});
+        },
+        child: Container(
+          padding: const EdgeInsets.all(16),
+          decoration: MacroSnapTheme.habitlyCard(context),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    width: 40,
+                    height: 40,
+                    decoration: BoxDecoration(
+                      color: accent.withValues(alpha: 0.14),
+                      borderRadius: BorderRadius.circular(13),
+                    ),
+                    child: Icon(
+                      Icons.speed_rounded,
+                      size: 21,
+                      color: accent,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'BMI',
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w900,
+                            color: isDark
+                                ? Colors.white
+                                : const Color(0xFF1A1A1A),
+                          ),
+                        ),
+                        Text(
+                          profile == null
+                              ? 'Add your height & weight'
+                              : '${BmiCalculator.formatHeight(profile.heightCm)} · ${profile.weightKg.toStringAsFixed(profile.weightKg % 1 == 0 ? 0 : 1)} kg',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: MacroSnapTheme.textSecondary(context),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      Text(
+                        bmi == null ? '—' : bmi.toStringAsFixed(1),
+                        style: TextStyle(
+                          fontSize: 26,
+                          height: 1,
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: -0.8,
+                          color: accent,
+                        ),
+                      ),
+                      if (category != null)
+                        Text(
+                          category.label.replaceAll('Underweight', 'Under'),
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                            color: accent,
+                          ),
+                        ),
+                    ],
+                  ),
+                ],
+              ),
+              if (bmi != null) ...[
+                const SizedBox(height: 14),
+                BmiBandBar(bmi: bmi, height: 7),
+              ],
+              if (trend.points.length >= 2) ...[
+                const SizedBox(height: 14),
+                Row(
+                  children: [
+                    Expanded(
+                      child: WeightTrendChart(
+                        points: trend.points,
+                        height: 44,
+                        color: accent,
+                      ),
+                    ),
+                    const SizedBox(width: 14),
+                    _trendChip(context, trend),
+                  ],
+                ),
+              ],
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Text(
+                    bmi == null ? 'Tap to calculate' : 'Open calculator',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      color: MacroSnapTheme.textTertiary(context),
+                    ),
+                  ),
+                  Icon(
+                    Icons.chevron_right_rounded,
+                    size: 16,
+                    color: MacroSnapTheme.textTertiary(context),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// Direction-of-travel readout beside the sparkline: signed delta over the
+  /// window, with a coloured arrow that matches what it means.
+  Widget _trendChip(BuildContext context, WeightSummary trend) {
+    final delta = trend.deltaKg;
+    final direction = trend.direction;
+    final color = switch (direction) {
+      WeightTrend.losing => MacroSnapTheme.successGreen,
+      WeightTrend.gaining => MacroSnapTheme.neonOrange,
+      WeightTrend.holding => MacroSnapTheme.textTertiary(context),
+    };
+    final icon = switch (direction) {
+      WeightTrend.losing => Icons.trending_down_rounded,
+      WeightTrend.gaining => Icons.trending_up_rounded,
+      WeightTrend.holding => Icons.trending_flat_rounded,
+    };
+    // Under 300 g is scale noise, so it is shown as flat rather than a fake
+    // up or down — the number is still printed if it exists.
+    final deltaLabel = delta == null
+        ? ''
+        : '${delta > 0 ? '+' : ''}${delta.toStringAsFixed(1)} kg';
+    final period = trend.spanDays > 0 ? '· ${trend.spanDays}d' : '';
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.end,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 16, color: color),
+            const SizedBox(width: 4),
+            Text(
+              deltaLabel.isEmpty ? 'No change' : deltaLabel,
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w800,
+                color: color,
+              ),
+            ),
+          ],
+        ),
+        Text(
+          period.isEmpty ? '30 days' : period,
+          style: TextStyle(
+            fontSize: 10.5,
+            fontWeight: FontWeight.w600,
+            color: MacroSnapTheme.textTertiary(context),
+          ),
+        ),
+      ],
     );
   }
 

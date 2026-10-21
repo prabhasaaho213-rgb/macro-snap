@@ -6,7 +6,6 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_timezone/flutter_timezone.dart';
 import 'package:timezone/timezone.dart' as tz;
 import 'package:timezone/data/latest.dart' as tz_data;
-import 'package:permission_handler/permission_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../core/app_nav.dart';
 import '../models/habit.dart';
@@ -55,12 +54,18 @@ class NotificationService with WidgetsBindingObserver {
   Future<void> init() async {
     if (_initialized) return;
     try {
-      // Request POST_NOTIFICATIONS (Android 13+). Never let a failure or
-      // denial here block plugin/channel setup — otherwise every scheduled
-      // reminder silently dies for the rest of the session.
-      try {
-        await Permission.notification.request();
-      } catch (e) { debugPrint("Error: $e"); }
+      // POST_NOTIFICATIONS is NOT requested here any more.
+      //
+      // It used to be, and because it was awaited, launch blocked on a system
+      // dialog that appeared on top of a still-unpainted window — the app sat
+      // on the launch screen (black in dark mode) until the user answered,
+      // every time the permission was still undetermined. The ask now happens
+      // once the UI is up and interactive, via the in-app prompt
+      // (maybeShowNotificationPrompt), which also explains WHY before
+      // Android's dialog appears.
+      //
+      // Scheduling below does not depend on the answer: reminders are
+      // scheduled either way, so granting later still delivers them.
       tz_data.initializeTimeZones();
       // CRITICAL: without this, tz.local stays UTC and every scheduled
       // reminder fires at the wrong wall-clock time (e.g. 5.5h late in IST).

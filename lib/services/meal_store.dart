@@ -86,6 +86,12 @@ class MealStore {
       _meals = [];
     }
     _loaded = true;
+    // Announce completion: anything that started listening before the load
+    // finished (Home builds as soon as the startup gate opens) must repaint
+    // with the real history. Without this a load that finished late — e.g.
+    // after the startup splash hit its safety timeout — never reached the UI,
+    // which then showed zeros for the rest of the session.
+    changeNotifier.value++;
     // Cloud restore merges missing meals in the background so a slow or
     // sleeping backend never blocks the app from opening.
     unawaited(_syncFromCloud());

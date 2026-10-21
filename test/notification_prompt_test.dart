@@ -17,6 +17,7 @@ void main() {
     required Future<PermissionStatus> Function() statusOf,
     Future<PermissionStatus> Function()? request,
     Future<void> Function()? openSettings,
+    bool force = false,
   }) {
     return MaterialApp(
       home: Scaffold(
@@ -27,6 +28,7 @@ void main() {
               statusOf: statusOf,
               request: request ?? () async => PermissionStatus.granted,
               openSettings: openSettings ?? () async {},
+              force: force,
             ),
             child: const Text('go'),
           ),
@@ -154,5 +156,24 @@ void main() {
     await tester.pump(const Duration(milliseconds: 300));
 
     expect(find.byIcon(Icons.notifications_active_rounded), findsNothing);
+  });
+
+  testWidgets('force ignores the cooldown (Settings asks on purpose)', (
+    tester,
+  ) async {
+    SharedPreferences.setMockInitialValues({
+      'notif_prompt_last_shown': DateTime.now().toIso8601String(),
+    });
+    await tester.pumpWidget(
+      host(statusOf: () async => PermissionStatus.denied, force: true),
+    );
+    await tester.tap(find.text('go'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+
+    // The launch prompt still respects the three-day quiet period; an explicit
+    // tap in Settings must always be able to reach the permission.
+    expect(find.byIcon(Icons.notifications_active_rounded), findsOneWidget);
+    expect(find.text('Allow notifications'), findsOneWidget);
   });
 }

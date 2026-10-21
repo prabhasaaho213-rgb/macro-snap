@@ -90,6 +90,13 @@ class HabitStore extends ChangeNotifier {
 
     _loaded = true;
 
+    // Announce completion — both to the habit UI and to the reminder registry.
+    // The Launch gate shows the app even if this load is still running (a
+    // slow device, or the startup safety timeout), and without these bumps
+    // that late data would never reach the screen or get scheduled.
+    notifyListeners();
+    remindersChangedNotifier.value++;
+
     // Restore from cloud backup in the background so a slow or sleeping
     // backend never blocks the app from opening.
     unawaited(_restoreFromCloud());
