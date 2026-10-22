@@ -18,6 +18,8 @@ import 'services/subscription_service.dart';
 import 'services/recent_food_service.dart';
 import 'services/meal_sync_service.dart';
 import 'services/crash_reporting.dart';
+import 'services/badge_service.dart';
+import 'services/meal_streak_service.dart';
 
 Future<void> main() async {
   // ── Global crash safety net ────────────────────────────────────────
@@ -28,13 +30,17 @@ Future<void> main() async {
   //
   // Both handlers also forward to Crashlytics, so a release crash leaves a
   // trace instead of vanishing into a `debugPrint` nobody reads.
+  // These three handlers all SWALLOW the error and let the app keep running,
+  // so they are reported as NON-fatal. Marking them fatal inflated the crash
+  // count with errors that never crashed anything and dragged the crash-free
+  // rate down for every user who hit a single failed frame build. A genuinely
+  // fatal crash is still reported as fatal by the platform itself.
   FlutterError.onError = (details) {
     FlutterError.presentError(details);
     CrashReporting.record(
       details.exception,
       details.stack,
       reason: details.context?.toString() ?? 'Flutter framework error',
-      fatal: true,
     );
   };
   PlatformDispatcher.instance.onError = (error, stack) {
@@ -42,7 +48,6 @@ Future<void> main() async {
       error,
       stack,
       reason: 'Uncaught platform error',
-      fatal: true,
     );
     // Swallow in release (the app must never die for users) but rethrow in
     // debug so developers still see uncaught errors loudly during dev.
@@ -74,7 +79,6 @@ Future<void> main() async {
         error,
         stack,
         reason: 'Uncaught zone error',
-        fatal: true,
       );
     },
   );
@@ -138,7 +142,24 @@ Future<void> _bootstrap() async {
     _guardStartup(() => WeightStore.instance.load(), 'WeightStore.load'),
   ]);
 
+  // Achievements shipped after these users had already been logging, so their
+  // history holds milestones the badge store has no record of. Re-apply them
+  // silently (no toast for something earned weeks ago); this also repairs a
+  // device change, where the local trophy case starts empty.
+  await _guardStartup(_backfillBadges, 'BadgeService.backfill');
+
   // ── Phase 3: background restore (never blocks the UI) ────────────
+  // Run the achievements backfill again once the cloud merge lands: on a new
+  // phone the local meal list is empty at launch, so the check in Phase 2 has
+  // nothing to count. Idempotent, so the second pass only adds what the merge
+  // brought in.
+  unawaited(
+    _guard(() async {
+      await MealStore.instance.cloudSynced;
+      await _backfillBadges();
+    }, 'BadgeService.backfill after cloud restore'),
+  );
+
   // Restore user preferences from cloud (theme, name) if local is missing.
   unawaited(
     _guard(() async {
@@ -176,6 +197,20 @@ Future<void> _bootstrap() async {
       // "plan says 5, OS holds 0" when alarms were silently dropped).
       await NotificationService().logPendingCount();
     }, 'NotificationService reminders'),
+  );
+}
+
+/// Rebuilds the trophy case from what is already on this device.
+///
+/// Badges are stored locally, so a new phone starts with an empty case even
+/// for an account that has logged a hundred meals. Recomputing from the store
+/// each launch makes the board self-healing: the same check awards the badge
+/// on the next launch after a reinstall, with no server round-trip.
+Future<void> _backfillBadges() async {
+  await BadgeService.instance.backfillFromHistory(
+    totalMeals: MealStore.instance.allMeals.length,
+    streakDays: await MealStreakService.getCurrent(),
+    hasWeighIn: WeightStore.instance.entries.isNotEmpty,
   );
 }
 

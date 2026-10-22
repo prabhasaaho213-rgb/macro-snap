@@ -98,6 +98,68 @@ void main() {
     expect(BadgeService.instance.isEarned('first_bite'), isFalse);
   });
 
+  test('concurrent first loads share ONE read and lose no award', () async {
+    // Two screens can both trigger the first load (Profile builds the board
+    // while the shell starts). They used to run two reads, and the slower one
+    // cleared the in-memory map AFTER the award — wiping the badge.
+    await Future.wait([
+      BadgeService.instance.load(),
+      BadgeService.instance.load(),
+      BadgeService.instance.noteMealLogged(1),
+    ]);
+    expect(BadgeService.instance.isEarned('first_bite'), isTrue);
+
+    // And it is really on disk, not just in memory.
+    BadgeService.instance.resetForTest();
+    await BadgeService.instance.load();
+    expect(BadgeService.instance.isEarned('first_bite'), isTrue);
+  });
+
+  test('backfill awards history the user already has, silently', () async {
+    await BadgeService.instance.load();
+    await BadgeService.instance.backfillFromHistory(
+      totalMeals: 24,
+      streakDays: 8,
+      hasWeighIn: true,
+    );
+
+    expect(BadgeService.instance.isEarned('first_bite'), isTrue);
+    expect(BadgeService.instance.isEarned('ten_plates'), isTrue);
+    expect(BadgeService.instance.isEarned('first_weigh_in'), isTrue);
+    expect(BadgeService.instance.isEarned('week_warrior'), isTrue);
+    expect(BadgeService.instance.isEarned('fortnight_flame'), isFalse);
+    // Silent: a milestone reached weeks ago must not pop a toast now.
+    expect(
+      BadgeService.instance.justEarned.value,
+      isNull,
+      reason: 'backfill is not a new award',
+    );
+  });
+
+  test('backfill on an empty account awards nothing', () async {
+    await BadgeService.instance.load();
+    await BadgeService.instance.backfillFromHistory(
+      totalMeals: 0,
+      streakDays: 0,
+      hasWeighIn: false,
+    );
+    expect(BadgeService.instance.earnedCount, 0);
+  });
+
+  test('clear() forgets badges in memory as well as on disk', () async {
+    // Account deletion cleared prefs but left this singleton holding the
+    // deleted user's trophies, which the next account then saw and saved.
+    await BadgeService.instance.noteMealLogged(10);
+    expect(BadgeService.instance.earnedCount, 2);
+
+    await BadgeService.instance.clear();
+    expect(BadgeService.instance.earnedCount, 0);
+    expect(BadgeService.instance.justEarned.value, isNull);
+
+    await BadgeService.instance.load();
+    expect(BadgeService.instance.earnedCount, 0, reason: 'storage was wiped');
+  });
+
   test(
     'a stale badge id from a future/old build never crashes the board',
     () async {

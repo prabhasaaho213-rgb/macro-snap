@@ -22,6 +22,10 @@ plugins {
     id("com.android.application") version "9.0.1" apply false
     id("org.jetbrains.kotlin.android") version "2.3.20" apply false
     id("com.google.gms.google-services") version "4.5.0" apply false
+    // Crashlytics needs its Gradle plugin, not just the Flutter package: the
+    // plugin is what instruments the release build and uploads the deobfuscated
+    // stack traces. Without it the dashboard only ever shows unmapped frames.
+    id("com.google.firebase.crashlytics") version "3.0.2" apply false
 }
 
 include(":app")

@@ -34,7 +34,7 @@ class UpdatesScreen extends StatefulWidget {
   /// the user has already seen and puts a dot on the "What's New" row when the
   /// two differ — so a new release announces itself instead of waiting to be
   /// found.
-  static const String latestVersion = '1.4.97';
+  static const String latestVersion = '1.4.98';
 
   /// SharedPreferences key holding the latest version the user has seen.
   static const String seenVersionKey = 'updates_seen_version';
@@ -50,7 +50,18 @@ class _UpdatesScreenState extends State<UpdatesScreen> {
       date: 'Latest',
       isLatest: true,
       notes: [
-        'The scan result is a proper report card now: a health score out of 5, the ingredients with their weights and scores, and your tastiness verdict',
+        'The health score understands simple food: water is no longer 1/5, milk is not junk, and lean chicken is not punished for having no fibre',
+        'Achievements you already earned by logging show up on a new phone, and they are cleared with the account when you delete it',
+        'Two badges earned together are both celebrated instead of only the last one',
+        'A failed scan can no longer cost you one of your free scans',
+        'Payments: a subscription cannot be started twice, and Pro only confirms once it is actually saved',
+      ],
+    ),
+    _UpdateEntry(
+      version: '1.4.97',
+      date: 'Earlier',
+      notes: [
+        'The scan result is a proper report card: a health score out of 5, the ingredients with their weights and scores, and your tastiness verdict',
         'Achievements: First Bite, Ten Plates, First Weigh-In, Week Warrior and Fortnight Flame - earned by logging, never by the number on the scale',
         'Share your week: a summary card with your average calories, the days you hit your protein goal and your streak',
         'A short animated logo introduces the launch while the app loads behind it',

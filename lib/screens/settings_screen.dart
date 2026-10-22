@@ -302,6 +302,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
     } catch (e) {
       debugPrint('Error: $e');
     }
+    // Clearing prefs wipes the trophy case on disk, but BadgeService is a
+    // singleton holding the awards in memory — without this the next account
+    // would open Profile and see the deleted user's badges, then save them
+    // under its own key.
+    await BadgeService.instance.clear();
     if (context.mounted) {
       Navigator.of(context).pushAndRemoveUntil(
         MaterialPageRoute(builder: (_) => const PhoneLoginScreen()),

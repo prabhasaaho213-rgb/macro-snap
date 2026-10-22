@@ -19,6 +19,18 @@ import 'widgets/startup_splash.dart';
 /// splash is not.
 const Duration kStartupTimeout = Duration(seconds: 12);
 
+/// How long the splash stays up when the app is really launching.
+///
+/// The logo intro is a 1.6 s Lottie, but startup work now finishes in a couple
+/// of hundred milliseconds on a warm start — so the splash was torn down long
+/// before the animation had played and the upgrade was effectively invisible
+/// on exactly the devices it was meant for. The extra 200 ms lets the last
+/// frame land before the first real screen replaces it.
+///
+/// Only applied when `main()` handed over startup work (a real launch); widget
+/// tests construct `MacroSnapApp` without it and get the immediate hand-off.
+const Duration kSplashMinimum = Duration(milliseconds: 1800);
+
 class MacroSnapApp extends StatefulWidget {
   /// Startup work that must finish before the first real screen is built
   /// (Firebase, plugins, local stores). Passed in by `main()` so the first
@@ -39,10 +51,24 @@ class _MacroSnapAppState extends State<MacroSnapApp> {
   bool _onboardingDone = false;
   ThemeMode _themeMode = ThemeMode.system;
 
+  /// Completes once the splash has been up for [kSplashMinimum].
+  ///
+  /// A timer started here (not a timestamp compared later) so the wait is
+  /// driven by the same clock as the rest of the app — including the fake one
+  /// widget tests run on — and so a slow startup simply arrives after it.
+  final Completer<void> _introSettled = Completer<void>();
+  Timer? _introTimer;
+
   @override
   void initState() {
     super.initState();
     _booting = widget.startup != null;
+    // No startup work means no real launch (widget tests): no minimum either.
+    if (widget.startup != null) {
+      _introTimer = Timer(kSplashMinimum, () {
+        if (!_introSettled.isCompleted) _introSettled.complete();
+      });
+    }
     _loadThemeMode();
     _checkOnboardingAndLogin();
     _awaitStartup();
@@ -68,13 +94,27 @@ class _MacroSnapAppState extends State<MacroSnapApp> {
     } catch (e) {
       debugPrint('❌ startup did not finish cleanly: $e');
     }
+    await _waitForIntro();
     if (!mounted) return;
     setState(() => _booting = false);
+  }
+
+  /// Holds the splash until the logo intro has had room to play.
+  ///
+  /// A no-op once startup has already taken longer than [kSplashMinimum], so
+  /// a slow launch is never made slower.
+  Future<void> _waitForIntro() async {
+    if (widget.startup == null) return;
+    await _introSettled.future;
   }
 
   @override
   void dispose() {
     themeModeNotifier.removeListener(_onThemeChanged);
+    _introTimer?.cancel();
+    _introTimer = null;
+    // Release anyone still waiting rather than leaving them suspended forever.
+    if (!_introSettled.isCompleted) _introSettled.complete();
     super.dispose();
   }
 
@@ -112,6 +152,7 @@ class _MacroSnapAppState extends State<MacroSnapApp> {
       // Use v2 key so existing users (who completed old feature tour)
       // see the new Cal AI-style onboarding once.
       final onboardingDone = prefs.getBool('onboarding_v2_done') ?? false;
+      await _waitForIntro();
       if (mounted) {
         setState(() {
           _savedPhone = phone;
@@ -121,6 +162,7 @@ class _MacroSnapAppState extends State<MacroSnapApp> {
       }
     } catch (e) {
       debugPrint('Error checking onboarding/login: $e');
+      await _waitForIntro();
       if (mounted) {
         setState(() {
           _savedPhone = null;

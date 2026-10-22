@@ -40,6 +40,13 @@ class BadgeService extends ChangeNotifier {
   bool _loaded = false;
   bool get isLoaded => _loaded;
 
+  /// The single in-flight load, so two concurrent first calls share ONE read.
+  ///
+  /// Without this, `load()` ran twice: the second read cleared [_earnedAt]
+  /// after the first had finished, so a badge awarded while the slower read
+  /// was still in flight was wiped from memory (and then re-saved as absent).
+  Future<void>? _loadFuture;
+
   /// Fires once per newly earned badge, so the shell can celebrate it. A
   /// ValueNotifier rather than a stream: the celebration is a one-shot UI
   /// event, and the last value is all anyone needs.
@@ -65,8 +72,12 @@ class BadgeService extends ChangeNotifier {
     return AccountPartition.suffix(AccountPartition.activeFromPrefs(prefs));
   }
 
-  Future<void> load() async {
-    if (_loaded) return;
+  Future<void> load() {
+    if (_loaded) return Future<void>.value();
+    return _loadFuture ??= _loadOnce();
+  }
+
+  Future<void> _loadOnce() async {
     try {
       final prefs = await SharedPreferences.getInstance();
       final raw = prefs.getString(
@@ -98,9 +109,29 @@ class BadgeService extends ChangeNotifier {
   /// Re-reads for a newly active account (login / logout).
   Future<void> reload() async {
     _loaded = false;
+    _loadFuture = null;
     _earnedAt.clear();
     justEarned.value = null;
     await load();
+  }
+
+  /// Forgets the trophy case entirely — storage AND the in-memory copy.
+  ///
+  /// Account deletion already clears SharedPreferences, but this singleton
+  /// kept the deleted account's badges in memory and would have shown them to
+  /// whoever signed in next, then saved them under the new account's key.
+  Future<void> clear() async {
+    _earnedAt.clear();
+    _loaded = false;
+    _loadFuture = null;
+    justEarned.value = null;
+    notifyListeners();
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove(AccountPartition.key(_prefsKey, await _suffix()));
+    } catch (e, st) {
+      logError('BadgeService.clear', e, st);
+    }
   }
 
   Future<void> _save() async {
@@ -148,11 +179,43 @@ class BadgeService extends ChangeNotifier {
     if (days >= fortnightStreak) await _award(AppBadge.fortnightFlame);
   }
 
+  /// Re-applies badges the user has ALREADY qualified for but has no record
+  /// of — everyone who was logging before achievements shipped.
+  ///
+  /// Deliberately silent: nothing pops up for a milestone reached weeks ago.
+  /// The earning date is "now", because the real date was never stored; the
+  /// board uses it as "when we noticed", which is why it is only ever shown
+  /// on earned cards.
+  Future<void> backfillFromHistory({
+    required int totalMeals,
+    required int streakDays,
+    required bool hasWeighIn,
+  }) async {
+    await load();
+    final before = _earnedAt.length;
+    if (totalMeals > 0) _recordSilently(AppBadge.firstBite);
+    if (totalMeals >= tenPlatesCount) _recordSilently(AppBadge.tenPlates);
+    if (hasWeighIn) _recordSilently(AppBadge.firstWeighIn);
+    if (streakDays >= weekStreak) _recordSilently(AppBadge.weekWarrior);
+    if (streakDays >= fortnightStreak) {
+      _recordSilently(AppBadge.fortnightFlame);
+    }
+    if (_earnedAt.length != before) {
+      await _save();
+      notifyListeners();
+    }
+  }
+
+  void _recordSilently(AppBadge badge) {
+    _earnedAt.putIfAbsent(badge.id, () => DateTime.now().toIso8601String());
+  }
+
   /// Test hook: forget everything loaded so the next [load] re-reads prefs.
   @visibleForTesting
   void resetForTest() {
     _earnedAt.clear();
     _loaded = false;
+    _loadFuture = null;
     justEarned.value = null;
   }
 }

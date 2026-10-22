@@ -47,6 +47,30 @@ void main() {
     expect(find.byType(StartupSplash), findsNothing);
   });
 
+  testWidgets('a fast launch still gives the logo intro its minimum time', (
+    tester,
+  ) async {
+    // Startup now finishes in a couple of frames on a warm start. The splash
+    // used to be swapped out immediately, cutting the 1.6 s Lottie off before
+    // it had played — the upgrade was invisible on the fastest devices.
+    final gate = Completer<void>();
+    await tester.pumpWidget(MacroSnapApp(startup: gate.future));
+    await tester.pump();
+
+    gate.complete();
+    await tester.pump(); // startup resolved
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(
+      find.byType(StartupSplash),
+      findsOneWidget,
+      reason: 'the intro must not be cut off 100 ms in',
+    );
+
+    await tester.pump(kSplashMinimum);
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(find.byType(StartupSplash), findsNothing);
+  });
+
   testWidgets('no startup future means no splash to wait for', (tester) async {
     await tester.pumpWidget(const MacroSnapApp());
     await tester.pump();

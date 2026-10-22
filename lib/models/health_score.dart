@@ -35,6 +35,19 @@ class HealthScore {
     double fiberPer100g = 0,
     double sugarPer100g = 0,
   }) {
+    // A drink is mostly water: low energy, little protein, little fat. It is
+    // scored on what is IN it (sugar) rather than judged like a meal. Without
+    // this, water scored 1/5 for having no protein and no fibre, and milk
+    // scored 2/5 — a scale that calls milk bad teaches the user to ignore it.
+    final isDrink = caloriesPer100g <= 60 &&
+        proteinPer100g < 6 &&
+        fatsPer100g <= 4;
+
+    // Nothing to penalise and nothing to praise: water, black coffee, plain tea.
+    if (caloriesPer100g <= 5 && sugarPer100g < 1) {
+      return const HealthScore(5, []);
+    }
+
     // Neutral start: an unknown dish is neither praised nor punished.
     var score = 3;
     final reasons = <String>[];
@@ -42,7 +55,9 @@ class HealthScore {
     if (proteinPer100g >= 10) {
       score++;
       reasons.add('High protein');
-    } else if (proteinPer100g < 3) {
+    } else if (proteinPer100g < 3 && !isDrink) {
+      // A drink is not expected to carry protein, so its absence is not a
+      // fault — only a food that should have some is penalised for lacking it.
       score--;
       reasons.add('Very little protein');
     }
@@ -50,16 +65,23 @@ class HealthScore {
     if (fiberPer100g >= 3) {
       score++;
       reasons.add('Good fibre');
-    } else if (fiberPer100g < 1) {
+    } else if (fiberPer100g < 1 && carbsPer100g >= 15) {
+      // Fibre is only expected where there are carbohydrates to carry it. A
+      // steak, eggs and cheese have none, and docking them for "low fibre"
+      // made every low-carb food look worse than a pastry.
       score--;
       reasons.add('Low fibre');
     }
 
     // 10 g/100 g is the line for a drink (a cola is ~10.6) and for a dessert;
-    // a savoury dish rarely crosses it.
+    // a savoury dish rarely crosses it. 25 g is confectionery.
     if (sugarPer100g >= 10) {
       score--;
       reasons.add('High sugar');
+    }
+    if (sugarPer100g >= 25) {
+      score--;
+      reasons.add('Very high sugar');
     }
 
     if (fatsPer100g >= 25) {
@@ -83,7 +105,9 @@ class HealthScore {
     if (score >= 5) return 'Excellent';
     if (score == 4) return 'Good';
     if (score == 3) return 'Fair';
-    return 'Heavy';
+    // "Indulgent" describes the food, not the person eating it. "Heavy" read
+    // like a comment on the user, and it was also wrong for water and milk.
+    return 'Indulgent';
   }
 
   /// True when the dish earns the full five — used to pick the badge colour.

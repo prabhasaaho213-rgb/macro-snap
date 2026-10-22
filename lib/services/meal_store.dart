@@ -115,6 +115,14 @@ class MealStore {
   /// a newly active account (mirrors HabitStore's restore guard).
   Future<void>? _syncFuture;
 
+  /// Completes when the background restore triggered by [load] has settled.
+  ///
+  /// For work that has to run on the restored history rather than on whatever
+  /// was on the device — achievements backfill is the case that needs it: a
+  /// new phone has no local meals, so a backfill run before the merge sees
+  /// zero and awards nothing.
+  Future<void> get cloudSynced => _syncFuture ?? Future<void>.value();
+
   /// Sync meals from cloud backup. Reentrant-safe: returns the in-flight
   /// future if a merge is already running.
   Future<void> _syncFromCloud() {

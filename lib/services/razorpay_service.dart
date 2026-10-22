@@ -214,6 +214,12 @@ class RazorpayService {
       headers: {'Content-Type': 'application/json'},
       body: jsonEncode({'name': name}),
     );
+    if (res.statusCode == 409) {
+      // The account already has an auto-charging subscription. Razorpay will
+      // happily create a second one, so the server refuses — saying "already
+      // Pro" is much better than silently billing the user twice.
+      throw Exception('This account already has an active Pro subscription.');
+    }
     if (res.statusCode != 200) {
       throw Exception('Could not start the payment (${res.statusCode}).');
     }
@@ -232,6 +238,10 @@ class RazorpayService {
         (response.data?['razorpay_subscription_id'] as String?) ??
         _subscriptionId;
     bool verified = false;
+    // A 202 means the payment was genuine but could not be SAVED yet, and the
+    // server explains why — quoting it is far more useful than a generic
+    // "could not confirm".
+    String? pendingReason;
     try {
       final res = await AuthHttp.post(
         Uri.parse('${GeminiService.serverUrl}/payment/verify'),
@@ -243,6 +253,12 @@ class RazorpayService {
         }),
       );
       verified = res.statusCode == 200;
+      if (res.statusCode == 202) {
+        final data = jsonDecode(res.body);
+        if (data is Map && data['message'] is String) {
+          pendingReason = data['message'] as String;
+        }
+      }
     } catch (e) {
       debugPrint('Payment verification error: $e');
     }
@@ -265,9 +281,10 @@ class RazorpayService {
       }
       // The money may still be fine — the webhook just has not landed yet.
       _finish(
-        const PaymentResult.pending(
-          'We could not confirm the payment yet. If money was deducted, Pro '
-          'switches on by itself within a few minutes.',
+        PaymentResult.pending(
+          pendingReason ??
+              'We could not confirm the payment yet. If money was deducted, Pro '
+                  'switches on by itself within a few minutes.',
         ),
       );
     }

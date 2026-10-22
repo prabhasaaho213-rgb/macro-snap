@@ -1,3 +1,6 @@
+import 'dart:async';
+import 'dart:collection';
+
 import 'package:flutter/material.dart';
 
 import '../core/theme.dart';
@@ -181,6 +184,13 @@ class BadgeCelebration extends StatefulWidget {
 
 class _BadgeCelebrationState extends State<BadgeCelebration> {
   OverlayEntry? _entry;
+  Timer? _timer;
+
+  /// Badges waiting their turn. Two can land in the same tick (the tenth meal
+  /// is both "First Bite" for a new account and "Ten Plates"), and the
+  /// notifier only remembers the last value — so without a queue the first
+  /// toast was silently replaced before it was ever read.
+  final Queue<AppBadge> _pending = Queue<AppBadge>();
 
   @override
   void initState() {
@@ -191,11 +201,35 @@ class _BadgeCelebrationState extends State<BadgeCelebration> {
   void _onEarned() {
     final badge = BadgeService.instance.justEarned.value;
     if (badge == null || !mounted) return;
-    _show(badge);
+    if (_pending.contains(badge)) return;
+    _pending.add(badge);
+    if (_entry == null) _showNext();
+  }
+
+  void _showNext() {
+    if (!mounted) return;
+    if (_pending.isEmpty) {
+      BadgeService.instance.justEarned.value = null;
+      return;
+    }
+    _show(_pending.removeFirst());
+  }
+
+  /// Removes the current toast and either shows the next one or clears the
+  /// notifier so the same badge can be celebrated again after a reset.
+  void _dismiss() {
+    _timer?.cancel();
+    _timer = null;
+    _entry?.remove();
+    _entry = null;
+    _showNext();
   }
 
   void _show(AppBadge badge) {
+    _timer?.cancel();
+    _timer = null;
     _entry?.remove();
+    _entry = null;
     final overlay = Overlay.of(context, rootOverlay: true);
     late final OverlayEntry entry;
     entry = OverlayEntry(
@@ -220,20 +254,21 @@ class _BadgeCelebrationState extends State<BadgeCelebration> {
     );
     _entry = entry;
     overlay.insert(entry);
-    Future<void>.delayed(const Duration(seconds: 3), () {
-      if (_entry == entry) {
-        entry.remove();
-        _entry = null;
-        // Clear so re-earning (after a reset) can fire again.
-        if (mounted) BadgeService.instance.justEarned.value = null;
-      }
-    });
+    // A cancellable Timer, not Future.delayed: the delayed callback used to
+    // survive dispose() and remove the overlay entry a SECOND time (dispose
+    // removed it but left `_entry` set, so its own guard passed), which throws
+    // on logout — the moment this widget is most likely to be torn down.
+    _timer = Timer(const Duration(seconds: 3), _dismiss);
   }
 
   @override
   void dispose() {
     BadgeService.instance.justEarned.removeListener(_onEarned);
+    _timer?.cancel();
+    _timer = null;
     _entry?.remove();
+    _entry = null;
+    _pending.clear();
     super.dispose();
   }
 
