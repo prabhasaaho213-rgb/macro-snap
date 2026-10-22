@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'core/app_nav.dart';
 import 'core/theme.dart';
@@ -19,17 +20,22 @@ import 'widgets/startup_splash.dart';
 /// splash is not.
 const Duration kStartupTimeout = Duration(seconds: 12);
 
-/// How long the splash stays up when the app is really launching.
+/// How long the logo intro is allowed to run on the launches that show it.
 ///
-/// The logo intro is a 1.6 s Lottie, but startup work now finishes in a couple
-/// of hundred milliseconds on a warm start — so the splash was torn down long
-/// before the animation had played and the upgrade was effectively invisible
-/// on exactly the devices it was meant for. The extra 200 ms lets the last
-/// frame land before the first real screen replaces it.
+/// The intro is a 1.6 s Lottie and startup work now finishes in a couple of
+/// hundred milliseconds on a warm start, so the splash used to be torn down
+/// before the animation had played — the upgrade was invisible on exactly the
+/// devices it was meant for. 1.8 s lets the last frame land and the reveal
+/// happen after it rather than on top of it.
 ///
-/// Only applied when `main()` handed over startup work (a real launch); widget
-/// tests construct `MacroSnapApp` without it and get the immediate hand-off.
+/// Deliberately NOT every launch: a returning user on the same build opens
+/// straight into the app. The floor applies only on the first launch of a
+/// version — a fresh install or the first run after an update — where the
+/// intro is actually new. See [_MacroSnapAppState._introFloorForLaunch].
 const Duration kSplashMinimum = Duration(milliseconds: 1800);
+
+/// Remembers which build has already shown its intro.
+const String kIntroSeenVersionKey = 'intro_seen_version';
 
 class MacroSnapApp extends StatefulWidget {
   /// Startup work that must finish before the first real screen is built
@@ -51,24 +57,18 @@ class _MacroSnapAppState extends State<MacroSnapApp> {
   bool _onboardingDone = false;
   ThemeMode _themeMode = ThemeMode.system;
 
-  /// Completes once the splash has been up for [kSplashMinimum].
-  ///
-  /// A timer started here (not a timestamp compared later) so the wait is
-  /// driven by the same clock as the rest of the app — including the fake one
-  /// widget tests run on — and so a slow startup simply arrives after it.
-  final Completer<void> _introSettled = Completer<void>();
-  Timer? _introTimer;
+  /// Completes once the intro has had its time (or immediately, on a launch
+  /// that does not show it). Started here so the wait is measured from the
+  /// first frame — including on the fake clock widget tests run on — and so a
+  /// slow startup simply arrives after it.
+  Future<void> _introFloor = Future<void>.value();
 
   @override
   void initState() {
     super.initState();
     _booting = widget.startup != null;
-    // No startup work means no real launch (widget tests): no minimum either.
-    if (widget.startup != null) {
-      _introTimer = Timer(kSplashMinimum, () {
-        if (!_introSettled.isCompleted) _introSettled.complete();
-      });
-    }
+    // No startup work means no real launch (widget tests): no floor either.
+    if (widget.startup != null) _introFloor = _introFloorForLaunch();
     _loadThemeMode();
     _checkOnboardingAndLogin();
     _awaitStartup();
@@ -99,22 +99,47 @@ class _MacroSnapAppState extends State<MacroSnapApp> {
     setState(() => _booting = false);
   }
 
+  /// Resolves after [kSplashMinimum] on the first launch of a version, and
+  /// immediately on every other launch.
+  ///
+  /// The intro is new exactly once per build, so that is the only time it is
+  /// worth holding the first screen back. A user who opens the app ten times a
+  /// day on the same build should never wait for an animation they have already
+  /// seen. If the version cannot be read, no delay is applied: an unknown
+  /// build is not a reason to slow somebody down.
+  Future<void> _introFloorForLaunch() async {
+    String version;
+    try {
+      final info = await PackageInfo.fromPlatform();
+      version = '${info.version}+${info.buildNumber}';
+    } catch (_) {
+      return;
+    }
+    if (version.isEmpty) return;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      if (prefs.getString(kIntroSeenVersionKey) == version) return;
+      // Recorded before the wait, so an app killed mid-intro does not replay it
+      // on the next launch.
+      await prefs.setString(kIntroSeenVersionKey, version);
+    } catch (_) {
+      return;
+    }
+    await Future<void>.delayed(kSplashMinimum);
+  }
+
   /// Holds the splash until the logo intro has had room to play.
   ///
   /// A no-op once startup has already taken longer than [kSplashMinimum], so
   /// a slow launch is never made slower.
   Future<void> _waitForIntro() async {
     if (widget.startup == null) return;
-    await _introSettled.future;
+    await _introFloor;
   }
 
   @override
   void dispose() {
     themeModeNotifier.removeListener(_onThemeChanged);
-    _introTimer?.cancel();
-    _introTimer = null;
-    // Release anyone still waiting rather than leaving them suspended forever.
-    if (!_introSettled.isCompleted) _introSettled.complete();
     super.dispose();
   }
 

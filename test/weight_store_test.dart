@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:macro_snap/services/badge_service.dart';
 import 'package:macro_snap/services/weight_store.dart';
 import 'package:macro_snap/widgets/weight_trend_chart.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -13,6 +14,33 @@ void main() {
     SharedPreferences.setMockInitialValues({});
     WeightStore.instance.resetForTest();
     await WeightStore.instance.load();
+  });
+
+  test('a SEEDED weight fills the chart without awarding the badge', () async {
+    // Opening the BMI calculator seeds the profile weight so the trend has a
+    // first point. That is not a weigh-in: nothing was measured or entered,
+    // and handing out "First Weigh-In" for tapping a card made the badge
+    // meaningless.
+    SharedPreferences.setMockInitialValues({});
+    BadgeService.instance.resetForTest();
+    WeightStore.instance.resetForTest();
+    await WeightStore.instance.load();
+
+    await WeightStore.instance.record(70, awardBadge: false);
+    // The award is fire-and-forget, so let it run before asserting absence —
+    // otherwise "no badge yet" would pass for the wrong reason.
+    await pumpEventQueue();
+    expect(WeightStore.instance.entries.length, 1, reason: 'chart has a point');
+    expect(
+      BadgeService.instance.isEarned('first_weigh_in'),
+      isFalse,
+      reason: 'a seed is not a weigh-in',
+    );
+
+    // A real save still earns it.
+    await WeightStore.instance.record(71);
+    await pumpEventQueue();
+    expect(BadgeService.instance.isEarned('first_weigh_in'), isTrue);
   });
 
   test('a second reading on the same day replaces the first', () async {

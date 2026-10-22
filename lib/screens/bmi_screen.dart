@@ -56,8 +56,15 @@ class _BmiScreenState extends State<BmiScreen> {
     await WeightStore.instance.load();
     // Seed today's/first point from the profile so the very first visit to the
     // calculator already has a line to draw, rather than an empty chart.
+    //
+    // awardBadge: false — opening the calculator is not a weigh-in. This used
+    // to hand out "First Weigh-In" to anyone who tapped the BMI card, which is
+    // the opposite of "earned by logging": nothing was measured or entered.
     if (profile != null && WeightStore.instance.entries.isEmpty) {
-      await WeightStore.instance.record(profile.weightKg);
+      await WeightStore.instance.record(
+        profile.weightKg,
+        awardBadge: false,
+      );
     }
     if (!mounted) return;
     setState(() {

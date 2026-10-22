@@ -22,8 +22,9 @@ class _IngredientLine {
   /// dish itself had none (multi-item photos). Rendered with a "≈".
   final bool approximate;
 
-  /// 0–5 health score for this component.
-  final int score;
+  /// 0–5 health score for this component, or null when there is nothing to
+  /// score (no nutrition data for it). The row then shows no dot number.
+  final int? score;
 }
 
 /// The result card: what the AI saw, how healthy it is, the macros and their
@@ -36,13 +37,20 @@ extension _ResultCard on _ResultScreenState {
   /// A meal that is already logged is read-only.
   bool get _cardReadOnly => widget.existingMeal != null;
 
-  int get _cardHealthScore =>
-      _healthOverride ?? _computedHealth(_result!).score;
-
-  HealthScore get _cardHealth =>
-      HealthScore(_cardHealthScore, _computedHealth(_result!).reasons);
+  /// The score shown on the card: the user's override when they set one,
+  /// otherwise the computed score — which may be "no score" at all.
+  HealthScore get _cardHealth {
+    final computed = _computedHealth(_result!);
+    final override = _healthOverride;
+    return override == null
+        ? computed
+        : HealthScore(override, computed.reasons);
+  }
 
   HealthScore _computedHealth(NutritionResult r) => HealthScore.of(
+    // The name is what lets an unidentified dish go unscored instead of
+    // scoring 5/5 for its all-zero macros.
+    name: _cardTitle,
     caloriesPer100g: r.caloriesPer100g.toDouble(),
     proteinPer100g: r.proteinPer100g,
     carbsPer100g: r.carbsPer100g,
@@ -107,14 +115,18 @@ extension _ResultCard on _ResultScreenState {
     return lines;
   }
 
-  int _dishScore(DishItem dish) => HealthScore.of(
-    caloriesPer100g: dish.caloriesPer100g.toDouble(),
-    proteinPer100g: dish.proteinPer100g,
-    carbsPer100g: dish.carbsPer100g,
-    fatsPer100g: dish.fatsPer100g,
-    fiberPer100g: dish.fiberPer100g,
-    sugarPer100g: dish.sugarPer100g,
-  ).score;
+  int? _dishScore(DishItem dish) {
+    final score = HealthScore.of(
+      name: dish.name,
+      caloriesPer100g: dish.caloriesPer100g.toDouble(),
+      proteinPer100g: dish.proteinPer100g,
+      carbsPer100g: dish.carbsPer100g,
+      fatsPer100g: dish.fatsPer100g,
+      fiberPer100g: dish.fiberPer100g,
+      sugarPer100g: dish.sugarPer100g,
+    );
+    return score.scored ? score.score : null;
+  }
 
   Tastiness? get _cardTastiness =>
       _tastiness ?? Tastiness.fromId(widget.existingMeal?.tastiness);
@@ -151,7 +163,7 @@ extension _ResultCard on _ResultScreenState {
           ),
           const SizedBox(height: 6),
           HealthScorePill(
-            score: health.score,
+            score: health.scored ? health.score : null,
             max: HealthScore.max,
             label: health.label,
             onEdit: _cardReadOnly ? null : _editHealthScore,
@@ -328,7 +340,36 @@ extension _ResultCard on _ResultScreenState {
     );
   }
 
-  Widget _buildIngredientScore(int score) {
+  Widget _buildIngredientScore(int? score) {
+    // No data for this component: an explicit dash, not an invented number.
+    if (score == null) {
+      return Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 18,
+            height: 18,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              border: Border.all(
+                color: MacroSnapTheme.textTertiary(context),
+                width: 1.2,
+              ),
+            ),
+            child: Text(
+              '—',
+              style: TextStyle(
+                fontSize: 10.5,
+                fontWeight: FontWeight.w800,
+                color: MacroSnapTheme.textTertiary(context),
+              ),
+            ),
+          ),
+          const SizedBox(width: 6),
+        ],
+      );
+    }
     final color = score >= 5
         ? MacroSnapTheme.successGreen
         : score >= 4

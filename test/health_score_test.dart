@@ -44,10 +44,48 @@ void main() {
       expect(score.reasons, isNot(contains('Low fibre')));
     });
 
-    test('water is not penalised for having no macros', () {
-      final score = HealthScore.of(caloriesPer100g: 0, proteinPer100g: 0);
-      expect(score.score, 5);
-      expect(score.reasons, isEmpty);
+    test('a dish with no data is not scored at all, not praised', () {
+      // The backend turns missing numbers into 0, so a failed identification
+      // arrives as all-zero macros. It used to match the "zero-calorie drink"
+      // rule and come back 5/5 Excellent — the best score for knowing nothing.
+      final zero = HealthScore.of(caloriesPer100g: 0, proteinPer100g: 0);
+      expect(zero.scored, isFalse);
+      expect(zero.label, 'Not scored');
+      expect(zero.fraction, '—');
+      expect(zero.isExcellent, isFalse);
+    });
+
+    test('a dish the model could not name is not scored', () {
+      // Real-looking macros, but the name is "Unknown": we do not know what it
+      // is, so the card shows a dash rather than a confident verdict.
+      final unknown = HealthScore.of(
+        name: 'Unknown',
+        caloriesPer100g: 250,
+        proteinPer100g: 12,
+      );
+      expect(unknown.scored, isFalse);
+      expect(unknown.label, 'Not scored');
+
+      // Case and whitespace do not make it "identified".
+      expect(
+        HealthScore.of(
+          name: '  unknown ',
+        caloriesPer100g: 250,
+          proteinPer100g: 12,
+        ).scored,
+        isFalse,
+      );
+    });
+
+    test('a name alone does not rescue a dish with no numbers', () {
+      // "Water" and a failed scan look identical in the data (all zeros), and
+      // there is no honest way to tell them apart — so neither gets a verdict.
+      final water = HealthScore.of(
+        name: 'Water',
+        caloriesPer100g: 0,
+        proteinPer100g: 0,
+      );
+      expect(water.scored, isFalse, reason: 'no numbers to judge');
     });
 
     test('milk is not treated as junk food', () {

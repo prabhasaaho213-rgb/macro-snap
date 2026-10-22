@@ -129,7 +129,15 @@ class WeightStore extends ChangeNotifier {
 
   /// Records a weigh-in for [date] (today by default). A second reading on the
   /// same day replaces the first.
-  Future<void> record(double kg, {DateTime? date}) async {
+  ///
+  /// [awardBadge] is false for a SEED: a value carried over from the profile so
+  /// the chart has a first point. Merely opening the BMI calculator is not a
+  /// weigh-in, and it should not hand out "First Weigh-In".
+  Future<void> record(
+    double kg, {
+    DateTime? date,
+    bool awardBadge = true,
+  }) async {
     if (kg <= 0) return;
     if (!_loaded) await load();
 
@@ -144,7 +152,7 @@ class WeightStore extends ChangeNotifier {
     unawaited(_save());
     // Achievement side effect: one recorded weigh-in earns the badge, whatever
     // the number says. Fire-and-forget so the save is never gated on it.
-    unawaited(BadgeService.instance.noteWeighIn());
+    if (awardBadge) unawaited(BadgeService.instance.noteWeighIn());
   }
 
   /// The last [days] days of history, oldest first (at least the newest point

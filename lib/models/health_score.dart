@@ -15,13 +15,21 @@ library;
 /// added sugar, very high fat and extreme energy density. Every rule is listed
 /// in [reasons], so the score can be explained instead of asserted.
 class HealthScore {
-  /// 0 (worst) to 5 (best).
+  /// 0 (worst) to 5 (best). Meaningless when [scored] is false.
   final int score;
+
+  /// False when there is nothing to score — the dish was not identified, or no
+  /// nutrition numbers came back at all. Such a card shows "—", not a verdict:
+  /// "5/5 Excellent" for a plate of zeros is worse than saying nothing.
+  final bool scored;
 
   /// Human-readable reasons, strongest signal first. Empty for a perfect 5.
   final List<String> reasons;
 
-  const HealthScore(this.score, this.reasons);
+  const HealthScore(this.score, this.reasons, {this.scored = true});
+
+  /// Nothing to judge. [score] carries no meaning.
+  static const HealthScore unscored = HealthScore(0, [], scored: false);
 
   static const int max = 5;
 
@@ -34,7 +42,22 @@ class HealthScore {
     double fatsPer100g = 0,
     double fiberPer100g = 0,
     double sugarPer100g = 0,
+    String? name,
   }) {
+    // ── Nothing to score ────────────────────────────────────────────────
+    // The backend turns missing numbers into 0, so a failed identification
+    // arrives as a dish called "Unknown" with all-zero macros. The rule that
+    // recognises a zero-calorie drink then matched it and awarded 5/5
+    // "Excellent" — the best possible score for knowing nothing.
+    final named = name?.trim().toLowerCase();
+    if (named == 'unknown' || named == '') return unscored;
+    if (caloriesPer100g <= 0 &&
+        proteinPer100g <= 0 &&
+        carbsPer100g <= 0 &&
+        fatsPer100g <= 0) {
+      return unscored;
+    }
+
     // A drink is mostly water: low energy, little protein, little fat. It is
     // scored on what is IN it (sugar) rather than judged like a meal. Without
     // this, water scored 1/5 for having no protein and no fibre, and milk
@@ -42,11 +65,6 @@ class HealthScore {
     final isDrink = caloriesPer100g <= 60 &&
         proteinPer100g < 6 &&
         fatsPer100g <= 4;
-
-    // Nothing to penalise and nothing to praise: water, black coffee, plain tea.
-    if (caloriesPer100g <= 5 && sugarPer100g < 1) {
-      return const HealthScore(5, []);
-    }
 
     // Neutral start: an unknown dish is neither praised nor punished.
     var score = 3;
@@ -102,6 +120,7 @@ class HealthScore {
 
   /// Short verdict shown next to the score.
   String get label {
+    if (!scored) return 'Not scored';
     if (score >= 5) return 'Excellent';
     if (score == 4) return 'Good';
     if (score == 3) return 'Fair';
@@ -111,10 +130,10 @@ class HealthScore {
   }
 
   /// True when the dish earns the full five — used to pick the badge colour.
-  bool get isExcellent => score >= 5;
+  bool get isExcellent => scored && score >= 5;
 
-  /// "4/5" — the exact form the card shows.
-  String get fraction => '$score/$max';
+  /// "4/5" — the exact form the card shows. A dash when there is no score.
+  String get fraction => scored ? '$score/$max' : '—';
 }
 
 /// The user's own verdict on how the dish tasted.

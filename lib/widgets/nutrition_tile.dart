@@ -169,24 +169,35 @@ class HealthScorePill extends StatelessWidget {
     this.onEdit,
   });
 
-  final int score;
+  /// Null when there is nothing to score (an unidentified dish, or a scan that
+  /// came back with no nutrition at all) — the pill then shows a dash.
+  final int? score;
   final int max;
   final String label;
   final VoidCallback? onEdit;
 
   @override
   Widget build(BuildContext context) {
+    final value = score;
     // Full marks and a poor score must not look the same at a glance: green
     // for an excellent dish, amber for the middle, orange for a heavy one.
-    final color = score >= 5
+    final color = value == null
+        ? MacroSnapTheme.textTertiary(context)
+        : value >= 5
         ? MacroSnapTheme.successGreen
-        : score >= 4
+        : value >= 4
         ? MacroSnapTheme.neonGreen
         : MacroSnapTheme.neonOrange;
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Icon(Icons.check_circle_rounded, size: 15, color: color),
+        Icon(
+          value == null
+              ? Icons.remove_circle_outline_rounded
+              : Icons.check_circle_rounded,
+          size: 15,
+          color: color,
+        ),
         const SizedBox(width: 5),
         Text(
           'Health Score: ',
@@ -197,7 +208,7 @@ class HealthScorePill extends StatelessWidget {
           ),
         ),
         Text(
-          '$score/$max',
+          value == null ? '—' : '$value/$max',
           style: TextStyle(
             fontSize: 12.5,
             fontWeight: FontWeight.w800,

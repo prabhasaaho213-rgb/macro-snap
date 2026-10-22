@@ -34,7 +34,7 @@ class UpdatesScreen extends StatefulWidget {
   /// the user has already seen and puts a dot on the "What's New" row when the
   /// two differ — so a new release announces itself instead of waiting to be
   /// found.
-  static const String latestVersion = '1.4.98';
+  static const String latestVersion = '1.4.99';
 
   /// SharedPreferences key holding the latest version the user has seen.
   static const String seenVersionKey = 'updates_seen_version';
@@ -51,6 +51,8 @@ class _UpdatesScreenState extends State<UpdatesScreen> {
       isLatest: true,
       notes: [
         'The health score understands simple food: water is no longer 1/5, milk is not junk, and lean chicken is not punished for having no fibre',
+        'A scan that could not be identified shows no score at all, instead of claiming 5/5 Excellent for a dish with no data',
+        'Opening the BMI calculator no longer earns First Weigh-In - the badge is for recording a weight, not for tapping a card',
         'Achievements you already earned by logging show up on a new phone, and they are cleared with the account when you delete it',
         'Two badges earned together are both celebrated instead of only the last one',
         'A failed scan can no longer cost you one of your free scans',
