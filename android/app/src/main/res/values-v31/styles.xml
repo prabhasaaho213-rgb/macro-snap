@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Android 12+ replaced the old windowBackground splash with the system
+     SplashScreen API, and the template never configured it — so on those
+     devices (most modern phones) the system picked its DEFAULT background,
+     which reads as black on some launches. Pinning the splash background to
+     @color/window_background makes the system splash the same colour as the
+     in-app StartupSplash in both light and dark mode, so the launch reads as
+     one continuous screen instead of flash → black → app. -->
+<resources>
+    <style name="LaunchTheme" parent="@android:style/Theme.Light.NoTitleBar">
+        <item name="android:windowBackground">@drawable/launch_background</item>
+        <item name="android:windowSplashScreenBackground">@color/window_background</item>
+        <item name="android:windowSplashScreenAnimatedIcon">@mipmap/ic_launcher</item>
+    </style>
+</resources>

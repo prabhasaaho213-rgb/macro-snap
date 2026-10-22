@@ -57,15 +57,6 @@ Future<void> main() async {
     () async {
       WidgetsFlutterBinding.ensureInitialized();
 
-      // One quick platform call, and it decides how the first frame is laid
-      // out — so it stays ahead of `runApp`.
-      await _guardStartup(
-        () => SystemChrome.setPreferredOrientations([
-          DeviceOrientation.portraitUp,
-        ]),
-        'orientation lock',
-      );
-
       // ── First frame first ─────────────────────────────────────────
       // Startup work used to be awaited *before* `runApp`, so the app showed
       // nothing but the native launch window (black in dark mode) until
@@ -73,6 +64,22 @@ Future<void> main() async {
       // — several seconds on a cold start or a busy device. The splash now
       // paints immediately and `_bootstrap()` runs behind it.
       runApp(MacroSnapApp(startup: _bootstrap()));
+
+      // One quick platform call for the portrait lock. It used to be AWAITED
+      // ahead of runApp — "it decides how the first frame is laid out" — but
+      // it is a platform channel like any other: on a handful of devices the
+      // answer simply never comes on some launches, and until runApp ran the
+      // window showed nothing but the native background. Eight seconds of
+      // black for a sidebar of code that does not need to precede the first
+      // frame is a bad trade, so it now runs in the background, guarded.
+      unawaited(
+        _guardStartup(
+          () => SystemChrome.setPreferredOrientations([
+            DeviceOrientation.portraitUp,
+          ]),
+          'orientation lock',
+        ),
+      );
     },
     (error, stack) {
       CrashReporting.record(

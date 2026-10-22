@@ -3,7 +3,6 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:macro_snap/app.dart';
-import 'package:package_info_plus/package_info_plus.dart';
 import 'package:macro_snap/core/theme.dart';
 import 'package:macro_snap/widgets/startup_splash.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -19,14 +18,6 @@ void main() {
     // the same thing `widget_test.dart` already renders without any plugin
     // fakes. (Signed-in builds MainShell, which opens the camera.)
     SharedPreferences.setMockInitialValues({});
-    // The intro floor is decided per BUILD, so the version has to be readable.
-    PackageInfo.setMockInitialValues(
-      appName: 'MacroSnap',
-      packageName: 'com.macrosnap.macro_snap',
-      version: '1.4.99',
-      buildNumber: '100',
-      buildSignature: '',
-    );
   });
 
   Widget wrap(Widget child, {Brightness brightness = Brightness.light}) {
@@ -80,14 +71,13 @@ void main() {
     expect(find.byType(StartupSplash), findsNothing);
   });
 
-  testWidgets('a returning user on the same build is not made to wait', (
+  testWidgets('the intro plays on EVERY launch, not just the first per build', (
     tester,
   ) async {
-    // The intro is new once per build. Re-opening the app must not cost 1.8 s
-    // of watching an animation the user has already seen.
-    SharedPreferences.setMockInitialValues({
-      kIntroSeenVersionKey: '1.4.99+100',
-    });
+    // This used to be gated behind a once-per-version flag, so a user who
+    // opened the app again never saw the logo animation — the splash was
+    // torn down the moment startup resolved. The floor must hold on every
+    // single launch and finish with the interface swap, so we assert this here.
     final gate = Completer<void>();
     await tester.pumpWidget(MacroSnapApp(startup: gate.future));
     await tester.pump();
@@ -98,9 +88,14 @@ void main() {
 
     expect(
       find.byType(StartupSplash),
-      findsNothing,
-      reason: 'no floor on a build whose intro has already played',
+      findsOneWidget,
+      reason: 'the entry animation is not cut off on a repeat launch either',
     );
+
+    // Then the floor ends, exactly like a first launch would.
+    await tester.pump(kSplashMinimum);
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(find.byType(StartupSplash), findsNothing);
   });
 
   testWidgets('no startup future means no splash to wait for', (tester) async {

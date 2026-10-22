@@ -1,12 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Modify this file to customize your launch splash screen -->
+<!-- Launch background shown before Flutter's first frame.
+     Resolved to @color/window_background so the hand-off to the in-app
+     StartupSplash is invisible in BOTH modes (light #FFF3EEFF, night
+     #0A0A0A). This used to be the template's plain-white layer-list, which
+     flashed white in dark mode and let Android 12+ fall back to a black
+     splash window on some devices. -->
 <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
-    <item android:drawable="@android:color/white" />
-
-    <!-- You can insert your own image assets here -->
-    <!-- <item>
-        <bitmap
-            android:gravity="center"
-            android:src="@mipmap/launch_image" />
-    </item> -->
+    <item android:drawable="@color/window_background" />
 </layer-list>

@@ -6,12 +6,9 @@ import 'package:macro_snap/screens/habits_tab.dart';
 import 'package:macro_snap/screens/home_screen.dart';
 import 'package:macro_snap/screens/onboarding_screen.dart';
 import 'package:macro_snap/screens/phone_login_screen.dart';
-import 'package:macro_snap/screens/recipe_editor_screen.dart';
-import 'package:macro_snap/screens/recipe_list_screen.dart';
 import 'package:macro_snap/screens/referral_screen.dart';
 import 'package:macro_snap/screens/settings_screen.dart';
 import 'package:macro_snap/screens/subscription_screen.dart';
-import 'package:macro_snap/screens/veg_plan_screen.dart';
 import 'package:macro_snap/widgets/notification_prompt.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -83,12 +80,9 @@ void main() {
     'Habits': () => const HabitsTab(),
     'DietPlan': () => const DietPlanScreen(),
     'Settings': () => const SettingsScreen(),
-    'Recipes': () => const RecipeListScreen(),
-    'RecipeEditor': () => const RecipeEditorScreen(),
     'Referral': () => const ReferralScreen(),
     'Home': () => const HomeScreen(),
     'Subscription': () => const SubscriptionScreen(),
-    'VegPlan': () => const VegPlanScreen(),
   };
 
   for (final sizeEntry in sizes.entries) {

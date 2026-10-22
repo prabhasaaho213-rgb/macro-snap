@@ -1,7 +1,6 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:package_info_plus/package_info_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'core/app_nav.dart';
 import 'core/theme.dart';
@@ -20,22 +19,15 @@ import 'widgets/startup_splash.dart';
 /// splash is not.
 const Duration kStartupTimeout = Duration(seconds: 12);
 
-/// How long the logo intro is allowed to run on the launches that show it.
+/// How long the logo intro is allowed to run on every launch.
 ///
 /// The intro is a 1.6 s Lottie and startup work now finishes in a couple of
-/// hundred milliseconds on a warm start, so the splash used to be torn down
-/// before the animation had played — the upgrade was invisible on exactly the
-/// devices it was meant for. 1.8 s lets the last frame land and the reveal
-/// happen after it rather than on top of it.
-///
-/// Deliberately NOT every launch: a returning user on the same build opens
-/// straight into the app. The floor applies only on the first launch of a
-/// version — a fresh install or the first run after an update — where the
-/// intro is actually new. See [_MacroSnapAppState._introFloorForLaunch].
+/// hundred milliseconds on a warm start, so reducing the intro to the first
+/// launch of a version made every other open skip the animation entirely —
+/// the user saw the splash blink and disappear. The floor applies on every
+/// launch now: startup may finish in 200 ms, but the splash holds until the
+/// 1.6 s Lottie has finished playing, then the screen swaps.
 const Duration kSplashMinimum = Duration(milliseconds: 1800);
-
-/// Remembers which build has already shown its intro.
-const String kIntroSeenVersionKey = 'intro_seen_version';
 
 class MacroSnapApp extends StatefulWidget {
   /// Startup work that must finish before the first real screen is built
@@ -99,32 +91,15 @@ class _MacroSnapAppState extends State<MacroSnapApp> {
     setState(() => _booting = false);
   }
 
-  /// Resolves after [kSplashMinimum] on the first launch of a version, and
-  /// immediately on every other launch.
+  /// Resolves after [kSplashMinimum] on every launch.
   ///
-  /// The intro is new exactly once per build, so that is the only time it is
-  /// worth holding the first screen back. A user who opens the app ten times a
-  /// day on the same build should never wait for an animation they have already
-  /// seen. If the version cannot be read, no delay is applied: an unknown
-  /// build is not a reason to slow somebody down.
+  /// This used to apply only on the first launch of a version, so the
+  /// animation the user already saw was cut short on every later open — the
+  /// splash was torn down the moment startup resolved. Holding for the intro
+  /// on every launch is what the user actually wants to see; startup work
+  /// keeps running behind the splash the whole time, so the only cost is the
+  /// wait itself.
   Future<void> _introFloorForLaunch() async {
-    String version;
-    try {
-      final info = await PackageInfo.fromPlatform();
-      version = '${info.version}+${info.buildNumber}';
-    } catch (_) {
-      return;
-    }
-    if (version.isEmpty) return;
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      if (prefs.getString(kIntroSeenVersionKey) == version) return;
-      // Recorded before the wait, so an app killed mid-intro does not replay it
-      // on the next launch.
-      await prefs.setString(kIntroSeenVersionKey, version);
-    } catch (_) {
-      return;
-    }
     await Future<void>.delayed(kSplashMinimum);
   }
 

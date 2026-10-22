@@ -111,6 +111,15 @@ class DishItem {
   );
 }
 
+// Total weight of all dishes, used when the server did not send one at the
+// top level. Each dish weight is already clamped 0–5000; the sum is then
+// clamped to the card's serving range, or 100 g when nothing was usable.
+int _dishSum(List<DishItem> dishes) {
+  final sum = dishes.fold<double>(0, (s, d) => s + d.grams);
+  if (sum <= 0) return 100;
+  return sum.clamp(5, 3000).toInt();
+}
+
 class NutritionResult {
   final List<DishItem> dishes;
   final String description;
@@ -212,9 +221,11 @@ class NutritionResult {
           json.containsKey('scans_used') && json.containsKey('scans_limit'),
       serverResetAt: DateTime.tryParse(json['reset_at'] as String? ?? ''),
       // Total weight of everything visible, estimated by the server and
-      // clamped there to 5–3000 g. Old servers don't send it → 100 g.
+      // clamped there to 5–3000 g. When the server did not send one (an older  // prompt) the per-dish weights it did send are summed before anything
+  // falls back to 100 g — a single egg must not open at 100 g just
+  // because the total was missing.
       grams: rawGrams == null || rawGrams <= 0
-          ? 100
+          ? _dishSum(dishesList)
           : rawGrams.clamp(5, 3000).toInt(),
     );
   }

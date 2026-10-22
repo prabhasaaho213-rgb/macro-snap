@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Night variant of the launch background. Same layer-list as the day one —
+     @color/window_background resolves to the night color (#0A0A0A) on its
+     own, but the res file must exist so dark-mode launches do not fall back
+     to the day drawable's colour. -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:drawable="@color/window_background" />
+</layer-list>

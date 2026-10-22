@@ -2,9 +2,9 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:macro_snap/services/gemini_service.dart';
 
 /// The analyzer now estimates the TOTAL weight of everything in the photo
-/// (two boiled eggs ≈ 100 g). The app opens the serving at that weight, while
-/// the +/- adjuster keeps rescaling macros from the per-100 g values.
-Map<String, dynamic> _eggJson({Object? grams}) => {
+/// (one egg ≈ 55 g, two ≈ 110 g). The app opens the serving at that weight,
+/// while the +/- adjuster keeps rescaling macros from the per-100 g values.
+Map<String, dynamic> _eggJson({Object? grams, Object? dishGrams}) => {
   'description': 'two boiled eggs',
   'confidence': 0.94,
   'grams': ?grams,
@@ -18,6 +18,7 @@ Map<String, dynamic> _eggJson({Object? grams}) => {
       'fats_g_per_100g': 9.6,
       'fiber_g_per_100g': 0,
       'sugar_g_per_100g': 0.2,
+      'grams': ?dishGrams,
     },
   ],
 };
@@ -28,7 +29,14 @@ void main() {
     expect(r.grams, 95);
   });
 
-  test('a missing weight falls back to 100 g (old servers)', () {
+  test('a missing weight falls back to the dishes\' own weights', () {
+    // The server's total was lost but the per-dish weight survived: one egg
+    // must open at one egg, never at the fixed 100 g baseline.
+    final r = NutritionResult.fromJson(_eggJson(dishGrams: 55));
+    expect(r.grams, 55);
+  });
+
+  test('a missing weight with no dish weights falls back to 100 g', () {
     final r = NutritionResult.fromJson(_eggJson());
     expect(r.grams, 100);
   });

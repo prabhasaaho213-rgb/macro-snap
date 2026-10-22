@@ -22,7 +22,7 @@ extension _HomeMeals on _HomeScreenState {
               ),
             ),
             const SizedBox(height: 16),
-            // Wrap, not Row: five actions must still fit a 320dp phone at 2x
+            // Wrap, not Row: three actions must still fit a 320dp phone at 2x
             // system font without a RenderFlex overflow.
             Wrap(
               spacing: 8,
@@ -66,30 +66,6 @@ extension _HomeMeals on _HomeScreenState {
                         habitFlowRoute(const DietPlanScreen()),
                       );
                     }
-                  },
-                ),
-                _quickAction(
-                  Icons.menu_book_rounded,
-                  'Recipes',
-                  MacroSnapTheme.neonPink,
-                  isDark,
-                  () {
-                    Navigator.push(
-                      context,
-                      habitFlowRoute(const RecipeListScreen()),
-                    );
-                  },
-                ),
-                _quickAction(
-                  Icons.grass_rounded,
-                  'Veg Plan',
-                  MacroSnapTheme.macroFiber,
-                  isDark,
-                  () {
-                    Navigator.push(
-                      context,
-                      habitFlowRoute(const VegPlanScreen()),
-                    ).then((_) => _refresh());
                   },
                 ),
               ],
