@@ -81,7 +81,38 @@ class _DietPlanScreenState extends State<DietPlanScreen> {
     return GestureDetector(
       onTap: () {
         HapticFeedback.selectionClick();
-        setState(() => _diet = d);
+        setState(() {
+          final saved = _profile;
+          if (saved == null) {
+            // Before the first Calculate there is no real profile: the form
+            // is empty, and inventing 70 kg / 170 cm / 25 here would save a
+            // person the user never described — the targets card and the BMI
+            // screen would then number-crunch from it. Until Calculate has
+            // stored a profile, tapping only flips the preference; the saved
+            // profile follows one honest Calculate.
+            _diet = d;
+          } else {
+            _diet = d;
+            // After that, copy the SAVED profile and change only the diet:
+            // no half-typed form text, no skipped underweight check, and the
+            // avatar is carried over untouched.
+            final profile = DietProfile(
+              weightKg: saved.weightKg,
+              heightCm: saved.heightCm,
+              age: saved.age,
+              gender: saved.gender,
+              goal: saved.goal,
+              activity: saved.activity,
+              diet: _diet,
+              avatar: saved.avatar,
+            );
+            DietPlanService.instance.save(profile);
+            _profile = profile;
+          }
+          // Preferences changed, so any previously generated AI plan no
+          // longer applies and must disappear from the screen.
+          _aiPlan = null;
+        });
       },
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 180),
@@ -205,8 +236,10 @@ class _DietPlanScreenState extends State<DietPlanScreen> {
           'gender': _profile!.gender.name,
           'goal': _profile!.goal.name,
           'activity': _profile!.activity.name,
-          // The generated plan has to respect the food preference too.
-          'diet': _profile!.diet.name,
+          // The generated plan has to respect the food preference too. Read
+          // the toggle, not a saved field, so the request can never disagree
+          // with what the screen shows.
+          'diet': _diet.name,
         }),
       );
       final data = jsonDecode(resp.body) as Map<String, dynamic>;
@@ -462,11 +495,8 @@ class _DietPlanScreenState extends State<DietPlanScreen> {
             onChanged: (v) => setState(() => _activity = v!),
           ),
           const SizedBox(height: 12),
-          // Food preference - drives the suggested meal plan below.
-          // A two-option dropdown was the wrong control here: it hid which
-          // choice was active and had to be opened to read the setting. This
-          // is a real two-segment toggle that always shows the current
-          // preference and flips on a single tap.
+          // Food preference - saves to the profile instantly and drives
+          // the suggested meal plan below. Flips on a single tap.
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [

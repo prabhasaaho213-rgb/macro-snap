@@ -1367,7 +1367,5 @@ class FoodDatabase {
   static List<String> get categories =>
       _items.map((e) => e.category).toSet().toList();
 
-  /// Everything a vegetarian can eat, in database order - the source for the
-  /// Veg Plan suggestion list.
-  static List<FoodItem> get vegetarian => _items.where((e) => e.isVeg).toList();
+
 }

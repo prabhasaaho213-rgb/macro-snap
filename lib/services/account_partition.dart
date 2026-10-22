@@ -1,7 +1,7 @@
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// Local-storage partitioning: one device can hold several Google accounts,
-/// so every user-scoped local store (meals, habits, water, recipes, diet
+/// so every user-scoped local store (meals, habits, water, diet
 /// profile) must key its data by the signed-in account — otherwise the
 /// previous account's data shows up in every other account on the phone.
 ///

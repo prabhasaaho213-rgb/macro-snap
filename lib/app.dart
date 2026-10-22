@@ -47,7 +47,6 @@ class _MacroSnapAppState extends State<MacroSnapApp> {
   bool _booting = true;
   String? _savedPhone;
   bool _onboardingDone = false;
-  ThemeMode _themeMode = ThemeMode.system;
 
   /// Completes once the intro has had its time (or immediately, on a launch
   /// that does not show it). Started here so the wait is measured from the
@@ -61,10 +60,8 @@ class _MacroSnapAppState extends State<MacroSnapApp> {
     _booting = widget.startup != null;
     // No startup work means no real launch (widget tests): no floor either.
     if (widget.startup != null) _introFloor = _introFloorForLaunch();
-    _loadThemeMode();
     _checkOnboardingAndLogin();
     _awaitStartup();
-    themeModeNotifier.addListener(_onThemeChanged);
   }
 
   /// Holds the splash until the work `main()` handed over is done.
@@ -112,39 +109,6 @@ class _MacroSnapAppState extends State<MacroSnapApp> {
     await _introFloor;
   }
 
-  @override
-  void dispose() {
-    themeModeNotifier.removeListener(_onThemeChanged);
-    super.dispose();
-  }
-
-  void _onThemeChanged() {
-    if (mounted) {
-      setState(() {
-        _themeMode = themeModeNotifier.value;
-      });
-    }
-  }
-
-  Future<void> _loadThemeMode() async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final value = prefs.getString('theme_mode') ?? 'system';
-      _themeMode = ThemeMode.values.firstWhere(
-        (e) => e.name == value,
-        orElse: () => ThemeMode.system,
-      );
-      themeModeNotifier.value = _themeMode;
-    } catch (e) {
-      debugPrint('Error loading theme: $e');
-      _themeMode = ThemeMode.system;
-      themeModeNotifier.value = _themeMode;
-    }
-    if (mounted) {
-      setState(() {});
-    }
-  }
-
   Future<void> _checkOnboardingAndLogin() async {
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -180,9 +144,13 @@ class _MacroSnapAppState extends State<MacroSnapApp> {
       debugShowCheckedModeBanner: false,
       navigatorKey: appNavigatorKey,
       navigatorObservers: [routeObserver],
-      theme: MacroSnapTheme.light,
+      // MacroSnap is dark-only: the user picks nothing, nothing is persisted,
+      // and both MaterialApp bots point at the dark theme so no requested
+      // brightness (or a stale 'theme_mode' pref left on devices) can ever
+      // produce a light screen.
+      theme: MacroSnapTheme.dark,
       darkTheme: MacroSnapTheme.dark,
-      themeMode: _themeMode,
+      themeMode: ThemeMode.dark,
       // The splash is painted on the very first frame; the home below is
       // chosen only once prefs are read and startup work has finished.
       home: _loading || _booting

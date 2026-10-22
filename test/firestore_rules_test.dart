@@ -173,7 +173,6 @@ void main() {
       'habitData/{uid}',
       'dietProfiles/{uid}',
       'recentFoods/{uid}',
-      'recipes/{uid}',
       'userPreferences/{uid}',
     ]) {
       expect(blockBody(path), contains('signedIn() && isOwner(uid)'));

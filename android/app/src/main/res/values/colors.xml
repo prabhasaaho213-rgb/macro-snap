@@ -1,8 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Colour of the Android window behind Flutter. It must match the app's
-         own background: whenever the Flutter surface is briefly not painted
-         (window recreation, route hand-off) the user sees this instead of a
-         hard black frame. -->
-    <color name="window_background">#FFF3EEFF</color>
+    <!-- Colour of the Android window behind Flutter. MacroSnap is dark-only,
+         so the day variant matches the night value exactly: a phone left in
+         system light mode would otherwise paint a light #FFF3EEFF splash and
+         then jump into the dark app on every launch. It must equal the app's
+         own background (MacroSnapTheme.surfaceDark, #0A0A0A) for the same
+         reason — whenever the Flutter surface is briefly not painted (window
+         recreation, route hand-off) the user sees this instead of a flash. -->
+    <!-- #FF0A0A0A in BOTH values/ and values-night/ keeps every launch dark. -->
+    <color name="window_background">#FF0A0A0A</color>
 </resources>

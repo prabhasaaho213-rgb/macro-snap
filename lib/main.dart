@@ -167,7 +167,32 @@ Future<void> _bootstrap() async {
     }, 'BadgeService.backfill after cloud restore'),
   );
 
-  // Restore user preferences from cloud (theme, name) if local is missing.
+  // One-time local cleanup for versions pre-1.5: the recipe feature is gone,
+  // but a device that upgraded carries its leftover keys — the legacy
+  // 'recipes' store and one 'recipes_<account>' blob per signed-in account —
+  // and nothing else ever deletes them. Remove them all; now that nothing
+  // reads them, they are dead data (the privacy policy promises no custom
+  // recipes are collected, so nothing should linger either).
+  // The obsolete 'theme_mode' pref goes too: the app is dark-only and reads
+  // nothing there.
+  unawaited(
+    _guard(() async {
+      final prefs = await SharedPreferences.getInstance();
+      final leftovers = prefs.getKeys().where((k) {
+        return k == 'recipes' ||
+            k.startsWith('recipes_') ||
+            k == 'theme_mode';
+      }).toList();
+      for (final key in leftovers) {
+        await prefs.remove(key);
+      }
+      if (leftovers.isNotEmpty) {
+        debugPrint('🧹 removed ${leftovers.length} obsolete prefs: $leftovers');
+      }
+    }, 'Remove obsolete recipe/theme prefs'),
+  );
+
+  // Restore user preferences from cloud (name) if local is missing.
   unawaited(
     _guard(() async {
       final prefs = await SharedPreferences.getInstance();
@@ -176,10 +201,6 @@ Future<void> _bootstrap() async {
         // Only restore if local doesn't have a value set by the user.
         // Type-check instead of a blind cast: a non-string from the cloud
         // used to throw and abort the whole preference restore.
-        final cloudTheme = cloudPrefs['themeMode'];
-        if (!prefs.containsKey('theme_mode') && cloudTheme is String) {
-          await prefs.setString('theme_mode', cloudTheme);
-        }
         final cloudName = cloudPrefs['name'];
         if (!prefs.containsKey('name') && cloudName is String) {
           await prefs.setString('name', cloudName);

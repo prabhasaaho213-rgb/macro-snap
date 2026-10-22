@@ -89,7 +89,7 @@ extension _HomeMeals on _HomeScreenState {
     VoidCallback onTap,
   ) {
     // Fixed width, not intrinsic: sizing the tile to its label made every
-    // action a different width ("Snap" narrow, "Veg Plan" wide) with the icon
+    // action a different width ("Snap" narrow) with the icon
     // floating in a skinny pill and the label spilling past the tile edges —
     // which is what made the row look broken. Every tile is now identical and
     // the label ellipsises instead of overflowing.

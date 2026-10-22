@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
+
 import '../services/auth_http.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -438,24 +438,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
         backgroundColor: Colors.transparent,
         elevation: 0,
         actions: [
-          // Tap = quick toggle light/dark · Long-press = full System picker
-          Tooltip(
-            message: 'Tap to toggle · Long-press for more',
-            child: InkWell(
-              onTap: () => _toggleTheme(isDark),
-              onLongPress: () => _showThemeDialog(isDark),
-              borderRadius: BorderRadius.circular(12),
-              child: Padding(
-                padding: const EdgeInsets.all(10),
-                child: Icon(
-                  isDark ? Icons.dark_mode_rounded : Icons.light_mode_rounded,
-                  color: isDark ? Colors.white : const Color(0xFF1A1A1A),
-                  size: 24,
-                ),
-              ),
-            ),
-          ),
-          const SizedBox(width: 4),
+          // MacroSnap is dark-only: there is no light mode to switch to, so
+          // the AppBar theme toggle and the Light/Dark/System picker are gone.
         ],
       ),
       body: SingleChildScrollView(
@@ -749,119 +733,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
         ),
       ),
     );
-  }
-
-  /// Quick toggle: flips between light and dark based on the CURRENT
-  /// effective brightness (so System mode resolves to whichever it's showing).
-  /// Full Light/Dark/System picker lives in [_showThemeDialog] (long-press).
-  Future<void> _toggleTheme(bool isDark) async {
-    final current = themeModeNotifier.value;
-    final effectiveDark =
-        current == ThemeMode.dark || (current == ThemeMode.system && isDark);
-    final next = effectiveDark ? ThemeMode.light : ThemeMode.dark;
-    if (next == current) return;
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('theme_mode', next.name);
-    themeModeNotifier.value = next;
-    HapticFeedback.selectionClick();
-    // Auto-sync theme to cloud.
-    MealSyncService.syncPreferences({'themeMode': next.name});
-  }
-
-  Future<void> _showThemeDialog(bool isDark) async {
-    final current = themeModeNotifier.value;
-    final result = await showDialog<ThemeMode>(
-      context: context,
-      builder: (ctx) {
-        ThemeMode selected = current;
-        return StatefulBuilder(
-          builder: (ctx, setDialogState) => AlertDialog(
-            backgroundColor: isDark ? MacroSnapTheme.cardDark : Colors.white,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(20),
-            ),
-            title: Text(
-              'Choose Theme',
-              style: TextStyle(
-                color: isDark ? Colors.white : const Color(0xFF1A1A1A),
-              ),
-            ),
-            content: RadioGroup<ThemeMode>(
-              groupValue: selected,
-              onChanged: (v) {
-                setDialogState(() {
-                  selected = v!;
-                });
-              },
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  for (final mode in ThemeMode.values)
-                    RadioListTile<ThemeMode>(
-                      value: mode,
-                      title: Text(
-                        _themeModeLabel(mode),
-                        style: TextStyle(
-                          color: isDark
-                              ? Colors.white
-                              : const Color(0xFF1A1A1A),
-                        ),
-                      ),
-                      subtitle: Text(
-                        _themeModeSubtitle(mode),
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: MacroSnapTheme.textTertiary(context),
-                        ),
-                      ),
-                      activeColor: MacroSnapTheme.neonGreen,
-                    ),
-                ],
-              ),
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(ctx),
-                child: const Text('Cancel'),
-              ),
-              FilledButton(
-                onPressed: () => Navigator.pop(ctx, selected),
-                child: const Text('Apply'),
-              ),
-            ],
-          ),
-        );
-      },
-    );
-    if (result != null && result != current) {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString('theme_mode', result.name);
-      themeModeNotifier.value = result;
-      // Auto-sync theme to cloud.
-      MealSyncService.syncPreferences({'themeMode': result.name});
-    }
-  }
-
-  String _themeModeLabel(ThemeMode mode) {
-    switch (mode) {
-      case ThemeMode.system:
-        return 'System default';
-      case ThemeMode.light:
-        return 'Light';
-      case ThemeMode.dark:
-        return 'Dark';
-    }
-  }
-
-  String _themeModeSubtitle(ThemeMode mode) {
-    switch (mode) {
-      case ThemeMode.system:
-        return 'Follow your device setting';
-      case ThemeMode.light:
-        return 'Always light background';
-      case ThemeMode.dark:
-        return 'Always dark background';
-    }
   }
 
   Widget _settingTile(

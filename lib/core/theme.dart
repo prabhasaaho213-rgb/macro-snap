@@ -1,9 +1,5 @@
 import 'package:flutter/material.dart';
 
-final ValueNotifier<ThemeMode> themeModeNotifier = ValueNotifier(
-  ThemeMode.system,
-);
-
 /// Global name notifier — Settings writes to it, Home reads from it.
 /// Eliminates the race between SharedPreferences reads and routeObserver
 /// didPopNext callbacks.

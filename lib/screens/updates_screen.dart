@@ -34,7 +34,7 @@ class UpdatesScreen extends StatefulWidget {
   /// the user has already seen and puts a dot on the "What's New" row when the
   /// two differ — so a new release announces itself instead of waiting to be
   /// found.
-  static const String latestVersion = '1.5.0';
+  static const String latestVersion = '1.5.2';
 
   /// SharedPreferences key holding the latest version the user has seen.
   static const String seenVersionKey = 'updates_seen_version';
@@ -49,6 +49,22 @@ class _UpdatesScreenState extends State<UpdatesScreen> {
       version: UpdatesScreen.latestVersion,
       date: 'Latest',
       isLatest: true,
+      notes: [
+        'MacroSnap is dark-only now — light mode is gone, along with the theme toggle in Settings',
+        'Switching Vegetarian / Non-Veg now switches what your plan follows, without saving half-typed numbers',
+        'Leftover recipe data is deleted — from the device at launch, and from your account when you delete it',
+      ],
+    ),
+    _UpdateEntry(
+      version: '1.5.1',
+      date: 'Earlier',
+      notes: [
+        'Recipes and separate Veg Plan removed — veg food data now lives as the diet preference toggle in the Diet Plan; no more recipe screen or service',
+      ],
+    ),
+    _UpdateEntry(
+      version: '1.5.0',
+      date: 'Earlier',
       notes: [
         'The health score understands simple food: water is no longer 1/5, milk is not junk, and lean chicken is not punished for having no fibre',
         'A scan that could not be identified shows no score at all, instead of claiming 5/5 Excellent for a dish with no data',
@@ -146,9 +162,6 @@ class _UpdatesScreenState extends State<UpdatesScreen> {
       version: '1.4.85',
       date: 'Earlier',
       notes: [
-        'Veg Plan — a full vegetarian day plan sized to your calorie target',
-        'All Veg Suggestions — every veg food in the app, tap to log it',
-        'Food Preference is now a Veg / Non-Veg toggle',
         'Faster home screen — fixed clipped action tiles and calorie ring',
       ],
     ),
@@ -179,7 +192,7 @@ class _UpdatesScreenState extends State<UpdatesScreen> {
       date: 'Earlier',
       notes: [
         'Faster AI food scans with Google Gemini',
-        'Custom recipes and barcode lookup',
+        'Rate Us now always opens the Google Play Store',
       ],
     ),
   ];

@@ -221,9 +221,10 @@ class NutritionResult {
           json.containsKey('scans_used') && json.containsKey('scans_limit'),
       serverResetAt: DateTime.tryParse(json['reset_at'] as String? ?? ''),
       // Total weight of everything visible, estimated by the server and
-      // clamped there to 5–3000 g. When the server did not send one (an older  // prompt) the per-dish weights it did send are summed before anything
-  // falls back to 100 g — a single egg must not open at 100 g just
-  // because the total was missing.
+      // clamped there to 5–3000 g. When the server did not send one (an older
+      // server build), the per-dish weights it did send are summed before
+      // anything falls back to 100 g — a single egg must not open at 100 g
+      // just because the total was missing.
       grams: rawGrams == null || rawGrams <= 0
           ? _dishSum(dishesList)
           : rawGrams.clamp(5, 3000).toInt(),

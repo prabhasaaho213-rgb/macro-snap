@@ -113,11 +113,6 @@ service cloud.firestore {
       allow read, write: if signedIn() && isOwner(uid);
     }
 
-    // ─── recipes/{uid} — custom recipes ────────────────────────────────
-    match /recipes/{uid} {
-      allow read, write: if signedIn() && isOwner(uid);
-    }
-
     // ─── userPreferences/{uid} — theme, display name, etc. ─────────────
     match /userPreferences/{uid} {
       allow read, write: if signedIn() && isOwner(uid);
