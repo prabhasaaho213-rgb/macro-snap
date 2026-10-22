@@ -210,7 +210,10 @@ Future<void> _backfillBadges() async {
   await BadgeService.instance.backfillFromHistory(
     totalMeals: MealStore.instance.allMeals.length,
     streakDays: await MealStreakService.getCurrent(),
-    hasWeighIn: WeightStore.instance.entries.isNotEmpty,
+    // Not `entries.isNotEmpty`: the BMI screen seeds the profile weight, and
+    // counting a seed would award "First Weigh-In" on the next launch — the
+    // badge fix would have been undone here instead of at the seed.
+    hasWeighIn: WeightStore.instance.hasRealWeighIn,
   );
 }
 

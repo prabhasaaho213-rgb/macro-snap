@@ -94,19 +94,43 @@ class SubscriptionService extends ChangeNotifier {
   /// personal address shipped inside the app. The privilege is now a Firebase
   /// custom claim set by the backend with the Admin SDK — the same claim
   /// `firestore.rules` checks, so the client cannot mint it.
+  /// True once this process has read the claim from a FRESH token.
+  ///
+  /// An ID token is cached for up to an hour, and the backend mints the claim
+  /// on its first request — so reading the cache meant the owner sat on the
+  /// free tier until the token happened to turn over, or until they signed out
+  /// and back in. One forced refresh per process is enough to pick the claim
+  /// up on the next launch.
+  bool _claimsRefreshed = false;
+
   Future<bool> isAdmin() async {
     final override = adminCheckOverride;
     if (override != null) return override();
+    // No Firebase app at all (unit tests, or a build without Firebase): there
+    // is no claim to read, and this is not an error worth reporting.
+    if (Firebase.apps.isEmpty) return false;
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return false;
+
+    final fresh = !_claimsRefreshed;
     try {
-      // No Firebase app at all (unit tests, or a build without Firebase): there
-      // is no claim to read, and this is not an error worth reporting.
-      if (Firebase.apps.isEmpty) return false;
-      final user = FirebaseAuth.instance.currentUser;
-      if (user == null) return false;
-      final token = await user.getIdTokenResult();
+      final token = await user.getIdTokenResult(fresh);
+      _claimsRefreshed = true;
       return token.claims?['admin'] == true;
     } catch (e, st) {
-      logError('SubscriptionService.isAdmin', e, st);
+      // A failed refresh (offline, or the app just launched) must not cost the
+      // owner their Pro: fall back to whatever the cached token says.
+      if (fresh) {
+        try {
+          final cached = await user.getIdTokenResult(false);
+          _claimsRefreshed = true;
+          return cached.claims?['admin'] == true;
+        } catch (e2, st2) {
+          logError('SubscriptionService.isAdmin(cached)', e2, st2);
+        }
+      } else {
+        logError('SubscriptionService.isAdmin', e, st);
+      }
       return false; // fail closed: no claim, no privilege
     }
   }
@@ -137,7 +161,13 @@ class SubscriptionService extends ChangeNotifier {
     if (_authSub != null) return;
     try {
       _authSub = FirebaseAuth.instance.authStateChanges().listen(
-        (_) => unawaited(refreshAdminState()),
+        (_) {
+          // A different account has its own token, so the next read is fresh
+          // again — a stale cached claim from the previous user must not be
+          // what decides the new one's Pro.
+          _claimsRefreshed = false;
+          unawaited(refreshAdminState());
+        },
         onError: (Object e, StackTrace st) =>
             logError('SubscriptionService.bindAuth', e, st),
       );

@@ -14,9 +14,26 @@ class WeightEntry {
   final DateTime date;
   final double kg;
 
-  const WeightEntry({required this.date, required this.kg});
+  /// True when this point was SEEDED from the profile rather than recorded.
+  ///
+  /// The BMI calculator seeds the profile weight so the trend has a first
+  /// point. That point draws a line, but it is not evidence that the user ever
+  /// stepped on a scale — so it must not earn "First Weigh-In", and it must
+  /// keep not earning it on the next launch, when the badge backfill runs.
+  /// Persisted for exactly that reason.
+  final bool seeded;
 
-  Map<String, dynamic> toJson() => {'date': date.toIso8601String(), 'kg': kg};
+  const WeightEntry({
+    required this.date,
+    required this.kg,
+    this.seeded = false,
+  });
+
+  Map<String, dynamic> toJson() => {
+    'date': date.toIso8601String(),
+    'kg': kg,
+    if (seeded) 'seeded': true,
+  };
 
   factory WeightEntry.fromJson(Map<String, dynamic> json) {
     final date = DateTime.tryParse(json['date'] as String? ?? '');
@@ -24,7 +41,13 @@ class WeightEntry {
     if (date == null || kg == null || kg <= 0) {
       throw const FormatException('bad weight entry');
     }
-    return WeightEntry(date: date, kg: kg);
+    // Absent means a real entry: everything logged before seeding existed was
+    // typed in by the user, so the default must be false.
+    return WeightEntry(
+      date: date,
+      kg: kg,
+      seeded: json['seeded'] == true,
+    );
   }
 
   static WeightEntry? tryFromJson(Map<String, dynamic> json) {
@@ -133,6 +156,11 @@ class WeightStore extends ChangeNotifier {
   /// [awardBadge] is false for a SEED: a value carried over from the profile so
   /// the chart has a first point. Merely opening the BMI calculator is not a
   /// weigh-in, and it should not hand out "First Weigh-In".
+  ///
+  /// A seed is also stored as seeded, because the badge backfill recomputes
+  /// achievements from this history on every launch — a seed that looked like a
+  /// recorded weight would hand out the badge one launch later instead of
+  /// immediately.
   Future<void> record(
     double kg, {
     DateTime? date,
@@ -142,8 +170,11 @@ class WeightStore extends ChangeNotifier {
     if (!_loaded) await load();
 
     final day = _startOfDay(date ?? DateTime.now());
+    // A real reading replaces a seed on the same day; the flag follows the
+    // call, so re-recording a day as a seed (never done in practice) would
+    // downgrade it rather than silently keep the badge.
     _entries.removeWhere((e) => _sameDay(e.date, day));
-    _entries.add(WeightEntry(date: day, kg: kg));
+    _entries.add(WeightEntry(date: day, kg: kg, seeded: !awardBadge));
     _entries.sort((a, b) => a.date.compareTo(b.date));
     if (_entries.length > maxEntries) {
       _entries = _entries.sublist(_entries.length - maxEntries);
@@ -154,6 +185,12 @@ class WeightStore extends ChangeNotifier {
     // the number says. Fire-and-forget so the save is never gated on it.
     if (awardBadge) unawaited(BadgeService.instance.noteWeighIn());
   }
+
+  /// True when the user has ever recorded a weight themselves.
+  ///
+  /// Seeds do not count: this is what the achievement backfill asks, and a
+  /// profile weight copied in by the BMI screen is not a weigh-in.
+  bool get hasRealWeighIn => _entries.any((e) => !e.seeded);
 
   /// The last [days] days of history, oldest first (at least the newest point
   /// when any exists, so callers always have something to show).

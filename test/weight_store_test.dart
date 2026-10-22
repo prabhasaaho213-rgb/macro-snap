@@ -36,10 +36,34 @@ void main() {
       isFalse,
       reason: 'a seed is not a weigh-in',
     );
+    expect(WeightStore.instance.hasRealWeighIn, isFalse);
+
+    // And it must still not count on the NEXT launch, when the achievement
+    // backfill recomputes from this history — that is the path that quietly
+    // re-awarded the badge after the seed fix.
+    await BadgeService.instance.backfillFromHistory(
+      totalMeals: 0,
+      streakDays: 0,
+      hasWeighIn: WeightStore.instance.hasRealWeighIn,
+    );
+    expect(
+      BadgeService.instance.isEarned('first_weigh_in'),
+      isFalse,
+      reason: 'the backfill must not treat a seed as a weigh-in',
+    );
+
+    // The flag is persisted, so a reload cannot relabel the seed as a real
+    // reading (a stored entry without the field reads as real, which is right
+    // for everything logged before seeding existed).
+    WeightStore.instance.resetForTest();
+    await WeightStore.instance.load();
+    expect(WeightStore.instance.entries.single.seeded, isTrue);
+    expect(WeightStore.instance.hasRealWeighIn, isFalse);
 
     // A real save still earns it.
     await WeightStore.instance.record(71);
     await pumpEventQueue();
+    expect(WeightStore.instance.hasRealWeighIn, isTrue);
     expect(BadgeService.instance.isEarned('first_weigh_in'), isTrue);
   });
 
