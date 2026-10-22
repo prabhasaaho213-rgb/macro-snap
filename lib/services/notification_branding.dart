@@ -23,7 +23,8 @@ class NotificationBranding {
 
   /// Large logo icon as a Flutter asset. Bundled into the APK as an asset,
   /// R8's resource optimizer can never strip it — no keep.xml entry needed.
-  static const String largeIconAsset = 'assets/images/ic_notification_large.png';
+  static const String largeIconAsset =
+      'assets/images/ic_notification_large.png';
 
   static Uint8List? _largeIconBytes;
 
@@ -34,8 +35,10 @@ class NotificationBranding {
     if (_largeIconBytes != null) return _largeIconBytes;
     try {
       final data = await rootBundle.load(largeIconAsset);
-      _largeIconBytes =
-          data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes);
+      _largeIconBytes = data.buffer.asUint8List(
+        data.offsetInBytes,
+        data.lengthInBytes,
+      );
     } catch (_) {
       return null;
     }
@@ -101,7 +104,8 @@ class NotificationBranding {
     }
     return (
       title: 'Keep your streak alive',
-      body: 'You haven\'t logged a meal today. Snap a photo to keep your streak going.',
+      body:
+          'You haven\'t logged a meal today. Snap a photo to keep your streak going.',
     );
   }
 

@@ -81,9 +81,7 @@ Future<String?> showNicknamePrompt(BuildContext context) async {
       backgroundColor: Theme.of(ctx).brightness == Brightness.dark
           ? MacroSnapTheme.cardDark
           : Colors.white,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(24),
-      ),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
       title: const Text('Pick a nickname'),
       content: TextField(
         controller: controller,

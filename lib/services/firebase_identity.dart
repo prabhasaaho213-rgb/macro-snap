@@ -20,10 +20,9 @@ class FirebaseIdentity {
   }) async {
     try {
       var user = FirebaseAuth.instance.currentUser;
-      user ??= await FirebaseAuth.instance
-          .authStateChanges()
-          .first
-          .timeout(timeout);
+      user ??= await FirebaseAuth.instance.authStateChanges().first.timeout(
+        timeout,
+      );
       return user?.uid;
     } catch (_) {
       return null;

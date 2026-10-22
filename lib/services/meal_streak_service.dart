@@ -1,4 +1,6 @@
+import 'dart:async';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../services/badge_service.dart';
 import '../services/meal_store.dart';
 import '../models/diet_profile.dart';
 
@@ -99,6 +101,10 @@ class MealStreakService {
     if (update.newStreak > best) {
       await prefs.setInt(_keyBest, update.newStreak);
     }
+
+    // Streak badges reward persistence, not the body: 7 and 14 days of
+    // hitting targets earn Week Warrior / Fortnight Flame.
+    unawaited(BadgeService.instance.noteStreak(update.newStreak));
 
     // Fires exactly once per break: the date was just written to today, so
     // any later call the same day returns early above.

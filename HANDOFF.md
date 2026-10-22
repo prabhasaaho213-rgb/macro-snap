@@ -1,158 +1,134 @@
-# MacroSnap — Laptop Handoff Checklist
+# MacroSnap — project handoff
 
-> **Purpose:** everything needed to continue development on a *new* laptop, with
-> the exact source paths from this machine. Last updated: Aug 6, 2026 (v1.4.44+57).
+Last updated: 22 Oct 2026 · version `1.4.97+98`
 
----
+This file used to contain machine-specific paths, a personal email address and
+the filename of a service-account key. All of that has been removed: nothing
+here identifies a person, a laptop or a credential.
 
-## 0. Quick summary of where things stand
+## Stack
 
-| Item | Status |
-|---|---|
-| Git repo | ✅ Pushed to GitHub, clean working tree |
-| Latest release | ✅ **v1.4.44** (APK + AAB) on GitHub |
-| Google Sign-In fix | ✅ Play deployment cert (`9b999d83…`) registered in Firebase |
-| Cloud backup | ✅ Phase-3 Firestore migration live (no Railway needed) |
-| Master backup ZIP | `C:\Users\DELL\Desktop\MacroSnap-FULL-BACKUP.zip` (1.0 GB, 714 files) |
+- Flutter (Dart 3) app, Android-first; iOS/macOS/Linux folders are present but
+  Android is the shipping target.
+- Firebase Auth (Google + phone) and Cloud Firestore for data; Razorpay for the
+  ₹29/month Pro subscription.
+- A separate Node backend (own repository) owns payments, trials and the
+  authoritative scan allowance.
 
-**The only things that do NOT live in git** are the three files in Section 2 —
-copy them manually. Everything else the new laptop gets by cloning the repo.
+## Layout
 
----
-
-## 1. What's already on GitHub (nothing to copy)
-
-Repo: `https://github.com/prabhasaaho213-rgb/macro-snap-source-1.4.5.git`
-
-```bash
-git clone https://github.com/prabhasaaho213-rgb/macro-snap-source-1.4.5.git
-cd macro-snap-source-1.4.5
-git pull          # get latest (currently master is in sync)
+```
+lib/
+  core/        theme, navigation, haptics, shared limits
+  models/      MealRecord, Habit, DietProfile, BMI
+  screens/     Home, Scan, Result, Habits, BMI, Profile, Settings, Subscription…
+  services/    stores (meal/habit/weight/recent), Gemini, Razorpay,
+               SubscriptionService, ScanGate, BadgeService, ShareService,
+               notification + reminder registry
+  widgets/     animation primitives, cards, gauge, charts, splash, badge board
+test/          widget + unit tests (run all of them before a release)
+android/       Gradle config, manifest, signing (key.properties + keystore)
+firestore.rules  data-access rules; deploy with `firebase deploy --only firestore:rules`
 ```
 
-This includes the app source, `firestore.rules`, `firebase.json`,
-`google-services.json` (with the Sign-In fix), tests, and the v1.4.43 release
-assets (APK + AAB) at `https://github.com/prabhasaaho213-rgb/macro-snap-source-1.4.5/releases`.
+### The three big screens are split by feature
 
----
+`home_screen.dart`, `result_screen.dart` and `habits_tab.dart` used to be
+1,600–2,000-line files. Each is now a thin screen plus `part` files, grouped by
+what the widgets are for:
 
-## 2. ⚠️ Machine-only files — MUST copy manually
-
-These are **excluded from git on purpose** (secrets + machine paths). Copy them
-to the **same paths** on the new laptop.
-
-### 2a. Android signing keystore (critical — cannot build without it)
-
-| From (this laptop) | To (new laptop) |
-|---|---|
-| `C:\DSP\macro-snap-source-1.4.5\macro-snap-source-1.4.5\android\upload-keystore.jks` | `…\android\upload-keystore.jks` (same repo path) |
-| `C:\DSP\macro-snap-source-1.4.5\macro-snap-source-1.4.5\android\key.properties` | `…\android\key.properties` (same repo path) |
-
-`key.properties` points at the keystore — keep both files together in
-`android/` and the relative path stays valid. **The keystore password is inside
-`key.properties`; do not share it in chats or commits.**
-
-> ⚠️ This keystore signs with SHA-1 `07edf911…`, which is registered in Firebase.
-> If you lose it, you can still ship via Play (Play App Signing), but direct APK
-> sideloads would break sign-in. Keep a copy in the master backup ZIP.
-
-> 🚀 **Automate the copy:** run `copy-handoff.bat` in the repo root — it detects
-> your USB drive and copies all three files (keystore, `key.properties`, service
-> account) into a `MacroSnap-Handoff\` folder with size verification.
-
-### 2b. Firebase admin service account (needed for `firebase deploy` / admin ops)
-
-| From (this laptop) | To (new laptop) |
-|---|---|
-| `C:\Users\DELL\Downloads\macrosnap-cfde3-firebase-adminsdk-fbsvc-3d8eacef5f.json` | anywhere safe (e.g. `Downloads` or `C:\src\`) |
-
-It is also **inside the backup ZIP** (`Downloads/macrosnap-cfde3-firebase-adminsdk-fbsvc-…json`).
-
-### 2c. Play Console signing certificates (reference only, optional)
-
-From: `C:\Users\DELL\Downloads\certificates (1).zip`
-(contains `deployment_cert.der`, `hybrid_classical_cert.der`, `hybrid_pqc_cert.der`).
-You can always re-download these from Play Console → **App integrity → App signing**.
-
----
-
-## 3. Toolchain to install on the new laptop
-
-The exact versions/tools used on this machine:
-
-| Tool | Version | This machine's path |
-|---|---|---|
-| Flutter SDK | 3.44.8 stable | `C:\src\flutter` |
-| Dart (bundled with Flutter) | — | `C:\src\flutter\bin\dart` |
-| Android SDK | (with build-tools + platform-tools) | `C:\Users\DELL\AppData\Local\Android\Sdk` |
-| Java (JDK) | bundled with Android Studio | `C:\Program Files\Android\Android Studio\jbr` |
-| Node.js (only for `firebase` CLI) | v24.19.0 | `C:\src\node-v24.19.0-win-x64` |
-| Pub cache (pre-downloaded packages) | — | `C:\src\.pub-cache` |
-
-**Fastest path:** copy `C:\src\flutter` and `C:\src\.pub-cache` from this laptop
-via USB/network instead of re-downloading (~2 GB). Then install **Android Studio**
-(on Windows: `flutter doctor` needs its bundled JBR + SDK).
-
-Environment variables used in every build here:
-
-```bash
-export ANDROID_HOME='C:/Users/DELL/AppData/Local/Android/Sdk'
-export JAVA_HOME='/c/Program Files/Android/Android Studio/jbr'
-export PATH="$JAVA_HOME/bin:$ANDROID_HOME/platform-tools:$PATH"
-export PUB_CACHE=/c/src/.pub-cache
+```
+home_screen.dart (360)   + home_screen_header / _calories / _week / _meals
+result_screen.dart (381) + result_screen_states / _results / _dish / _dialogs
+habits_tab.dart (451)    + habits_tab_cards / _mission / _sheets
 ```
 
-> First-time build on a fresh SDK: accept Android licenses once —
-> `flutter doctor --android-licenses`.
+The parts stay in the same library (they are `part of` the screen), so the
+builders keep access to the screen's private state without threading a dozen
+parameters through. `_rebuild()` exists only because `setState` is `@protected`
+and an extension is not a `State` subclass — it is not a second state machine.
 
----
+Truly self-contained pieces were lifted out as real widgets in `lib/widgets/`:
+`MacroBar`, `NutrientRow`, `SwipeActionBackground`. They rebuild independently
+of the screen, and `SwipeActionBackground` has its own shape test.
 
-## 4. Rebuild commands (exact, from this machine)
+When adding UI to one of these screens, put it in the part file that matches its
+feature; a new 400-line screen method is how these files got to 2,000 lines.
+
+## Build and release
 
 ```bash
-cd <repo>/macro-snap-source-1.4.5   # nested project folder
 flutter pub get
-
-# Release APK (sideload users)
-flutter build apk --release
-# → build/app/outputs/flutter-apk/app-release.apk
-
-# Release AAB (Play Console upload)
+flutter analyze          # must be clean
+flutter test             # must be green
 flutter build appbundle --release
-# → build/app/outputs/bundle/release/app-release.aab
+flutter build apk --release
 ```
 
-**Version bumps** happen in `pubspec.yaml`:
-`version: 1.4.43+56` → bump both (name + code). **Version codes must increase**
-on every Play upload — 55 and 56 are used; next is **57**.
+Release signing uses `android/key.properties` + `android/upload-keystore.jks`.
+Both are deliberately kept out of source archives and out of git. The keystore
+must be the **same** one registered in Firebase (Google Sign-In) and in Play
+Console — a new key breaks sign-in and in-place updates.
 
-**Firestore rules deploy** (from repo root, where `firebase.json` lives):
+Release checklist: analyze, tests, `aapt dump badging` for versionCode/name,
+`apksigner verify --print-certs` to confirm the certificate matches the
+previous release, then a real payment on a release build.
 
-```bash
-# with Node + firebase-tools, logged in via: firebase login
-firebase deploy --only firestore:rules --project macrosnap-cfde3
-# or using the service account JSON:
-#   GOOGLE_APPLICATION_CREDENTIALS=<path-to-service-account.json> firebase deploy --only firestore:rules
-```
+## Repository and folder names
 
----
+- Local folder: `MACROSNAP/extracted/macro-snap` — version-less on purpose. It
+  was `macro-snap-source-1.4.5`, which stopped matching the app at 1.4.96.
+- GitHub: `prabhasaaho213-rgb/macro-snap`, renamed from
+  `macro-snap-source-1.4.5`. Raw/API links to the old name still redirect.
+- `prabhasaaho213-rgb/macro-snap-source-1.4.5` is deliberately kept as a tiny
+  **redirect-only** repository. Builds already on phones open their Privacy
+  Policy from that Pages address, which does not redirect on its own; the repo
+  serves a meta-refresh to the new site. Do not delete it while 1.4.x builds
+  are in the wild.
+- Pages site: `https://prabhasaaho213-rgb.github.io/macro-snap/`, published from
+  `docs/` by `.github/workflows/pages.yml`. The workflow used to upload
+  `macro-snap-source-1.4.5/docs`, a path that never existed in the repo.
+- Note: `prabhasaaho213-rgb/macro-snap-source` is an unrelated stale v1.4.5
+  dump (last push July). It is not this project.
 
-## 5. Post-setup verification checklist
+## Environment / credentials
 
-- [ ] `flutter doctor` → all green (Android toolchain + licenses accepted)
-- [ ] `git status` clean, `git pull` up to date
-- [ ] `android/key.properties` + `android/upload-keystore.jks` present
-- [ ] Build `flutter build apk --release` succeeds
-- [ ] Google Sign-In works on a fresh install (Play-delivered build)
-- [ ] `firebase deploy --only firestore:rules` succeeds
+- `android/app/google-services.json` — Firebase project config; required.
+- Keystore + `key.properties` — machine-only, never committed.
+- No API keys live in the app: scans and payments go through the backend, and
+  the client authenticates with a Firebase ID token.
+- CI (`.github/workflows`, `codemagic.yaml`) expects the signing material as
+  secrets, not files in the repo.
 
----
+## Crash reporting
 
-## 6. Security notes
+Release builds report to **Firebase Crashlytics** (`lib/services/crash_reporting.dart`).
+Collection starts after `Firebase.initializeApp()` and is release-only: debug
+and profile builds stay local so the dashboard is not polluted. Uncaught
+framework/platform/zone errors are recorded as fatal; caught errors go through
+`logError('<Class.method>', e, st)` as non-fatal, which is why the old generic
+`debugPrint("Error: $e")` calls no longer exist. Reporting is best-effort and
+never throws — a failure to report can never break startup.
 
-- The master ZIP (`MacroSnap-FULL-BACKUP.zip`) contains **signing keys + admin
-  credentials** — treat it as a master secret; store offline.
-- Never paste `key.properties` passwords, the service-account JSON, or the
-  keystore into chats, commits, or public gists.
-- If the old laptop is decommissioned, consider rotating the service account
-  key in Google Cloud Console (IAM → Service accounts) afterwards.
+## Owner / admin access
+
+The owner's free Pro and the admin exemptions are a Firebase **custom claim**
+(`admin: true`), never an email address. The app reads the claim from its ID
+token (`SubscriptionService.isAdmin`), `firestore.rules` checks
+`request.auth.token.admin == true`, and the backend does the same in
+`isAdminUser()`.
+
+The claim is minted by the backend at boot from `ADMIN_EMAIL` (comma-separated
+if more than one) using the Admin SDK — that env var is the only place the
+address lives. Until the claim has been set once, the owner has no admin
+privileges: run the backend with `ADMIN_EMAIL` set, or set the claim manually.
+The client refreshes its ID token on sign-in, so a newly granted claim takes
+effect at the next sign-in/restart.
+
+## Known gaps
+
+- A real payment has not been tested on a release build. R8 keep rules for
+  Razorpay exist, but only a paid checkout on a real phone proves them.
+- Reminders use inexact alarms, so they can arrive late while the phone is in
+  battery saver.
+- `firestore.rules` must be deployed; editing the file alone changes nothing.

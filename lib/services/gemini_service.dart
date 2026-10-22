@@ -1,9 +1,35 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:http/http.dart' as http;
-import 'package:shared_preferences/shared_preferences.dart';
+import '../core/app_limits.dart';
 import 'auth_http.dart';
+
+/// One component of a detected dish — "Grilled chicken breast 150 g".
+///
+/// The scan prompt asks the model to break a dish into its visible parts so
+/// the result card can list ingredients the way a nutrition label does. Older
+/// servers send no ingredient list at all, so [DishItem.ingredients] is
+/// allowed to be empty and the card falls back to the dish itself.
+class DishIngredient {
+  final String name;
+
+  /// Estimated edible weight of this component, in grams. 0 when unknown.
+  final double grams;
+
+  /// The server's own 0–5 judgment, if it sent one; the card derives a score
+  /// from the parent dish's macros otherwise.
+  final int? healthScore;
+
+  const DishIngredient({required this.name, this.grams = 0, this.healthScore});
+
+  factory DishIngredient.fromJson(Map<String, dynamic> json) => DishIngredient(
+    name: (json['name'] as String? ?? '').trim(),
+    grams: ((json['grams'] as num?)?.toDouble() ?? 0).clamp(0, 5000),
+    healthScore: (json['health_score'] as num?)?.toInt().clamp(0, 5),
+  );
+}
 
 class DishItem {
   final String name;
@@ -16,6 +42,15 @@ class DishItem {
   final double sugarPer100g;
   final String suitableFor;
 
+  /// Weight of this dish alone, in grams. 0 when the server did not say (the
+  /// result card then shows the whole-photo weight for a single dish, or an
+  /// apportioned estimate for a multi-item photo).
+  final double grams;
+
+  /// Visible components, in the order the model listed them. Empty for a scan
+  /// that did not break the dish down.
+  final List<DishIngredient> ingredients;
+
   const DishItem({
     required this.name,
     this.portionDescription = '',
@@ -26,6 +61,8 @@ class DishItem {
     this.fiberPer100g = 0,
     this.sugarPer100g = 0,
     this.suitableFor = 'both',
+    this.grams = 0,
+    this.ingredients = const [],
   });
 
   factory DishItem.fromJson(Map<String, dynamic> json) => DishItem(
@@ -38,6 +75,17 @@ class DishItem {
     fiberPer100g: (json['fiber_g_per_100g'] as num?)?.toDouble() ?? 0,
     sugarPer100g: (json['sugar_g_per_100g'] as num?)?.toDouble() ?? 0,
     suitableFor: json['suitable_for'] as String? ?? 'both',
+    grams: ((json['grams'] as num?)?.toDouble() ?? 0).clamp(0, 5000),
+    // Tolerant parse: one malformed ingredient must not discard the dish.
+    ingredients:
+        (json['ingredients'] as List<dynamic>?)
+            ?.whereType<Map>()
+            .map(
+              (i) => DishIngredient.fromJson(Map<String, dynamic>.from(i)),
+            )
+            .where((i) => i.name.isNotEmpty)
+            .toList() ??
+        const [],
   );
 
   DishItem withGrams(int g) => DishItem(
@@ -50,6 +98,16 @@ class DishItem {
     fiberPer100g: fiberPer100g * g / 100,
     sugarPer100g: sugarPer100g * g / 100,
     suitableFor: suitableFor,
+    grams: grams * g / 100,
+    ingredients: ingredients
+        .map(
+          (i) => DishIngredient(
+            name: i.name,
+            grams: i.grams * g / 100,
+            healthScore: i.healthScore,
+          ),
+        )
+        .toList(),
   );
 }
 
@@ -75,14 +133,16 @@ class NutritionResult {
     this.description = '',
     this.confidence = 0.7,
     this.scansUsed = 0,
-    this.scansLimit = 3,
+    this.scansLimit = AppLimits.freeScansPerDay,
     this.grams = 100,
     this.serverScansKnown = false,
     this.serverResetAt,
   });
 
-  int get caloriesPer100g => dishes.fold(0, (sum, d) => sum + d.caloriesPer100g);
-  double get proteinPer100g => dishes.fold(0.0, (sum, d) => sum + d.proteinPer100g);
+  int get caloriesPer100g =>
+      dishes.fold(0, (sum, d) => sum + d.caloriesPer100g);
+  double get proteinPer100g =>
+      dishes.fold(0.0, (sum, d) => sum + d.proteinPer100g);
   double get carbsPer100g => dishes.fold(0.0, (sum, d) => sum + d.carbsPer100g);
   double get fatsPer100g => dishes.fold(0.0, (sum, d) => sum + d.fatsPer100g);
   double get fiberPer100g => dishes.fold(0.0, (sum, d) => sum + d.fiberPer100g);
@@ -105,17 +165,23 @@ class NutritionResult {
 
   NutritionResult withGrams(int g) {
     return NutritionResult(
-      dishes: dishes.map((d) => DishItem(
-        name: d.name,
-        portionDescription: d.portionDescription,
-        caloriesPer100g: d.caloriesPer100g,
-        proteinPer100g: d.proteinPer100g,
-        carbsPer100g: d.carbsPer100g,
-        fatsPer100g: d.fatsPer100g,
-        fiberPer100g: d.fiberPer100g,
-        sugarPer100g: d.sugarPer100g,
-        suitableFor: d.suitableFor,
-      )).toList(),
+      dishes: dishes
+          .map(
+            (d) => DishItem(
+              name: d.name,
+              portionDescription: d.portionDescription,
+              caloriesPer100g: d.caloriesPer100g,
+              proteinPer100g: d.proteinPer100g,
+              carbsPer100g: d.carbsPer100g,
+              fatsPer100g: d.fatsPer100g,
+              fiberPer100g: d.fiberPer100g,
+              sugarPer100g: d.sugarPer100g,
+              suitableFor: d.suitableFor,
+              grams: d.grams,
+              ingredients: d.ingredients,
+            ),
+          )
+          .toList(),
       description: description,
       confidence: confidence,
       scansUsed: scansUsed,
@@ -127,19 +193,23 @@ class NutritionResult {
   }
 
   factory NutritionResult.fromJson(Map<String, dynamic> json) {
-    final dishesList = (json['dishes'] as List<dynamic>?)
-        ?.map((d) => DishItem.fromJson(d as Map<String, dynamic>))
-        .toList() ?? [];
+    final dishesList =
+        (json['dishes'] as List<dynamic>?)
+            ?.map((d) => DishItem.fromJson(d as Map<String, dynamic>))
+            .toList() ??
+        [];
     final rawGrams = (json['grams'] as num?)?.toInt();
     return NutritionResult(
       dishes: dishesList,
       description: json['description'] as String? ?? '',
       confidence: (json['confidence'] as num?)?.toDouble() ?? 0.7,
       scansUsed: (json['scans_used'] as num?)?.toInt() ?? 0,
-      scansLimit: (json['scans_limit'] as num?)?.toInt() ?? 3,
+      scansLimit:
+          (json['scans_limit'] as num?)?.toInt() ?? AppLimits.freeScansPerDay,
       // The server always sends both on a successful /analyze; only then may
       // the numbers it reports be trusted over the local estimate.
-      serverScansKnown: json.containsKey('scans_used') && json.containsKey('scans_limit'),
+      serverScansKnown:
+          json.containsKey('scans_used') && json.containsKey('scans_limit'),
       serverResetAt: DateTime.tryParse(json['reset_at'] as String? ?? ''),
       // Total weight of everything visible, estimated by the server and
       // clamped there to 5–3000 g. Old servers don't send it → 100 g.
@@ -151,16 +221,16 @@ class NutritionResult {
 }
 
 class GeminiService {
-  static const _prefsKey = 'server_url';
-  static String _serverUrl = 'https://macro-snap-backend.vercel.app';
+  /// The backend URL is a build-time constant.
+  ///
+  /// This used to be overridable through a `server_url` preference, but no
+  /// screen ever wrote that key — the error message it implied ("enter your
+  /// server URL in Settings") pointed at a setting that does not exist.
+  static const String _serverUrl = 'https://macro-snap-backend.vercel.app';
 
-  static Future<void> init() async {
-    final prefs = await SharedPreferences.getInstance();
-    final savedUrl = prefs.getString(_prefsKey);
-    if (savedUrl != null && savedUrl.isNotEmpty) {
-      _serverUrl = savedUrl.trim();
-    }
-  }
+  /// Kept as a no-op so startup ordering does not change: nothing needs to be
+  /// read before the first request.
+  static Future<void> init() async {}
 
   static String get serverUrl => _serverUrl;
   static bool get hasServerUrl => _serverUrl.isNotEmpty;
@@ -175,7 +245,12 @@ class GeminiService {
     final mock = mockResult;
     if (mock != null) return mock;
     if (!hasServerUrl) {
-      throw Exception('Server URL not set. Enter your server URL in Settings.');
+      // There is no in-app setting for this — it can only be missing if the
+      // build itself is misconfigured, so never send the user looking for one.
+      throw Exception(
+        'The scan service is not configured in this build. '
+        'Please update MacroSnap.',
+      );
     }
 
     try {
@@ -197,7 +272,9 @@ class GeminiService {
         if (body['error'] == 'scan_limit_reached') {
           throw Exception('Scan limit reached. Subscribe for unlimited scans.');
         }
-        throw Exception(body['error'] as String? ?? 'Server error (${response.statusCode})');
+        throw Exception(
+          body['error'] as String? ?? 'Server error (${response.statusCode})',
+        );
       }
 
       if (response.statusCode == 401) {
@@ -206,17 +283,33 @@ class GeminiService {
 
       if (response.statusCode != 200) {
         final body = jsonDecode(response.body) as Map<String, dynamic>;
-        throw Exception(body['error'] as String? ?? 'Server error (${response.statusCode})');
+        throw Exception(
+          body['error'] as String? ?? 'Server error (${response.statusCode})',
+        );
       }
 
       final json = jsonDecode(response.body) as Map<String, dynamic>;
       return NutritionResult.fromJson(json);
+    } on TimeoutException {
+      // A 30 s timeout used to escape as a raw TimeoutException and surface as
+      // an unexplained error screen. Give the user something actionable.
+      throw Exception(
+        'The scan took too long. Check your connection and try again.',
+      );
     } on SocketException {
-      throw Exception('Cannot reach server at $serverUrl.\nMake sure your phone is on the same WiFi and the backend is running.');
+      // No server addresses, WiFi instructions or stack details in user copy.
+      throw Exception(
+        'Cannot reach MacroSnap right now. Check your internet connection and '
+        'try again.',
+      );
     } on http.ClientException {
-      throw Exception('Connection failed. Check that the server is running at $serverUrl.');
+      throw Exception(
+        'The connection dropped while scanning. Please try again.',
+      );
     } on FormatException {
-      throw Exception('Invalid response from server.');
+      throw Exception(
+        'The server sent an unexpected response. Please try again.',
+      );
     }
   }
 }

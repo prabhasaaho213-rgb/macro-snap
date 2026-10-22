@@ -42,7 +42,9 @@ class _RecentFoodsScreenState extends State<RecentFoodsScreen> {
           content: Text('✅ Logged "${food.name}" (${food.calories} kcal)'),
           behavior: SnackBarBehavior.floating,
           backgroundColor: MacroSnapTheme.neonGreen,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
           duration: const Duration(seconds: 2),
         ),
       );
@@ -57,7 +59,9 @@ class _RecentFoodsScreenState extends State<RecentFoodsScreen> {
         SnackBar(
           content: Text('Removed "${food.name}"'),
           behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
           duration: const Duration(seconds: 2),
         ),
       );
@@ -81,7 +85,9 @@ class _RecentFoodsScreenState extends State<RecentFoodsScreen> {
           ),
           FilledButton(
             onPressed: () => Navigator.pop(ctx, true),
-            style: FilledButton.styleFrom(backgroundColor: MacroSnapTheme.neonPink),
+            style: FilledButton.styleFrom(
+              backgroundColor: MacroSnapTheme.neonPink,
+            ),
             child: const Text('Clear'),
           ),
         ],
@@ -99,7 +105,9 @@ class _RecentFoodsScreenState extends State<RecentFoodsScreen> {
     final foods = _filteredFoods;
 
     return Scaffold(
-      backgroundColor: isDark ? MacroSnapTheme.surfaceDark : MacroSnapTheme.surfaceLight,
+      backgroundColor: isDark
+          ? MacroSnapTheme.surfaceDark
+          : MacroSnapTheme.surfaceLight,
       appBar: AppBar(
         title: Text(
           'Recent Foods',
@@ -219,7 +227,9 @@ class _RecentFoodsScreenState extends State<RecentFoodsScreen> {
           ),
           const SizedBox(height: 16),
           Text(
-            _searchQuery.isEmpty ? 'No recent foods yet' : 'No foods match your search',
+            _searchQuery.isEmpty
+                ? 'No recent foods yet'
+                : 'No foods match your search',
             style: TextStyle(
               fontSize: 16,
               fontWeight: FontWeight.w700,
@@ -265,7 +275,9 @@ class _RecentFoodsScreenState extends State<RecentFoodsScreen> {
             context: context,
             builder: (ctx) => AlertDialog(
               backgroundColor: isDark ? MacroSnapTheme.cardDark : Colors.white,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(20),
+              ),
               title: const Text('Remove Food'),
               content: Text('Remove "${food.name}" from recent foods?'),
               actions: [
@@ -275,7 +287,9 @@ class _RecentFoodsScreenState extends State<RecentFoodsScreen> {
                 ),
                 FilledButton(
                   onPressed: () => Navigator.pop(ctx, true),
-                  style: FilledButton.styleFrom(backgroundColor: MacroSnapTheme.neonPink),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: MacroSnapTheme.neonPink,
+                  ),
                   child: const Text('Remove'),
                 ),
               ],
@@ -290,7 +304,10 @@ class _RecentFoodsScreenState extends State<RecentFoodsScreen> {
             color: MacroSnapTheme.neonPink.withValues(alpha: 0.15),
             borderRadius: BorderRadius.circular(16),
           ),
-          child: const Icon(Icons.delete_rounded, color: MacroSnapTheme.neonPink),
+          child: const Icon(
+            Icons.delete_rounded,
+            color: MacroSnapTheme.neonPink,
+          ),
         ),
         child: GestureDetector(
           onTap: () {
@@ -329,7 +346,9 @@ class _RecentFoodsScreenState extends State<RecentFoodsScreen> {
                         style: TextStyle(
                           fontSize: 15,
                           fontWeight: FontWeight.w700,
-                          color: isDark ? Colors.white : const Color(0xFF1A1A1A),
+                          color: isDark
+                              ? Colors.white
+                              : const Color(0xFF1A1A1A),
                         ),
                       ),
                       const SizedBox(height: 3),
@@ -360,7 +379,10 @@ class _RecentFoodsScreenState extends State<RecentFoodsScreen> {
                 ),
                 // Calories badge
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 5,
+                  ),
                   decoration: BoxDecoration(
                     color: MacroSnapTheme.neonGreen.withValues(alpha: 0.12),
                     borderRadius: BorderRadius.circular(12),

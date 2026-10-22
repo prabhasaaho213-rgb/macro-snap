@@ -30,9 +30,14 @@ class PaymentResult {
 
   const PaymentResult(this.outcome, [this.message]);
 
-  const PaymentResult.success() : outcome = PaymentOutcome.success, message = null;
-  const PaymentResult.cancelled() : outcome = PaymentOutcome.cancelled, message = null;
-  const PaymentResult.pending([this.message]) : outcome = PaymentOutcome.pending;
+  const PaymentResult.success()
+    : outcome = PaymentOutcome.success,
+      message = null;
+  const PaymentResult.cancelled()
+    : outcome = PaymentOutcome.cancelled,
+      message = null;
+  const PaymentResult.pending([this.message])
+    : outcome = PaymentOutcome.pending;
   const PaymentResult.failed(this.message) : outcome = PaymentOutcome.failed;
 }
 
@@ -48,6 +53,19 @@ class RazorpayService {
   /// The subscription currently being paid for — needed by the hosted-page
   /// fallback and by the verify call when the SDK omits the id.
   static String? _subscriptionId;
+
+  /// True while a purchase is still being *set up* (server call + sheet open).
+  /// A second tap in that window used to create a second Razorpay subscription
+  /// for the same user, which is one of the ways a person can be charged twice.
+  static bool _starting = false;
+
+  /// Test seams. Both default to the real network calls; tests replace them so
+  /// the no-double-charge guards can be exercised without a device or keys.
+  @visibleForTesting
+  static Future<Map<String, dynamic>> Function({required String name})?
+  createSubscriptionForTest;
+  @visibleForTesting
+  static Future<bool> Function()? refreshStatusForTest;
 
   /// Initialize Razorpay. Call this once in the app lifecycle.
   static void init() {
@@ -83,58 +101,79 @@ class RazorpayService {
   /// known to work rather than failing the purchase outright; either way the
   /// caller gets one [PaymentResult].
   static Future<PaymentResult> purchase({required String name}) async {
-    final created = await _createSubscription(name: name);
-    final subscriptionId = created['subscription_id'];
-    if (subscriptionId is! String || subscriptionId.isEmpty) {
-      return const PaymentResult.failed('Could not start the payment.');
+    // One purchase at a time. Retrying while a checkout is opening, or while
+    // the hosted page is still being polled, must never mint a second
+    // subscription — that is exactly how a "try again" tap becomes a second
+    // charge for the same ₹29.
+    if (_starting || _pending != null) {
+      return const PaymentResult.pending(
+        'A payment is already in progress. Finish it in the window that is '
+        'open — Pro switches on by itself once it clears.',
+      );
     }
-    _subscriptionId = subscriptionId;
-
-    final key = created['razorpay_key'];
-    if (key is! String || key.isEmpty) {
-      // No publishable key from the server → the native sheet cannot open.
-      return _openHostedPage(subscriptionId);
-    }
-
-    final pending = Completer<PaymentResult>();
-    _pending = pending;
+    _starting = true;
     try {
-      _razorpay.open({
-        'key': key,
-        // Subscriptions are charged from the plan, so no amount/currency here:
-        // sending them alongside subscription_id is what triggers the SDK's
-        // recurrence-pattern rejection.
-        'subscription_id': subscriptionId,
-        'name': 'MacroSnap',
-        'description': 'MacroSnap Pro · ₹29/month',
-        'theme': {'color': '#FF6B2B'},
-        'send_sms_hash': true,
-        'retry': {'enabled': true, 'max_count': 2},
-      });
-    } catch (e) {
-      // Some SDK versions throw instead of reporting the recurrence bug.
-      debugPrint('Razorpay checkout could not open ($e) — using hosted page');
-      _pending = null;
-      return _openHostedPage(subscriptionId);
-    }
-    // Safety valve: some SDK builds close the sheet without firing either
-    // callback, which would leave the caller's button spinning forever.
-    return pending.future.timeout(
-      const Duration(minutes: 10),
-      onTimeout: () {
+      // Someone who already paid (e.g. a hosted-page payment that cleared
+      // after we gave up polling) must not be charged again.
+      if (await refreshStatus()) return const PaymentResult.success();
+
+      final created = await _createSubscription(name: name);
+      final subscriptionId = created['subscription_id'];
+      if (subscriptionId is! String || subscriptionId.isEmpty) {
+        return const PaymentResult.failed('Could not start the payment.');
+      }
+      _subscriptionId = subscriptionId;
+
+      final key = created['razorpay_key'];
+      if (key is! String || key.isEmpty) {
+        // No publishable key from the server → the native sheet cannot open.
+        return _openHostedPage(subscriptionId);
+      }
+
+      final pending = Completer<PaymentResult>();
+      _pending = pending;
+      try {
+        _razorpay.open({
+          'key': key,
+          // Subscriptions are charged from the plan, so no amount/currency
+          // here: sending them alongside subscription_id is what triggers the
+          // SDK's recurrence-pattern rejection.
+          'subscription_id': subscriptionId,
+          'name': 'MacroSnap',
+          'description': 'MacroSnap Pro · ₹29/month',
+          'theme': {'color': '#FF6B2B'},
+          'send_sms_hash': true,
+          'retry': {'enabled': true, 'max_count': 2},
+        });
+      } catch (e) {
+        // Some SDK versions throw instead of reporting the recurrence bug.
+        debugPrint('Razorpay checkout could not open ($e) — using hosted page');
         _pending = null;
-        _subscriptionId = null;
-        return const PaymentResult.pending(
-          'No confirmation yet. If money was deducted, Pro switches on by '
-          'itself within a few minutes.',
-        );
-      },
-    );
+        return _openHostedPage(subscriptionId);
+      }
+      // Safety valve: some SDK builds close the sheet without firing either
+      // callback, which would leave the caller's button spinning forever.
+      return pending.future.timeout(
+        const Duration(minutes: 10),
+        onTimeout: () {
+          _pending = null;
+          _subscriptionId = null;
+          return const PaymentResult.pending(
+            'No confirmation yet. If money was deducted, Pro switches on by '
+            'itself within a few minutes.',
+          );
+        },
+      );
+    } finally {
+      _starting = false;
+    }
   }
 
   /// Re-asks the backend whether Pro is active yet. Used by the "pending"
   /// screen: a bank confirmation can land seconds after the sheet closes.
   static Future<bool> refreshStatus() async {
+    final override = refreshStatusForTest;
+    if (override != null) return override();
     try {
       final resp = await AuthHttp.get(
         Uri.parse('${GeminiService.serverUrl}/me/payment/status'),
@@ -168,6 +207,8 @@ class RazorpayService {
   static Future<Map<String, dynamic>> _createSubscription({
     required String name,
   }) async {
+    final override = createSubscriptionForTest;
+    if (override != null) return override(name: name);
     final res = await AuthHttp.post(
       Uri.parse('${GeminiService.serverUrl}/payment/create-subscription'),
       headers: {'Content-Type': 'application/json'},
@@ -184,10 +225,12 @@ class RazorpayService {
   }
 
   /// Verifies the payment server-side, then switches Pro on.
-  static Future<void> _verifyAndActivate(PaymentSuccessResponse response) async {
+  static Future<void> _verifyAndActivate(
+    PaymentSuccessResponse response,
+  ) async {
     final subscriptionId =
         (response.data?['razorpay_subscription_id'] as String?) ??
-            _subscriptionId;
+        _subscriptionId;
     bool verified = false;
     try {
       final res = await AuthHttp.post(
@@ -212,11 +255,21 @@ class RazorpayService {
       }
       _finish(const PaymentResult.success());
     } else {
+      // /payment/verify may be unreachable while the webhook has already
+      // landed. Ask the authoritative status once before calling this
+      // unconfirmed — telling a paid user "we could not confirm" is one of the
+      // worst outcomes in the flow.
+      if (await refreshStatus()) {
+        _finish(const PaymentResult.success());
+        return;
+      }
       // The money may still be fine — the webhook just has not landed yet.
-      _finish(const PaymentResult.pending(
-        'We could not confirm the payment yet. If money was deducted, Pro '
-        'switches on by itself within a few minutes.',
-      ));
+      _finish(
+        const PaymentResult.pending(
+          'We could not confirm the payment yet. If money was deducted, Pro '
+          'switches on by itself within a few minutes.',
+        ),
+      );
     }
   }
 
@@ -289,9 +342,11 @@ class RazorpayService {
       _finish(const PaymentResult.cancelled());
       return;
     }
-    _finish(PaymentResult.failed(
-      message.isEmpty ? 'The payment did not go through.' : message,
-    ));
+    _finish(
+      PaymentResult.failed(
+        message.isEmpty ? 'The payment did not go through.' : message,
+      ),
+    );
   }
 
   static void _handleExternalWallet(ExternalWalletResponse response) {

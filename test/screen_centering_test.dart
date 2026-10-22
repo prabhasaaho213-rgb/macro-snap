@@ -44,10 +44,7 @@ void main() {
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
     await tester.pumpWidget(
-      MaterialApp(
-        theme: MacroSnapTheme.light,
-        home: screen,
-      ),
+      MaterialApp(theme: MacroSnapTheme.light, home: screen),
     );
     for (var i = 0; i < 4; i++) {
       await tester.pump(const Duration(milliseconds: 300));
@@ -61,11 +58,18 @@ void main() {
     testWidgets('login page centers its headline on $name', (tester) async {
       await pumpAt(tester, const PhoneLoginScreen(), size);
 
-      final offset = await verticalOffsetFraction(tester, 'Welcome to MacroSnap');
+      final offset = await verticalOffsetFraction(
+        tester,
+        'Welcome to MacroSnap',
+      );
       final limit = name == '320dp' ? 0.20 : 0.15;
-      expect(offset.abs(), lessThan(limit),
-          reason: 'headline centered on $name, actual offset: '
-              '${(offset * 100).toStringAsFixed(1)}% of height');
+      expect(
+        offset.abs(),
+        lessThan(limit),
+        reason:
+            'headline centered on $name, actual offset: '
+            '${(offset * 100).toStringAsFixed(1)}% of height',
+      );
     });
 
     testWidgets('onboarding page 1 centers its title on $name', (tester) async {
@@ -75,11 +79,17 @@ void main() {
         size,
       );
 
-      final offset =
-          await verticalOffsetFraction(tester, 'Welcome to\nMacroSnap');
-      expect(offset.abs(), lessThan(0.15),
-          reason: 'intro title centered on $name, actual offset: '
-              '${(offset * 100).toStringAsFixed(1)}% of height');
+      final offset = await verticalOffsetFraction(
+        tester,
+        'Welcome to\nMacroSnap',
+      );
+      expect(
+        offset.abs(),
+        lessThan(0.15),
+        reason:
+            'intro title centered on $name, actual offset: '
+            '${(offset * 100).toStringAsFixed(1)}% of height',
+      );
     });
   }
 }

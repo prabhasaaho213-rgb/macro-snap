@@ -34,7 +34,7 @@ class UpdatesScreen extends StatefulWidget {
   /// the user has already seen and puts a dot on the "What's New" row when the
   /// two differ — so a new release announces itself instead of waiting to be
   /// found.
-  static const String latestVersion = '1.4.96';
+  static const String latestVersion = '1.4.97';
 
   /// SharedPreferences key holding the latest version the user has seen.
   static const String seenVersionKey = 'updates_seen_version';
@@ -49,6 +49,17 @@ class _UpdatesScreenState extends State<UpdatesScreen> {
       version: UpdatesScreen.latestVersion,
       date: 'Latest',
       isLatest: true,
+      notes: [
+        'The scan result is a proper report card now: a health score out of 5, the ingredients with their weights and scores, and your tastiness verdict',
+        'Achievements: First Bite, Ten Plates, First Weigh-In, Week Warrior and Fortnight Flame - earned by logging, never by the number on the scale',
+        'Share your week: a summary card with your average calories, the days you hit your protein goal and your streak',
+        'A short animated logo introduces the launch while the app loads behind it',
+        'Your details from onboarding are editable in Settings > Profile, along with your achievements',
+      ],
+    ),
+    _UpdateEntry(
+      version: '1.4.96',
+      date: 'Earlier',
       notes: [
         'Launching is instant - the app draws its splash right away instead of sitting on a black screen',
         'The notification permission is now asked inside the app, not on top of a loading screen',
@@ -139,9 +150,7 @@ class _UpdatesScreenState extends State<UpdatesScreen> {
     _UpdateEntry(
       version: '1.4.83',
       date: 'Earlier',
-      notes: [
-        'Release notes — see what\u2019s new right in the app',
-      ],
+      notes: ['Release notes — see what\u2019s new right in the app'],
     ),
     _UpdateEntry(
       version: '1.4.5',
@@ -275,8 +284,10 @@ class _UpdatesScreenState extends State<UpdatesScreen> {
           Row(
             children: [
               Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 4,
+                ),
                 decoration: entry.isLatest
                     ? MacroSnapTheme.neonPill(MacroSnapTheme.neonGreen)
                     : BoxDecoration(
@@ -328,7 +339,9 @@ class _UpdatesScreenState extends State<UpdatesScreen> {
                       style: TextStyle(
                         fontSize: 13,
                         height: 1.35,
-                        color: isDark ? Colors.white70 : const Color(0xFF334155),
+                        color: isDark
+                            ? Colors.white70
+                            : const Color(0xFF334155),
                       ),
                     ),
                   ),

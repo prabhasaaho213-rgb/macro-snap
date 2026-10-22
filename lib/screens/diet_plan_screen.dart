@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../services/auth_http.dart';
 import '../core/theme.dart';
+import '../models/bmi.dart';
 import '../models/diet_profile.dart';
 import '../services/gemini_service.dart';
 import '../services/meal_store.dart';
@@ -25,7 +26,9 @@ class _DietPlanScreenState extends State<DietPlanScreen> {
   final _heightCtrl = TextEditingController();
   final _ageCtrl = TextEditingController();
   Gender _gender = Gender.male;
-  Goal _goal = Goal.loseWeight;
+  // Neutral default. "Lose weight" is the goal most people pick, but it must
+  // never be pre-selected for someone whose data we know nothing about.
+  Goal _goal = Goal.maintain;
   ActivityLevel _activity = ActivityLevel.sedentary;
   DietPreference _diet = DietPreference.vegetarian;
   DietProfile? _profile;
@@ -111,7 +114,7 @@ class _DietPlanScreenState extends State<DietPlanScreen> {
     );
   }
 
-  void _calculate() {
+  Future<void> _calculate() async {
     final w = double.tryParse(_weightCtrl.text);
     final h = double.tryParse(_heightCtrl.text);
     final a = int.tryParse(_ageCtrl.text);
@@ -124,6 +127,44 @@ class _DietPlanScreenState extends State<DietPlanScreen> {
       );
       return;
     }
+
+    // A deficit is not a safe plan below the healthy BMI range. The BMI screen
+    // already tells an underweight user to eat a small surplus; handing them a
+    // weight-loss target on the next screen contradicted that advice.
+    if (_goal == Goal.loseWeight) {
+      final bmi = BmiCalculator.value(weightKg: w, heightCm: h);
+      if (bmi != null && bmi < DietProfile.underweightBmi) {
+        final switchToMaintain = await showDialog<bool>(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(24),
+            ),
+            title: const Text('Weight loss is not safe at this weight'),
+            content: Text(
+              'Your BMI is ${BmiCalculator.displayValue(bmi).toStringAsFixed(1)}, '
+              'below the healthy range (18.5–24.9). A calorie deficit can do more '
+              'harm than good here — MacroSnap will use Maintain instead. If you '
+              'want to lose weight at this size, please talk to a doctor first.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.pop(ctx, true),
+                child: const Text('Use Maintain'),
+              ),
+            ],
+          ),
+        );
+        if (switchToMaintain != true) return;
+        if (!mounted) return;
+        setState(() => _goal = Goal.maintain);
+      }
+    }
+
     final profile = DietProfile(
       weightKg: w,
       heightCm: h,
@@ -173,8 +214,7 @@ class _DietPlanScreenState extends State<DietPlanScreen> {
         // A non-2xx body carries `message` (human-readable, e.g. the 429
         // rate-limit text) and, failing that, `error` (a machine code). Prefer
         // the message so the user never reads a bare `pro_required`.
-        final serverMessage =
-            (data['message'] ?? data['error'])?.toString();
+        final serverMessage = (data['message'] ?? data['error'])?.toString();
         if (data['error'] == 'pro_required') {
           // The server says this account is not Pro. That happens when the local
           // flag is stale — a free plan that expired since this screen loaded —
@@ -184,7 +224,8 @@ class _DietPlanScreenState extends State<DietPlanScreen> {
           if (!mounted) return;
           setState(() {
             _generating = false;
-            _aiError = serverMessage ??
+            _aiError =
+                serverMessage ??
                 'The AI meal plan is a Pro feature. Upgrade to build your plan.';
           });
           Navigator.push(

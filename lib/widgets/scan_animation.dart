@@ -133,9 +133,7 @@ class _ScanAnimationViewState extends State<ScanAnimationView>
 
             // Corner brackets.
             IgnorePointer(
-              child: CustomPaint(
-                painter: _BracketPainter(color: accent),
-              ),
+              child: CustomPaint(painter: _BracketPainter(color: accent)),
             ),
 
             // Sweeping scan line (only while analysing).
@@ -160,8 +158,8 @@ class _ScanAnimationViewState extends State<ScanAnimationView>
                   text: labels[i],
                   color: accent,
                   delay: Duration(
-                    milliseconds: 500 +
-                        ScanAnimationView.labelGap.inMilliseconds * i,
+                    milliseconds:
+                        500 + ScanAnimationView.labelGap.inMilliseconds * i,
                   ),
                 ),
               ),
@@ -196,7 +194,10 @@ class _ScanLine extends StatelessWidget {
             stops: const [0.0, 0.7, 1.0],
           ),
           border: Border(
-            bottom: BorderSide(color: Colors.white.withValues(alpha: 0.9), width: 2),
+            bottom: BorderSide(
+              color: Colors.white.withValues(alpha: 0.9),
+              width: 2,
+            ),
           ),
           boxShadow: [
             BoxShadow(

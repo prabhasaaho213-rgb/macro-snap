@@ -5,6 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../models/meal_record.dart';
 import '../services/account_partition.dart';
 import '../services/meal_sync_service.dart';
+import 'crash_reporting.dart';
 
 /// A scanned food item saved for quick re-add.
 class RecentFood {
@@ -34,44 +35,44 @@ class RecentFood {
 
   /// Convert to a MealRecord for logging.
   MealRecord toMealRecord() => MealRecord(
-        id: id,
-        date: DateTime.now(),
-        name: name,
-        category: 'recent',
-        calories: calories,
-        protein: protein,
-        carbs: carbs,
-        fats: fats,
-        fiber: fiber,
-        serving: serving,
-      );
+    id: id,
+    date: DateTime.now(),
+    name: name,
+    category: 'recent',
+    calories: calories,
+    protein: protein,
+    carbs: carbs,
+    fats: fats,
+    fiber: fiber,
+    serving: serving,
+  );
 
   Map<String, dynamic> toJson() => {
-        'id': id,
-        'name': name,
-        'calories': calories,
-        'protein': protein,
-        'carbs': carbs,
-        'fats': fats,
-        'fiber': fiber,
-        'serving': serving,
-        'scannedAt': scannedAt.toIso8601String(),
-        'imagePath': imagePath,
-      };
+    'id': id,
+    'name': name,
+    'calories': calories,
+    'protein': protein,
+    'carbs': carbs,
+    'fats': fats,
+    'fiber': fiber,
+    'serving': serving,
+    'scannedAt': scannedAt.toIso8601String(),
+    'imagePath': imagePath,
+  };
 
   factory RecentFood.fromJson(Map<String, dynamic> json) => RecentFood(
-        id: json['id'] as String? ?? '',
-        name: json['name'] as String? ?? 'Unknown',
-        calories: (json['calories'] as num?)?.toInt() ?? 0,
-        protein: (json['protein'] as num?)?.toDouble() ?? 0,
-        carbs: (json['carbs'] as num?)?.toDouble() ?? 0,
-        fats: (json['fats'] as num?)?.toDouble() ?? 0,
-        fiber: (json['fiber'] as num?)?.toDouble() ?? 0,
-        serving: json['serving'] as String? ?? '',
-        scannedAt: DateTime.tryParse(json['scannedAt'] as String? ?? '') ??
-            DateTime.now(),
-        imagePath: json['imagePath'] as String?,
-      );
+    id: json['id'] as String? ?? '',
+    name: json['name'] as String? ?? 'Unknown',
+    calories: (json['calories'] as num?)?.toInt() ?? 0,
+    protein: (json['protein'] as num?)?.toDouble() ?? 0,
+    carbs: (json['carbs'] as num?)?.toDouble() ?? 0,
+    fats: (json['fats'] as num?)?.toDouble() ?? 0,
+    fiber: (json['fiber'] as num?)?.toDouble() ?? 0,
+    serving: json['serving'] as String? ?? '',
+    scannedAt:
+        DateTime.tryParse(json['scannedAt'] as String? ?? '') ?? DateTime.now(),
+    imagePath: json['imagePath'] as String?,
+  );
 }
 
 /// Manages a recently-scanned foods list (max 50 items).
@@ -117,8 +118,7 @@ class RecentFoodService {
   /// Deduplicates by name (case-insensitive) — replaces old entry if exists.
   Future<void> add(RecentFood food) async {
     // Remove duplicate by name
-    _foods.removeWhere(
-        (f) => f.name.toLowerCase() == food.name.toLowerCase());
+    _foods.removeWhere((f) => f.name.toLowerCase() == food.name.toLowerCase());
     // Add to top
     _foods.insert(0, food);
     // Trim to max
@@ -145,15 +145,12 @@ class RecentFoodService {
   }
 
   /// Get the N most recent foods (for quick display).
-  List<RecentFood> recent({int count = 10}) =>
-      _foods.take(count).toList();
+  List<RecentFood> recent({int count = 10}) => _foods.take(count).toList();
 
   /// Search recent foods by name.
   List<RecentFood> search(String query) {
     final q = query.toLowerCase();
-    return _foods
-        .where((f) => f.name.toLowerCase().contains(q))
-        .toList();
+    return _foods.where((f) => f.name.toLowerCase().contains(q)).toList();
   }
 
   Future<void> _save() async {
@@ -165,7 +162,9 @@ class RecentFoodService {
       final key = AccountPartition.key(_prefsKey, suffix);
       final raw = jsonEncode(_foods.map((f) => f.toJson()).toList());
       await prefs.setString(key, raw);
-    } catch (e) { debugPrint("Error: $e"); }
+    } catch (e, st) {
+      logError('RecentFoodService._save', e, st);
+    }
   }
 
   /// Auto-sync to cloud (fire-and-forget).

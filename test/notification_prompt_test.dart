@@ -49,30 +49,29 @@ void main() {
     expect(find.text('Not now'), findsNothing);
   });
 
-  testWidgets(
-    'denied → prompt shows, Not now closes and sets cooldown',
-    (tester) async {
-      await tester.pumpWidget(
-        host(statusOf: () async => PermissionStatus.denied),
-      );
-      await tester.tap(find.text('go'));
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 300));
+  testWidgets('denied → prompt shows, Not now closes and sets cooldown', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      host(statusOf: () async => PermissionStatus.denied),
+    );
+    await tester.tap(find.text('go'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
 
-      expect(find.byIcon(Icons.notifications_active_rounded), findsOneWidget);
-      expect(find.text('Let me remind you 💬'), findsOneWidget);
-      expect(find.text('Allow notifications'), findsOneWidget);
+    expect(find.byIcon(Icons.notifications_active_rounded), findsOneWidget);
+    expect(find.text('Let me remind you 💬'), findsOneWidget);
+    expect(find.text('Allow notifications'), findsOneWidget);
 
-      await tester.tap(find.text('Not now'));
-      await tester.pump(); // let the pop fire
-      await tester.pump(const Duration(milliseconds: 300));
+    await tester.tap(find.text('Not now'));
+    await tester.pump(); // let the pop fire
+    await tester.pump(const Duration(milliseconds: 300));
 
-      expect(find.byIcon(Icons.notifications_active_rounded), findsNothing);
-      final prefs = await SharedPreferences.getInstance();
-      expect(prefs.getString('notif_prompt_last_shown'), isNotNull);
-      expect(tester.takeException(), isNull);
-    },
-  );
+    expect(find.byIcon(Icons.notifications_active_rounded), findsNothing);
+    final prefs = await SharedPreferences.getInstance();
+    expect(prefs.getString('notif_prompt_last_shown'), isNotNull);
+    expect(tester.takeException(), isNull);
+  });
 
   testWidgets('denied → allowing the permission closes the dialog', (
     tester,
@@ -173,6 +172,25 @@ void main() {
 
     // The launch prompt still respects the three-day quiet period; an explicit
     // tap in Settings must always be able to reach the permission.
+    expect(find.byIcon(Icons.notifications_active_rounded), findsOneWidget);
+    expect(find.text('Allow notifications'), findsOneWidget);
+  });
+
+  testWidgets('cooldown over → the launch prompt asks again', (tester) async {
+    // With the Settings row gone, this re-ask is the only in-app route back to
+    // reminders, so the expiry has to actually work.
+    SharedPreferences.setMockInitialValues({
+      'notif_prompt_last_shown': DateTime.now()
+          .subtract(const Duration(days: 4))
+          .toIso8601String(),
+    });
+    await tester.pumpWidget(
+      host(statusOf: () async => PermissionStatus.denied),
+    );
+    await tester.tap(find.text('go'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+
     expect(find.byIcon(Icons.notifications_active_rounded), findsOneWidget);
     expect(find.text('Allow notifications'), findsOneWidget);
   });

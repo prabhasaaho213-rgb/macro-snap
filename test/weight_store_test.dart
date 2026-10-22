@@ -111,18 +111,21 @@ void main() {
     expect(WeightStore.instance.latestKg, closeTo(72.9, 0.001));
   });
 
-  test('a corrupt row is dropped without losing the rest of the history',
-      () async {
-    SharedPreferences.setMockInitialValues({
-      'weight_log': '[{"date":"nonsense","kg":70},'
-          '{"date":"${DateTime(2026, 10, 20).toIso8601String()}","kg":68.4}]',
-    });
-    WeightStore.instance.resetForTest();
-    await WeightStore.instance.load();
+  test(
+    'a corrupt row is dropped without losing the rest of the history',
+    () async {
+      SharedPreferences.setMockInitialValues({
+        'weight_log':
+            '[{"date":"nonsense","kg":70},'
+            '{"date":"${DateTime(2026, 10, 20).toIso8601String()}","kg":68.4}]',
+      });
+      WeightStore.instance.resetForTest();
+      await WeightStore.instance.load();
 
-    expect(WeightStore.instance.entries.length, 1);
-    expect(WeightStore.instance.latestKg, closeTo(68.4, 0.001));
-  });
+      expect(WeightStore.instance.entries.length, 1);
+      expect(WeightStore.instance.latestKg, closeTo(68.4, 0.001));
+    },
+  );
 
   test('load announces itself to listeners', () async {
     WeightStore.instance.resetForTest();
@@ -139,25 +142,19 @@ void main() {
   });
 
   group('WeightTrendChart', () {
-    Widget host(Widget child) =>
-        MaterialApp(home: Scaffold(body: child));
+    Widget host(Widget child) => MaterialApp(home: Scaffold(body: child));
 
     testWidgets('draws nothing with fewer than two points', (tester) async {
       await tester.pumpWidget(
-        host(
-          const WeightTrendChart(
-            points: [],
-            height: 44,
-            animate: false,
-          ),
-        ),
+        host(const WeightTrendChart(points: [], height: 44, animate: false)),
       );
       expect(tester.getSize(find.byType(WeightTrendChart)).height, 0);
       expect(tester.takeException(), isNull);
     });
 
-    testWidgets('draws a line when there are two or more points',
-        (tester) async {
+    testWidgets('draws a line when there are two or more points', (
+      tester,
+    ) async {
       final today = DateTime.now();
       final points = [
         WeightEntry(date: today.subtract(const Duration(days: 6)), kg: 72),

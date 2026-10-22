@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../core/theme.dart';
+import '../models/bmi.dart';
 import '../models/diet_profile.dart';
 import '../services/meal_sync_service.dart';
 
@@ -41,7 +42,8 @@ class _OnboardingScreenState extends State<OnboardingScreen>
   double _height = 170;
   bool _isKg = true;
   bool _isCm = true;
-  Goal _goal = Goal.loseWeight;
+  // Neutral default — see diet_plan_screen: a deficit is never pre-selected.
+  Goal _goal = Goal.maintain;
   ActivityLevel _activity = ActivityLevel.moderate;
   DietPreference _diet = DietPreference.vegetarian;
 
@@ -54,15 +56,14 @@ class _OnboardingScreenState extends State<OnboardingScreen>
       vsync: this,
       duration: const Duration(milliseconds: 600),
     );
-    _entranceOpacity = Tween<double>(begin: 0, end: 1).animate(
-      CurvedAnimation(parent: _entranceAnim, curve: Curves.easeOut),
-    );
-    _entranceSlide = Tween<Offset>(
-      begin: const Offset(0, 0.08),
-      end: Offset.zero,
-    ).animate(
-      CurvedAnimation(parent: _entranceAnim, curve: Curves.easeOutCubic),
-    );
+    _entranceOpacity = Tween<double>(
+      begin: 0,
+      end: 1,
+    ).animate(CurvedAnimation(parent: _entranceAnim, curve: Curves.easeOut));
+    _entranceSlide =
+        Tween<Offset>(begin: const Offset(0, 0.08), end: Offset.zero).animate(
+          CurvedAnimation(parent: _entranceAnim, curve: Curves.easeOutCubic),
+        );
     _entranceAnim.forward();
   }
 
@@ -85,9 +86,62 @@ class _OnboardingScreenState extends State<OnboardingScreen>
     FocusManager.instance.primaryFocus?.unfocus();
   }
 
+  /// BMI from the dials as they currently stand.
+  double? get _bmi => BmiCalculator.value(
+    weightKg: _isKg ? _weight : _weight * 0.453592,
+    heightCm: _isCm ? _height : _height * 2.54,
+  );
+
+  bool get _isUnderweight {
+    final bmi = _bmi;
+    return bmi != null && bmi < DietProfile.underweightBmi;
+  }
+
+  /// Blocks a "Lose Weight" goal when the measurements entered put the user
+  /// below the healthy BMI range.
+  ///
+  /// The diet plan already refuses to save a deficit for an underweight user,
+  /// but onboarding could still hand them one-step-earlier: they left this
+  /// screen with `loseWeight` stored and no explanation. Returns true when the
+  /// goal has been switched to Maintain and onboarding may continue.
+  Future<bool> _confirmHealthyGoal() async {
+    final bmi = _bmi;
+    if (bmi == null) return true;
+    final keep = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Lose Weight is not safe at this BMI'),
+        content: Text(
+          'Your BMI is ${BmiCalculator.displayValue(bmi).toStringAsFixed(1)}, '
+          'below the healthy range (18.5–24.9). A calorie deficit can do more '
+          'harm than good here, so we will keep your goal at Maintain Weight. '
+          'You can change it later in Diet Plan.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Go Back'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('Use Maintain Weight'),
+          ),
+        ],
+      ),
+    );
+    if (keep != true) return false;
+    setState(() => _goal = Goal.maintain);
+    return true;
+  }
+
   Future<void> _complete() async {
     _dismissKeyboard();
     HapticFeedback.heavyImpact();
+    // Skip lands here too, so the safe-goal check cannot be bypassed by
+    // jumping straight to the end of onboarding.
+    if (_goal == Goal.loseWeight && _isUnderweight) {
+      if (!await _confirmHealthyGoal()) return;
+    }
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('onboarding_v2_done', true);
     final name = _name.isNotEmpty ? _name : _nameController.text.trim();
@@ -110,16 +164,21 @@ class _OnboardingScreenState extends State<OnboardingScreen>
     DietPlanService.instance.save(profile);
 
     if (mounted) {
-      Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (_) => widget.nextScreen),
-      );
+      Navigator.of(
+        context,
+      ).pushReplacement(MaterialPageRoute(builder: (_) => widget.nextScreen));
     }
   }
 
-  void _next() {
+  Future<void> _next() async {
     _dismissKeyboard();
     HapticFeedback.lightImpact();
     if (_page.value < _totalSteps - 1) {
+      // Page 6 is the goal step: stop an underweight user from walking out of
+      // it with a deficit selected.
+      if (_page.value == 6 && _goal == Goal.loseWeight && _isUnderweight) {
+        if (!await _confirmHealthyGoal()) return;
+      }
       // Reset entrance animation for next page
       _entranceAnim.reset();
       _entranceAnim.forward();
@@ -148,7 +207,9 @@ class _OnboardingScreenState extends State<OnboardingScreen>
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final bg = isDark ? MacroSnapTheme.surfaceDark : MacroSnapTheme.surfaceLight;
+    final bg = isDark
+        ? MacroSnapTheme.surfaceDark
+        : MacroSnapTheme.surfaceLight;
     final textColor = isDark ? Colors.white : const Color(0xFF1A1A1A);
     final subText = MacroSnapTheme.textSecondary(context);
 
@@ -185,7 +246,10 @@ class _OnboardingScreenState extends State<OnboardingScreen>
                       onPressed: _complete,
                       child: Text(
                         'Skip',
-                        style: TextStyle(color: subText, fontWeight: FontWeight.w600),
+                        style: TextStyle(
+                          color: subText,
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
                     ),
                   ],
@@ -196,13 +260,20 @@ class _OnboardingScreenState extends State<OnboardingScreen>
             ValueListenableBuilder<int>(
               valueListenable: _page,
               builder: (_, p, _) => Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 20,
+                  vertical: 8,
+                ),
                 child: ClipRRect(
                   borderRadius: BorderRadius.circular(4),
                   child: LinearProgressIndicator(
                     value: (p + 1) / _totalSteps,
-                    backgroundColor: isDark ? Colors.white10 : const Color(0xFFE2E8F0),
-                    valueColor: AlwaysStoppedAnimation(MacroSnapTheme.neonGreen),
+                    backgroundColor: isDark
+                        ? Colors.white10
+                        : const Color(0xFFE2E8F0),
+                    valueColor: AlwaysStoppedAnimation(
+                      MacroSnapTheme.neonGreen,
+                    ),
                     minHeight: 4,
                   ),
                 ),
@@ -220,7 +291,8 @@ class _OnboardingScreenState extends State<OnboardingScreen>
                   if (i != 1) _dismissKeyboard();
                 },
                 itemCount: _totalSteps,
-                itemBuilder: (_, i) => _buildPage(i, textColor, subText, isDark),
+                itemBuilder: (_, i) =>
+                    _buildPage(i, textColor, subText, isDark),
               ),
             ),
             // Next / Done button
@@ -260,28 +332,41 @@ class _OnboardingScreenState extends State<OnboardingScreen>
 
   Widget _buildPage(int i, Color textColor, Color subText, bool isDark) {
     switch (i) {
-      case 0: return _buildWelcome(textColor, subText, isDark);
-      case 1: return _buildName(textColor, subText, isDark);
-      case 2: return _buildGender(textColor, subText, isDark);
-      case 3: return _buildDialPage<int>(
-        title: 'How old are you?',
-        value: _age,
-        display: '$_age',
-        unit: 'years',
-        min: 14,
-        max: 100,
-        step: 1,
-        onChanged: (v) => setState(() => _age = v),
-        textColor: textColor,
-        subText: subText,
-        isDark: isDark,
-      );
-      case 4: return _buildWeightDial(textColor, subText, isDark);
-      case 5: return _buildHeightDial(textColor, subText, isDark);
-      case 6: return _buildGoal(textColor, subText, isDark);
-      case 7: return _buildActivity(textColor, subText, isDark);
-      case 8: return _buildDietPreference(textColor, subText, isDark);
-      default: return const SizedBox();
+      case 0:
+        return _buildWelcome(textColor, subText, isDark);
+      case 1:
+        return _buildName(textColor, subText, isDark);
+      case 2:
+        return _buildGender(textColor, subText, isDark);
+      case 3:
+        return _buildDialPage<int>(
+          title: 'How old are you?',
+          value: _age < 18 ? 18 : _age,
+          display: '${_age < 18 ? 18 : _age}',
+          unit: 'years',
+          // 18+, not 14+: every calorie target and BMI band in the app is an
+          // adult formula, and India's DPDP Act treats under-18s as children
+          // (parental consent). A 14-year-old was being handed an adult deficit.
+          min: 18,
+          max: 100,
+          step: 1,
+          onChanged: (v) => setState(() => _age = v),
+          textColor: textColor,
+          subText: subText,
+          isDark: isDark,
+        );
+      case 4:
+        return _buildWeightDial(textColor, subText, isDark);
+      case 5:
+        return _buildHeightDial(textColor, subText, isDark);
+      case 6:
+        return _buildGoal(textColor, subText, isDark);
+      case 7:
+        return _buildActivity(textColor, subText, isDark);
+      case 8:
+        return _buildDietPreference(textColor, subText, isDark);
+      default:
+        return const SizedBox();
     }
   }
 
@@ -290,10 +375,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
   Widget _animateIn(Widget child) {
     return FadeTransition(
       opacity: _entranceOpacity,
-      child: SlideTransition(
-        position: _entranceSlide,
-        child: child,
-      ),
+      child: SlideTransition(position: _entranceSlide, child: child),
     );
   }
 
@@ -315,7 +397,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
                 mainAxisAlignment: MainAxisAlignment.center,
                 mainAxisSize: MainAxisSize.min,
                 children: [
-              // Glowing circle icon
+                  // Glowing circle icon
                   Container(
                     width: 120,
                     height: 120,
@@ -330,13 +412,17 @@ class _OnboardingScreenState extends State<OnboardingScreen>
                       ),
                       boxShadow: [
                         BoxShadow(
-                          color: MacroSnapTheme.neonGreen.withValues(alpha: 0.3),
+                          color: MacroSnapTheme.neonGreen.withValues(
+                            alpha: 0.3,
+                          ),
                           blurRadius: 40,
                           spreadRadius: 10,
                         ),
                       ],
                     ),
-                    child: const Center(child: Text('📸', style: TextStyle(fontSize: 52))),
+                    child: const Center(
+                      child: Text('📸', style: TextStyle(fontSize: 52)),
+                    ),
                   ),
                   const SizedBox(height: 32),
                   Text(
@@ -387,7 +473,9 @@ class _OnboardingScreenState extends State<OnboardingScreen>
                   ],
                 ),
               ),
-              child: const Center(child: Text('👋', style: TextStyle(fontSize: 40))),
+              child: const Center(
+                child: Text('👋', style: TextStyle(fontSize: 40)),
+              ),
             ),
             const SizedBox(height: 28),
             TextField(
@@ -398,15 +486,24 @@ class _OnboardingScreenState extends State<OnboardingScreen>
               // Tapping the background closes the keyboard too.
               onTapOutside: (_) => _dismissKeyboard(),
               textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 28, fontWeight: FontWeight.w800, color: textColor),
+              style: TextStyle(
+                fontSize: 28,
+                fontWeight: FontWeight.w800,
+                color: textColor,
+              ),
               decoration: InputDecoration(
                 hintText: 'Enter your name',
                 hintStyle: TextStyle(color: subText.withValues(alpha: 0.5)),
                 border: UnderlineInputBorder(
-                  borderSide: BorderSide(color: MacroSnapTheme.neonGreen.withValues(alpha: 0.3)),
+                  borderSide: BorderSide(
+                    color: MacroSnapTheme.neonGreen.withValues(alpha: 0.3),
+                  ),
                 ),
                 focusedBorder: const UnderlineInputBorder(
-                  borderSide: BorderSide(color: MacroSnapTheme.neonGreen, width: 2),
+                  borderSide: BorderSide(
+                    color: MacroSnapTheme.neonGreen,
+                    width: 2,
+                  ),
                 ),
               ),
               onChanged: (v) => _name = v.trim(),
@@ -425,9 +522,25 @@ class _OnboardingScreenState extends State<OnboardingScreen>
         textColor,
         Row(
           children: [
-            Expanded(child: _genderOption('👨', 'Male', Gender.male, isDark, textColor)),
+            Expanded(
+              child: _genderOption(
+                '👨',
+                'Male',
+                Gender.male,
+                isDark,
+                textColor,
+              ),
+            ),
             const SizedBox(width: 16),
-            Expanded(child: _genderOption('👩', 'Female', Gender.female, isDark, textColor)),
+            Expanded(
+              child: _genderOption(
+                '👩',
+                'Female',
+                Gender.female,
+                isDark,
+                textColor,
+              ),
+            ),
           ],
         ),
       ),
@@ -478,7 +591,13 @@ class _OnboardingScreenState extends State<OnboardingScreen>
     );
   }
 
-  Widget _dietOption(String emoji, String label, DietPreference value, bool isDark, Color textColor) {
+  Widget _dietOption(
+    String emoji,
+    String label,
+    DietPreference value,
+    bool isDark,
+    Color textColor,
+  ) {
     final selected = _diet == value;
     return GestureDetector(
       onTap: () {
@@ -517,18 +636,27 @@ class _OnboardingScreenState extends State<OnboardingScreen>
               child: Text(emoji, style: const TextStyle(fontSize: 48)),
             ),
             const SizedBox(height: 12),
-            Text(label, style: TextStyle(
-              fontSize: 15,
-              fontWeight: FontWeight.w700,
-              color: textColor,
-            )),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.w700,
+                color: textColor,
+              ),
+            ),
           ],
         ),
       ),
     );
   }
 
-  Widget _genderOption(String emoji, String label, Gender value, bool isDark, Color textColor) {
+  Widget _genderOption(
+    String emoji,
+    String label,
+    Gender value,
+    bool isDark,
+    Color textColor,
+  ) {
     final selected = _gender == value;
     return GestureDetector(
       onTap: () {
@@ -567,11 +695,14 @@ class _OnboardingScreenState extends State<OnboardingScreen>
               child: Text(emoji, style: const TextStyle(fontSize: 48)),
             ),
             const SizedBox(height: 12),
-            Text(label, style: TextStyle(
-              fontSize: 17,
-              fontWeight: FontWeight.w700,
-              color: textColor,
-            )),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 17,
+                fontWeight: FontWeight.w700,
+                color: textColor,
+              ),
+            ),
           ],
         ),
       ),
@@ -642,7 +773,10 @@ class _OnboardingScreenState extends State<OnboardingScreen>
     final step = _isKg ? 1.0 : 1.0;
     final display = _isKg ? _weight : _weight / 0.453592;
     final itemCount = ((maxW - minW) / step).round();
-    final currentIndex = ((display - minW) / step).round().clamp(0, itemCount - 1);
+    final currentIndex = ((display - minW) / step).round().clamp(
+      0,
+      itemCount - 1,
+    );
 
     return _animateIn(
       _buildQuestion(
@@ -658,7 +792,10 @@ class _OnboardingScreenState extends State<OnboardingScreen>
               },
               child: AnimatedContainer(
                 duration: const Duration(milliseconds: 300),
-                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 20,
+                  vertical: 8,
+                ),
                 decoration: BoxDecoration(
                   color: MacroSnapTheme.neonGreen.withValues(alpha: 0.12),
                   borderRadius: BorderRadius.circular(24),
@@ -680,7 +817,10 @@ class _OnboardingScreenState extends State<OnboardingScreen>
             const SizedBox(height: 16),
             _GlowingNumber(text: display.toStringAsFixed(1)),
             const SizedBox(height: 4),
-            Text(_isKg ? 'kilograms' : 'pounds', style: TextStyle(fontSize: 16, color: subText)),
+            Text(
+              _isKg ? 'kilograms' : 'pounds',
+              style: TextStyle(fontSize: 16, color: subText),
+            ),
             const SizedBox(height: 24),
             _DialPicker(
               currentIndex: currentIndex,
@@ -708,7 +848,10 @@ class _OnboardingScreenState extends State<OnboardingScreen>
     final step = _isCm ? 1.0 : 1.0;
     final display = _isCm ? _height : _height / 2.54;
     final itemCount = ((maxH - minH) / step).round();
-    final currentIndex = ((display - minH) / step).round().clamp(0, itemCount - 1);
+    final currentIndex = ((display - minH) / step).round().clamp(
+      0,
+      itemCount - 1,
+    );
 
     return _animateIn(
       _buildQuestion(
@@ -724,7 +867,10 @@ class _OnboardingScreenState extends State<OnboardingScreen>
               },
               child: AnimatedContainer(
                 duration: const Duration(milliseconds: 300),
-                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 20,
+                  vertical: 8,
+                ),
                 decoration: BoxDecoration(
                   color: MacroSnapTheme.neonGreen.withValues(alpha: 0.12),
                   borderRadius: BorderRadius.circular(24),
@@ -746,7 +892,10 @@ class _OnboardingScreenState extends State<OnboardingScreen>
             const SizedBox(height: 16),
             _GlowingNumber(text: display.toStringAsFixed(1)),
             const SizedBox(height: 4),
-            Text(_isCm ? 'centimeters' : 'inches', style: TextStyle(fontSize: 16, color: subText)),
+            Text(
+              _isCm ? 'centimeters' : 'inches',
+              style: TextStyle(fontSize: 16, color: subText),
+            ),
             const SizedBox(height: 24),
             _DialPicker(
               currentIndex: currentIndex,
@@ -775,18 +924,74 @@ class _OnboardingScreenState extends State<OnboardingScreen>
         textColor,
         Column(
           children: [
-            _goalOption('🔥', 'Lose Weight', 'Calorie deficit for fat loss', Goal.loseWeight, isDark),
+            _goalOption(
+              '🔥',
+              'Lose Weight',
+              'Calorie deficit for fat loss',
+              Goal.loseWeight,
+              isDark,
+            ),
             const SizedBox(height: 12),
-            _goalOption('⚖️', 'Maintain Weight', 'Stay at your current weight', Goal.maintain, isDark),
+            _goalOption(
+              '⚖️',
+              'Maintain Weight',
+              'Stay at your current weight',
+              Goal.maintain,
+              isDark,
+            ),
             const SizedBox(height: 12),
-            _goalOption('💪', 'Gain Muscle', 'Calorie surplus for muscle gain', Goal.gainMuscle, isDark),
+            _goalOption(
+              '💪',
+              'Gain Muscle',
+              'Calorie surplus for muscle gain',
+              Goal.gainMuscle,
+              isDark,
+            ),
+            // The BMI screen already tells an underweight user to eat a small
+            // surplus; this is the same message at the moment the choice is
+            // made, instead of a contradiction two screens later.
+            if (_isUnderweight) ...[
+              const SizedBox(height: 16),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: MacroSnapTheme.neonYellow.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(
+                    color: MacroSnapTheme.neonYellow.withValues(alpha: 0.4),
+                  ),
+                ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('⚠️', style: TextStyle(fontSize: 16)),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Your BMI is '
+                        '${BmiCalculator.displayValue(_bmi!).toStringAsFixed(1)} '
+                        '— below the healthy range. A calorie deficit is not a '
+                        'safe goal right now; Maintenance or a small surplus is.',
+                        style: TextStyle(fontSize: 12, color: subText),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ],
         ),
       ),
     );
   }
 
-  Widget _goalOption(String emoji, String title, String subtitle, Goal value, bool isDark) {
+  Widget _goalOption(
+    String emoji,
+    String title,
+    String subtitle,
+    Goal value,
+    bool isDark,
+  ) {
     final selected = _goal == value;
     return GestureDetector(
       onTap: () {
@@ -828,23 +1033,37 @@ class _OnboardingScreenState extends State<OnboardingScreen>
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w700,
-                    color: Theme.of(context).brightness == Brightness.dark
-                        ? Colors.white
-                        : const Color(0xFF1A1A1A),
-                  )),
+                  Text(
+                    title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
+                      color: Theme.of(context).brightness == Brightness.dark
+                          ? Colors.white
+                          : const Color(0xFF1A1A1A),
+                    ),
+                  ),
                   const SizedBox(height: 2),
-                  Text(subtitle, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(
-                    fontSize: 13,
-                    color: MacroSnapTheme.textSecondary(context),
-                  )),
+                  Text(
+                    subtitle,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: MacroSnapTheme.textSecondary(context),
+                    ),
+                  ),
                 ],
               ),
             ),
             if (selected)
-              Icon(Icons.check_circle_rounded, color: MacroSnapTheme.neonGreen, size: 24),
+              Icon(
+                Icons.check_circle_rounded,
+                color: MacroSnapTheme.neonGreen,
+                size: 24,
+              ),
           ],
         ),
       ),
@@ -883,13 +1102,17 @@ class _OnboardingScreenState extends State<OnboardingScreen>
                         : (isDark ? const Color(0xFF1A1A22) : Colors.white),
                     borderRadius: BorderRadius.circular(16),
                     border: Border.all(
-                      color: selected ? MacroSnapTheme.neonGreen : Colors.transparent,
+                      color: selected
+                          ? MacroSnapTheme.neonGreen
+                          : Colors.transparent,
                       width: 2,
                     ),
                     boxShadow: selected
                         ? [
                             BoxShadow(
-                              color: MacroSnapTheme.neonGreen.withValues(alpha: 0.12),
+                              color: MacroSnapTheme.neonGreen.withValues(
+                                alpha: 0.12,
+                              ),
                               blurRadius: 16,
                               spreadRadius: 1,
                             ),
@@ -902,18 +1125,32 @@ class _OnboardingScreenState extends State<OnboardingScreen>
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(l.$2, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(
-                              fontSize: 15,
-                              fontWeight: FontWeight.w700,
-                              color: textColor,
-                            )),
+                            Text(
+                              l.$2,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontSize: 15,
+                                fontWeight: FontWeight.w700,
+                                color: textColor,
+                              ),
+                            ),
                             const SizedBox(height: 2),
-                            Text(l.$3, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 12, color: subText)),
+                            Text(
+                              l.$3,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(fontSize: 12, color: subText),
+                            ),
                           ],
                         ),
                       ),
                       if (selected)
-                        Icon(Icons.check_circle_rounded, color: MacroSnapTheme.neonGreen, size: 22),
+                        Icon(
+                          Icons.check_circle_rounded,
+                          color: MacroSnapTheme.neonGreen,
+                          size: 22,
+                        ),
                     ],
                   ),
                 ),
@@ -939,7 +1176,11 @@ class _OnboardingScreenState extends State<OnboardingScreen>
               Text(
                 title,
                 textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 24, fontWeight: FontWeight.w900, color: textColor),
+                style: TextStyle(
+                  fontSize: 24,
+                  fontWeight: FontWeight.w900,
+                  color: textColor,
+                ),
               ),
               const SizedBox(height: 28),
               child,
@@ -967,10 +1208,7 @@ class _GlowingNumber extends StatelessWidget {
       duration: const Duration(milliseconds: 300),
       curve: Curves.easeOutBack,
       builder: (_, scale, child) {
-        return Transform.scale(
-          scale: scale,
-          child: child,
-        );
+        return Transform.scale(scale: scale, child: child);
       },
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 12),
@@ -1101,7 +1339,10 @@ class _DialPickerState extends State<_DialPicker> {
         childDelegate: ListWheelChildBuilderDelegate(
           childCount: widget.itemCount,
           builder: (context, index) {
-            final distance = (index - _selectedIndex).abs().toDouble().clamp(0.0, 3.0);
+            final distance = (index - _selectedIndex).abs().toDouble().clamp(
+              0.0,
+              3.0,
+            );
             final opacity = (1.0 - (distance * 0.25)).clamp(0.3, 1.0);
             final scale = (1.0 - (distance * 0.08));
             final isSelected = index == _selectedIndex;
@@ -1128,10 +1369,7 @@ class _DialPickerState extends State<_DialPicker> {
                   ),
                   child: Opacity(
                     opacity: opacity,
-                    child: Transform.scale(
-                      scale: scale,
-                      child: Text(label),
-                    ),
+                    child: Transform.scale(scale: scale, child: Text(label)),
                   ),
                 ),
               ),

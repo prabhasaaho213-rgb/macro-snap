@@ -23,8 +23,11 @@ void main() {
 
   setUpAll(() {
     final file = File('firestore.rules');
-    expect(file.existsSync(), isTrue,
-        reason: 'firestore.rules must live at the project root');
+    expect(
+      file.existsSync(),
+      isTrue,
+      reason: 'firestore.rules must live at the project root',
+    );
     rules = file.readAsStringSync();
   });
 
@@ -33,7 +36,11 @@ void main() {
   /// contain placeholders like `{uid}`, whose braces must not be counted.
   String blockBody(String path) {
     final start = rules.indexOf('match /$path');
-    expect(start, isNonNegative, reason: 'match /$path must exist in the rules');
+    expect(
+      start,
+      isNonNegative,
+      reason: 'match /$path must exist in the rules',
+    );
     final open = rules.indexOf('{', start + 'match /$path'.length);
     var depth = 0;
     for (var i = open; i < rules.length; i++) {
@@ -52,34 +59,68 @@ void main() {
 
       expect(users, contains('allow read: if signedIn() && isOwner(uid);'));
       expect(users, contains('allow write: if false;'));
-      expect(users, isNot(contains('allow read, write')),
-          reason: 'the old read+write rule let a user set subscribed: true');
-      expect(users, isNot(contains('allow create')),
-          reason: 'clients must never create their own user doc');
-      expect(users, isNot(contains('allow update')),
-          reason: 'clients must never update their own user doc');
+      expect(
+        users,
+        isNot(contains('allow read, write')),
+        reason: 'the old read+write rule let a user set subscribed: true',
+      );
+      expect(
+        users,
+        isNot(contains('allow create')),
+        reason: 'clients must never create their own user doc',
+      );
+      expect(
+        users,
+        isNot(contains('allow update')),
+        reason: 'clients must never update their own user doc',
+      );
     });
   });
 
   group('meals/{mealId}', () {
     test('create requires the caller as owner', () {
       final meals = blockBody('meals/{mealId}').replaceAll('\r\n', '\n');
+      expect(meals, contains('allow create: if signedIn() && validMeal();'));
+      // The ownership half of validMeal() must still be there.
       expect(
-        meals,
-        contains('allow create: if signedIn()\n'
-            '        && request.resource.data.uid == request.auth.uid;'),
+        rules,
+        contains('d.uid == request.auth.uid'),
+        reason: 'a meal may only be written as yourself',
       );
     });
 
-    test('update re-checks the uid on BOTH copies, so a meal cannot be moved', () {
-      final meals = blockBody('meals/{mealId}');
-      expect(meals, contains('allow update: if signedIn()'));
-      expect(meals, contains('&& resource.data.uid == request.auth.uid'),
-          reason: 'you must own the stored meal');
-      expect(meals, contains('&& request.resource.data.uid == request.auth.uid'),
-          reason: 'and you must keep yourself as the owner');
-      expect(meals, isNot(contains('allow read, update, delete')),
-          reason: 'update needs its own, stricter rule');
+    test(
+      'update re-checks the uid on BOTH copies, so a meal cannot be moved',
+      () {
+        final meals = blockBody('meals/{mealId}');
+        expect(meals, contains('allow update: if signedIn()'));
+        expect(
+          meals,
+          contains('&& resource.data.uid == request.auth.uid'),
+          reason: 'you must own the stored meal',
+        );
+        expect(
+          meals,
+          contains('validMeal()'),
+          reason: 'and the new payload must still validate',
+        );
+        expect(
+          meals,
+          isNot(contains('allow read, update, delete')),
+          reason: 'update needs its own, stricter rule',
+        );
+      },
+    );
+
+    test('the payload is bounded — no giant or negative meal docs', () {
+      final meals = rules;
+      expect(meals, contains('d.name.size() <= 80'));
+      expect(meals, contains('d.calories >= 0'));
+      expect(
+        meals,
+        contains('d.size() <= 20'),
+        reason: 'field count is capped, so a doc cannot be padded',
+      );
     });
   });
 
@@ -91,20 +132,39 @@ void main() {
     ]) {
       test('$path is never client-writable', () {
         final body = blockBody(path);
-        expect(body, contains('allow write: if false;'),
-            reason: 'only the Admin SDK may write $path');
+        expect(
+          body,
+          contains('allow write: if false;'),
+          reason: 'only the Admin SDK may write $path',
+        );
       });
     }
 
-    test('referrals/{code} can only be created as yourself and never edited', () {
-      final referrals = blockBody('referrals/{code}').replaceAll('\r\n', '\n');
+    test(
+      'referrals/{code} can only be created as yourself and never edited',
+      () {
+        final referrals = blockBody('referrals/{code}');
+        expect(
+          referrals,
+          contains('request.resource.data.uid == request.auth.uid'),
+          reason: 'a user may only publish their OWN referral code',
+        );
+        expect(referrals, contains('allow update, delete: if false;'));
+      },
+    );
+
+    test('referrals/{code} is not readable by other signed-in users', () {
+      final referrals = blockBody('referrals/{code}');
       expect(
         referrals,
-        contains('allow create: if signedIn()\n'
-            '        && request.resource.data.uid == request.auth.uid;'),
-        reason: 'a user may only publish their OWN referral code',
+        isNot(contains('allow read: if signedIn();')),
+        reason: 'the old rule exposed every user\'s referral document',
       );
-      expect(referrals, contains('allow update, delete: if false;'));
+      expect(
+        referrals,
+        contains('resource.data.uid == request.auth.uid'),
+        reason: 'reads must be limited to your own code',
+      );
     });
   });
 

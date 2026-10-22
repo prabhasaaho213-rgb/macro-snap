@@ -33,15 +33,16 @@ class RecipeIngredient {
     'fiberPer100g': fiberPer100g,
   };
 
-  factory RecipeIngredient.fromJson(Map<String, dynamic> json) => RecipeIngredient(
-    name: json['name'] as String? ?? '',
-    grams: (json['grams'] as num?)?.toDouble() ?? 0,
-    caloriesPer100g: (json['caloriesPer100g'] as num?)?.toDouble() ?? 0,
-    proteinPer100g: (json['proteinPer100g'] as num?)?.toDouble() ?? 0,
-    carbsPer100g: (json['carbsPer100g'] as num?)?.toDouble() ?? 0,
-    fatsPer100g: (json['fatsPer100g'] as num?)?.toDouble() ?? 0,
-    fiberPer100g: (json['fiberPer100g'] as num?)?.toDouble() ?? 0,
-  );
+  factory RecipeIngredient.fromJson(Map<String, dynamic> json) =>
+      RecipeIngredient(
+        name: json['name'] as String? ?? '',
+        grams: (json['grams'] as num?)?.toDouble() ?? 0,
+        caloriesPer100g: (json['caloriesPer100g'] as num?)?.toDouble() ?? 0,
+        proteinPer100g: (json['proteinPer100g'] as num?)?.toDouble() ?? 0,
+        carbsPer100g: (json['carbsPer100g'] as num?)?.toDouble() ?? 0,
+        fatsPer100g: (json['fatsPer100g'] as num?)?.toDouble() ?? 0,
+        fiberPer100g: (json['fiberPer100g'] as num?)?.toDouble() ?? 0,
+      );
 }
 
 class Recipe {
@@ -80,8 +81,10 @@ class Recipe {
     id: json['id'] as String? ?? '',
     name: json['name'] as String? ?? '',
     servings: (json['servings'] as num?)?.toInt() ?? 4,
-    ingredients: (json['ingredients'] as List<dynamic>?)
-        ?.map((i) => RecipeIngredient.fromJson(i as Map<String, dynamic>))
-        .toList() ?? [],
+    ingredients:
+        (json['ingredients'] as List<dynamic>?)
+            ?.map((i) => RecipeIngredient.fromJson(i as Map<String, dynamic>))
+            .toList() ??
+        [],
   );
 }

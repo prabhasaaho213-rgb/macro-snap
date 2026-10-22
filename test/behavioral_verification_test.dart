@@ -26,24 +26,40 @@ void main() {
       final libDir = Directory('lib');
       if (!libDir.existsSync()) return;
       final issues = <String>[];
-      for (final f in libDir.listSync(recursive: true).whereType<File>().where((f) => f.path.endsWith('.dart'))) {
+      for (final f
+          in libDir
+              .listSync(recursive: true)
+              .whereType<File>()
+              .where((f) => f.path.endsWith('.dart'))) {
         if (f.readAsStringSync().contains("update_checker")) {
           issues.add(f.path);
         }
       }
-      expect(issues, isEmpty, reason: 'Files still importing update_checker: $issues');
+      expect(
+        issues,
+        isEmpty,
+        reason: 'Files still importing update_checker: $issues',
+      );
     });
 
     test('[macro_ring] is not imported anywhere', () {
       final libDir = Directory('lib');
       if (!libDir.existsSync()) return;
       final issues = <String>[];
-      for (final f in libDir.listSync(recursive: true).whereType<File>().where((f) => f.path.endsWith('.dart'))) {
+      for (final f
+          in libDir
+              .listSync(recursive: true)
+              .whereType<File>()
+              .where((f) => f.path.endsWith('.dart'))) {
         if (f.readAsStringSync().contains("macro_ring")) {
           issues.add(f.path);
         }
       }
-      expect(issues, isEmpty, reason: 'Files still importing macro_ring: $issues');
+      expect(
+        issues,
+        isEmpty,
+        reason: 'Files still importing macro_ring: $issues',
+      );
     });
 
     test('Deleted files no longer exist on disk', () {
@@ -67,35 +83,71 @@ void main() {
     });
 
     test('add → appears in todayMeals', () async {
-      await MealStore.instance.add(MealRecord(
-        id: 't1', date: DateTime.now(), name: 'Test',
-        category: 'x', calories: 350, protein: 12,
-        carbs: 50, fats: 8, fiber: 4, serving: '1',
-      ));
+      await MealStore.instance.add(
+        MealRecord(
+          id: 't1',
+          date: DateTime.now(),
+          name: 'Test',
+          category: 'x',
+          calories: 350,
+          protein: 12,
+          carbs: 50,
+          fats: 8,
+          fiber: 4,
+          serving: '1',
+        ),
+      );
       expect(MealStore.instance.todayMeals.any((m) => m.id == 't1'), true);
     });
 
     test('remove → disappears from todayMeals', () async {
-      await MealStore.instance.add(MealRecord(
-        id: 't2', date: DateTime.now(), name: 'Remove Me',
-        category: 'x', calories: 500, protein: 20,
-        carbs: 40, fats: 15, fiber: 5, serving: '1',
-      ));
+      await MealStore.instance.add(
+        MealRecord(
+          id: 't2',
+          date: DateTime.now(),
+          name: 'Remove Me',
+          category: 'x',
+          calories: 500,
+          protein: 20,
+          carbs: 40,
+          fats: 15,
+          fiber: 5,
+          serving: '1',
+        ),
+      );
       await MealStore.instance.remove('t2');
       expect(MealStore.instance.todayMeals.any((m) => m.id == 't2'), false);
     });
 
     test('remove one meal does not affect other meals', () async {
-      await MealStore.instance.add(MealRecord(
-        id: 'keep', date: DateTime.now(), name: 'Keep',
-        category: 'x', calories: 300, protein: 10,
-        carbs: 30, fats: 5, fiber: 2, serving: '1',
-      ));
-      await MealStore.instance.add(MealRecord(
-        id: 'del', date: DateTime.now(), name: 'Delete',
-        category: 'x', calories: 400, protein: 15,
-        carbs: 35, fats: 10, fiber: 3, serving: '1',
-      ));
+      await MealStore.instance.add(
+        MealRecord(
+          id: 'keep',
+          date: DateTime.now(),
+          name: 'Keep',
+          category: 'x',
+          calories: 300,
+          protein: 10,
+          carbs: 30,
+          fats: 5,
+          fiber: 2,
+          serving: '1',
+        ),
+      );
+      await MealStore.instance.add(
+        MealRecord(
+          id: 'del',
+          date: DateTime.now(),
+          name: 'Delete',
+          category: 'x',
+          calories: 400,
+          protein: 15,
+          carbs: 35,
+          fats: 10,
+          fiber: 3,
+          serving: '1',
+        ),
+      );
       expect(MealStore.instance.todayMeals.length, 2);
       await MealStore.instance.remove('del');
       expect(MealStore.instance.todayMeals.length, 1);
@@ -104,18 +156,30 @@ void main() {
     });
 
     test('changeNotifier fires after remove (triggers UI rebuild)', () async {
-      await MealStore.instance.add(MealRecord(
-        id: 'n1', date: DateTime.now(), name: 'Notif',
-        category: 'x', calories: 150, protein: 5,
-        carbs: 20, fats: 5, fiber: 2, serving: '1',
-      ));
+      await MealStore.instance.add(
+        MealRecord(
+          id: 'n1',
+          date: DateTime.now(),
+          name: 'Notif',
+          category: 'x',
+          calories: 150,
+          protein: 5,
+          carbs: 20,
+          fats: 5,
+          fiber: 2,
+          serving: '1',
+        ),
+      );
       int calls = 0;
       void listener() => calls++;
       MealStore.instance.changeNotifier.addListener(listener);
       await MealStore.instance.remove('n1');
       MealStore.instance.changeNotifier.removeListener(listener);
-      expect(calls, greaterThanOrEqualTo(1),
-          reason: 'changeNotifier must fire so Dashboard rebuilds');
+      expect(
+        calls,
+        greaterThanOrEqualTo(1),
+        reason: 'changeNotifier must fire so Dashboard rebuilds',
+      );
     });
 
     test('idempotent — removing same ID twice does not throw', () async {
@@ -131,26 +195,32 @@ void main() {
   //   runApp(), leaving it permanently unable to open)
   // ──────────────────────────────────────────────────────────
   group('Startup resilience — corrupted persisted data', () {
-    test('load() survives corrupted habits JSON — resets instead of throwing',
-        () async {
-      SharedPreferences.setMockInitialValues({'habits': '{not valid json!!'});
-      await HabitStore.instance.reload();
-      expect(HabitStore.instance.habits, isEmpty);
-    });
+    test(
+      'load() survives corrupted habits JSON — resets instead of throwing',
+      () async {
+        SharedPreferences.setMockInitialValues({'habits': '{not valid json!!'});
+        await HabitStore.instance.reload();
+        expect(HabitStore.instance.habits, isEmpty);
+      },
+    );
 
-    test('load() survives corrupted water_log JSON — resets instead of throwing',
-        () async {
-      SharedPreferences.setMockInitialValues({'water_log': 'oops['});
-      await HabitStore.instance.reload();
-      expect(HabitStore.instance.waterToday, 0);
-    });
+    test(
+      'load() survives corrupted water_log JSON — resets instead of throwing',
+      () async {
+        SharedPreferences.setMockInitialValues({'water_log': 'oops['});
+        await HabitStore.instance.reload();
+        expect(HabitStore.instance.waterToday, 0);
+      },
+    );
 
-    test('load() survives habits stored as wrong type (Map instead of List)',
-        () async {
-      SharedPreferences.setMockInitialValues({'habits': '{"a":1}'});
-      await HabitStore.instance.reload();
-      expect(HabitStore.instance.habits, isEmpty);
-    });
+    test(
+      'load() survives habits stored as wrong type (Map instead of List)',
+      () async {
+        SharedPreferences.setMockInitialValues({'habits': '{"a":1}'});
+        await HabitStore.instance.reload();
+        expect(HabitStore.instance.habits, isEmpty);
+      },
+    );
   });
 
   // ──────────────────────────────────────────────────────────
@@ -164,14 +234,19 @@ void main() {
     });
 
     test('create habit → appears in list', () async {
-      await HabitStore.instance.add(Habit(
-        id: 'h1', name: 'Read', emoji: '📚', colorValue: 0xFF00FF66,
-      ));
+      await HabitStore.instance.add(
+        Habit(id: 'h1', name: 'Read', emoji: '📚', colorValue: 0xFF00FF66),
+      );
       expect(HabitStore.instance.habits.any((h) => h.id == 'h1'), true);
     });
 
     test('remove habit → disappears from list', () async {
-      final h = Habit(id: 'h2', name: 'Run', emoji: '🏃', colorValue: 0xFFFF007F);
+      final h = Habit(
+        id: 'h2',
+        name: 'Run',
+        emoji: '🏃',
+        colorValue: 0xFFFF007F,
+      );
       await HabitStore.instance.add(h);
       expect(HabitStore.instance.habits.length, 1);
       await HabitStore.instance.remove(h);
@@ -179,7 +254,12 @@ void main() {
     });
 
     test('toggle completion two-way state transition', () {
-      final h = Habit(id: 'h3', name: 'Meditate', emoji: '🧘', colorValue: 0xFF6C3BFF);
+      final h = Habit(
+        id: 'h3',
+        name: 'Meditate',
+        emoji: '🧘',
+        colorValue: 0xFF6C3BFF,
+      );
       expect(h.isCompleted(DateTime.now()), false);
       h.toggle(DateTime.now());
       expect(h.isCompleted(DateTime.now()), true);
@@ -189,8 +269,21 @@ void main() {
 
     test('todayHabits excludes paused habits', () {
       HabitStore.instance.habits.addAll([
-        Habit(id: 'a', name: 'A', emoji: '📚', colorValue: 0xFF00FF66, frequency: 'Daily'),
-        Habit(id: 'b', name: 'B', emoji: '🏃', colorValue: 0xFFFF007F, frequency: 'Daily', paused: true),
+        Habit(
+          id: 'a',
+          name: 'A',
+          emoji: '📚',
+          colorValue: 0xFF00FF66,
+          frequency: 'Daily',
+        ),
+        Habit(
+          id: 'b',
+          name: 'B',
+          emoji: '🏃',
+          colorValue: 0xFFFF007F,
+          frequency: 'Daily',
+          paused: true,
+        ),
       ]);
       expect(HabitStore.instance.todayHabits.length, 1);
       expect(HabitStore.instance.todayHabits.any((h) => h.id == 'a'), true);
@@ -198,7 +291,15 @@ void main() {
     });
 
     test('todayCompleted increments correctly after toggle', () {
-      HabitStore.instance.habits.add(Habit(id: 'c', name: 'C', emoji: '💻', colorValue: 0xFF6C3BFF, frequency: 'Daily'));
+      HabitStore.instance.habits.add(
+        Habit(
+          id: 'c',
+          name: 'C',
+          emoji: '💻',
+          colorValue: 0xFF6C3BFF,
+          frequency: 'Daily',
+        ),
+      );
       expect(HabitStore.instance.todayCompleted, 0);
       HabitStore.instance.habits.first.toggle(DateTime.now());
       expect(HabitStore.instance.todayCompleted, 1);

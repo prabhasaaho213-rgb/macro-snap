@@ -10,13 +10,10 @@ import '../models/habit.dart' show Habit, dateKey;
 /// the highest single-day count in the shown month).
 class ConsistencyMap extends StatefulWidget {
   final List<Habit> habits;
-  final void Function(DateTime date, int count, List<String> habitNames)? onCellTap;
+  final void Function(DateTime date, int count, List<String> habitNames)?
+  onCellTap;
 
-  const ConsistencyMap({
-    super.key,
-    required this.habits,
-    this.onCellTap,
-  });
+  const ConsistencyMap({super.key, required this.habits, this.onCellTap});
 
   @override
   State<ConsistencyMap> createState() => _ConsistencyMapState();
@@ -100,10 +97,7 @@ class _ConsistencyMapState extends State<ConsistencyMap> {
             ),
             Text(
               '${_monthName(shownMonth)} $shownYear',
-              style: const TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w800,
-              ),
+              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800),
             ),
             _navButton(
               icon: Icons.chevron_right_rounded,
@@ -149,7 +143,8 @@ class _ConsistencyMapState extends State<ConsistencyMap> {
                     final day = cell - leading + 1;
                     final isThisMonth = day >= 1 && day <= daysInMonth;
                     final date = DateTime(shownYear, shownMonth, day);
-                    final isToday = isThisMonth &&
+                    final isToday =
+                        isThisMonth &&
                         date.year == today.year &&
                         date.month == today.month &&
                         date.day == today.day;
@@ -169,14 +164,17 @@ class _ConsistencyMapState extends State<ConsistencyMap> {
                         .toList();
 
                     return Padding(
-                      padding: EdgeInsets.only(right: colIndex == 6 ? 0 : cellGap),
+                      padding: EdgeInsets.only(
+                        right: colIndex == 6 ? 0 : cellGap,
+                      ),
                       child: Tooltip(
                         message:
                             '${date.day}/${date.month}/${date.year}: $count/${widget.habits.length} habits',
                         child: GestureDetector(
                           onTap: isFuture
                               ? null
-                              : () => widget.onCellTap?.call(date, count, names),
+                              : () =>
+                                    widget.onCellTap?.call(date, count, names),
                           child: Container(
                             width: cellSize,
                             height: cellSize,
@@ -272,8 +270,18 @@ class _ConsistencyMapState extends State<ConsistencyMap> {
 
   String _monthName(int month) {
     const months = [
-      'January', 'February', 'March', 'April', 'May', 'June',
-      'July', 'August', 'September', 'October', 'November', 'December',
+      'January',
+      'February',
+      'March',
+      'April',
+      'May',
+      'June',
+      'July',
+      'August',
+      'September',
+      'October',
+      'November',
+      'December',
     ];
     return months[(month - 1).clamp(0, 11)];
   }

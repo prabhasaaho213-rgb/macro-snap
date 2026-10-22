@@ -27,7 +27,9 @@ void main() {
       return http.Response('{"ok":true}', 200);
     });
 
-    final res = await AuthHttp.get(Uri.parse('https://api.test/me/entitlements'));
+    final res = await AuthHttp.get(
+      Uri.parse('https://api.test/me/entitlements'),
+    );
 
     expect(res.statusCode, 200);
     expect(seen!['Authorization'], 'Bearer id-token-1');
@@ -43,8 +45,11 @@ void main() {
 
     await AuthHttp.get(Uri.parse('https://api.test/trial/status'));
 
-    expect(seen!.containsKey('Authorization'), isFalse,
-        reason: 'guests must not send a token');
+    expect(
+      seen!.containsKey('Authorization'),
+      isFalse,
+      reason: 'guests must not send a token',
+    );
   });
 
   test('a 401 refreshes the token once and retries', () async {
@@ -59,11 +64,15 @@ void main() {
     AuthHttp.client = MockClient((req) async {
       attempts++;
       sentTokens.add(req.headers['Authorization']);
-      if (attempts == 1) return http.Response('{"error":"unauthenticated"}', 401);
+      if (attempts == 1) {
+        return http.Response('{"error":"unauthenticated"}', 401);
+      }
       return http.Response('{"subscribed":false}', 200);
     });
 
-    final res = await AuthHttp.get(Uri.parse('https://api.test/subscription/status'));
+    final res = await AuthHttp.get(
+      Uri.parse('https://api.test/subscription/status'),
+    );
 
     expect(res.statusCode, 200, reason: 'the retry must succeed');
     expect(attempts, 2, reason: 'exactly one retry');
@@ -124,7 +133,9 @@ void main() {
       seen = req.headers;
       // First attempt: an expired token; the retry must rebuild the multipart
       // request (a StreamedRequest can only be sent once).
-      if (attempts == 1) return http.Response('{"error":"unauthenticated"}', 401);
+      if (attempts == 1) {
+        return http.Response('{"error":"unauthenticated"}', 401);
+      }
       return http.Response('{"scans_used":1,"scans_limit":3}', 200);
     });
 
@@ -139,6 +150,10 @@ void main() {
     expect(seen!['Authorization'], 'Bearer tok');
     expect(seen!['Content-Type'], contains('multipart/form-data'));
     expect(body, contains('name="image"'), reason: 'the file field is sent');
-    expect(body, contains('fake-jpeg-bytes'), reason: 'the file bytes are sent');
+    expect(
+      body,
+      contains('fake-jpeg-bytes'),
+      reason: 'the file bytes are sent',
+    );
   });
 }

@@ -33,7 +33,8 @@ class ReminderSpec {
   /// Title/body, computed at schedule time so it can reference real data
   /// (yesterday's calories, current streak, weekly stats). Must never
   /// throw — callers fall back to the generic copy on any data error.
-  final Future<({String title, String body})> Function(String? subscribedDate) copy;
+  final Future<({String title, String body})> Function(String? subscribedDate)
+  copy;
 
   /// When set, [ReminderRegistry] checks this prefs marker before arming:
   /// if it holds today's date, the reminder is scheduled from tomorrow
@@ -123,9 +124,8 @@ class ReminderRegistry {
       match: DateTimeComponents.time,
       subscriberOnly: false,
       next: (_) => ReminderCopy.nextDaily(19, 30),
-      copy: (_) async => NotificationBranding.streakCopy(
-        streak: await _currentStreak(),
-      ),
+      copy: (_) async =>
+          NotificationBranding.streakCopy(streak: await _currentStreak()),
       suppressMarkerKey: _keyStreakSuppressed,
     ),
     // Weekly summary (id 5) — subscribers only.
@@ -220,7 +220,10 @@ class ReminderRegistry {
       copy.title,
       copy.body,
       when,
-      NotificationDetails(android: details, iOS: const DarwinNotificationDetails()),
+      NotificationDetails(
+        android: details,
+        iOS: const DarwinNotificationDetails(),
+      ),
       androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
       matchDateTimeComponents: spec.match,
       uiLocalNotificationDateInterpretation:
@@ -233,16 +236,15 @@ class ReminderRegistry {
   Future<void> _scheduleBuiltIns(String? subscribedDate) async {
     // Lifetime subscribers (admin) never get expiry reminders — the
     // '1900-01-01T00:00:00.000' marker means the subscription never expires.
-    final isLifetime = subscribedDate != null &&
-        subscribedDate.startsWith('1900');
+    final isLifetime =
+        subscribedDate != null && subscribedDate.startsWith('1900');
     for (final spec in _reminders) {
       if (spec.subscriberOnly &&
           (subscribedDate == null || subscribedDate.isEmpty)) {
         continue;
       }
       // Skip expiry/expired reminders for lifetime subscribers.
-      if (isLifetime &&
-          (spec.id == expiryReminderId || spec.id == expiredId)) {
+      if (isLifetime && (spec.id == expiryReminderId || spec.id == expiredId)) {
         continue;
       }
       await _safe(() => _scheduleReminder(spec, subscribedDate));
@@ -412,7 +414,10 @@ class ReminderRegistry {
       copy.title,
       copy.body,
       tomorrow,
-      NotificationDetails(android: details, iOS: const DarwinNotificationDetails()),
+      NotificationDetails(
+        android: details,
+        iOS: const DarwinNotificationDetails(),
+      ),
       androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
       matchDateTimeComponents: DateTimeComponents.time,
       uiLocalNotificationDateInterpretation:
@@ -470,13 +475,13 @@ class ReminderRegistry {
     bool subscribed = false,
     int enabledHabits = 0,
   }) => [
-        'Subscription: ${subscribed ? 'active' : 'free'}',
-        'Habits with reminders: $enabledHabits',
-        for (final spec in _reminders)
-          '#${spec.id} ${spec.channelName} '
-              '${spec.subscriberOnly ? '(subscriber only)' : '(always)'} '
-              '${spec.match == DateTimeComponents.dayOfWeekAndTime ? '(weekly)' : '(daily)'}',
-      ];
+    'Subscription: ${subscribed ? 'active' : 'free'}',
+    'Habits with reminders: $enabledHabits',
+    for (final spec in _reminders)
+      '#${spec.id} ${spec.channelName} '
+          '${spec.subscriberOnly ? '(subscriber only)' : '(always)'} '
+          '${spec.match == DateTimeComponents.dayOfWeekAndTime ? '(weekly)' : '(daily)'}',
+  ];
 
   Future<void> _safe(Future<void> Function() fn) async {
     try {

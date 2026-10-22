@@ -1,10 +1,12 @@
 import 'dart:convert';
-import 'package:flutter/foundation.dart' show debugPrint;
+import 'dart:math' as math;
+
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:io';
 import '../services/account_partition.dart';
 import '../services/meal_sync_service.dart';
+import '../services/crash_reporting.dart';
 
 enum Goal { loseWeight, maintain, gainMuscle }
 
@@ -17,6 +19,17 @@ enum Gender { male, female }
 enum DietPreference { vegetarian, nonVegetarian }
 
 class DietProfile {
+  /// Absolute daily-intake floors. A "deficit" that lands below these stops
+  /// being a diet: below roughly 1200 kcal (women) / 1500 kcal (men) it is very
+  /// hard to meet basic nutrient needs without medical supervision. A 45 kg,
+  /// 150 cm, 25-year-old woman on a plain TDEE − 500 deficit used to be given
+  /// 822 kcal a day; the target is now floored at the larger of BMR and these.
+  static const int safeMinimumCaloriesFemale = 1200;
+  static const int safeMinimumCaloriesMale = 1500;
+
+  /// Below this the "weight loss" goal is a health risk, not a plan.
+  static const double underweightBmi = 18.5;
+
   final double weightKg;
   final double heightCm;
   final int age;
@@ -56,15 +69,34 @@ class DietProfile {
     return bmr * (multipliers[activity] ?? 1.2);
   }
 
+  /// Body-mass index for this profile, or null when the numbers are unusable.
+  double? get bmi {
+    if (weightKg <= 0 || heightCm <= 0) return null;
+    final metres = heightCm / 100;
+    final value = weightKg / (metres * metres);
+    return value.isFinite ? value : null;
+  }
+
+  bool get isUnderweight {
+    final value = bmi;
+    return value != null && value < underweightBmi;
+  }
+
+  int get safeMinimumCalories => gender == Gender.male
+      ? safeMinimumCaloriesMale
+      : safeMinimumCaloriesFemale;
+
   int get targetCalories {
-    switch (goal) {
-      case Goal.loseWeight:
-        return (tdee - 500).round();
-      case Goal.maintain:
-        return tdee.round();
-      case Goal.gainMuscle:
-        return (tdee + 300).round();
-    }
+    final raw = switch (goal) {
+      Goal.loseWeight => (tdee - 500).round(),
+      Goal.maintain => tdee.round(),
+      Goal.gainMuscle => (tdee + 300).round(),
+    };
+    // Never prescribe below BMR or the sex-specific safe minimum, whichever
+    // is higher. BMR alone still allows a deficit for most people; it is the
+    // hard stop for very small bodies.
+    final floor = math.max(bmr.round(), safeMinimumCalories);
+    return raw < floor ? floor : raw;
   }
 
   double get targetProtein {
@@ -108,7 +140,9 @@ class DietProfile {
       ),
       goal: Goal.values.firstWhere(
         (g) => g.name == goalName,
-        orElse: () => Goal.loseWeight,
+        // A profile with no saved goal must never inherit "weight loss" by
+        // accident — maintain is the neutral default.
+        orElse: () => Goal.maintain,
       ),
       activity: ActivityLevel.values.firstWhere(
         (a) => a.name == activityName,
@@ -143,7 +177,9 @@ class DietPlanService {
       final suffix = AccountPartition.suffix(
         AccountPartition.activeFromPrefs(prefs),
       );
-      final file = File('${dir.path}/${AccountPartition.key('diet_profile', suffix)}.json');
+      final file = File(
+        '${dir.path}/${AccountPartition.key('diet_profile', suffix)}.json',
+      );
       if (!await file.exists() && suffix.isNotEmpty) {
         // One-shot migration: attribute the legacy pre-partitioning file to
         // this account; the move deletes the legacy file so a later
@@ -165,7 +201,9 @@ class DietPlanService {
           await file.writeAsString(jsonEncode(cloudProfile));
         }
       }
-    } catch (e) { debugPrint("Error: $e"); }
+    } catch (e, st) {
+      logError('DietPlanService.load', e, st);
+    }
   }
 
   Future<void> save(DietProfile profile) async {
@@ -176,11 +214,15 @@ class DietPlanService {
       final suffix = AccountPartition.suffix(
         AccountPartition.activeFromPrefs(prefs),
       );
-      final file = File('${dir.path}/${AccountPartition.key('diet_profile', suffix)}.json');
+      final file = File(
+        '${dir.path}/${AccountPartition.key('diet_profile', suffix)}.json',
+      );
       await file.writeAsString(jsonEncode(profile.toJson()));
       // Auto-sync to cloud (fire-and-forget)
       MealSyncService.syncDietProfile(profile.toJson());
-    } catch (e) { debugPrint("Error: $e"); }
+    } catch (e, st) {
+      logError('DietPlanService.save', e, st);
+    }
   }
 
   static String goalLabel(Goal g) {

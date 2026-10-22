@@ -57,7 +57,8 @@ void main() {
       expect(
         prefs.getString('habits'),
         isNull,
-        reason: 'legacy key is deleted after migration so B can never '
+        reason:
+            'legacy key is deleted after migration so B can never '
             'inherit A\u2019s data',
       );
       expect(prefs.getString('habits_a_gmail_com'), isNotNull);
@@ -82,28 +83,32 @@ void main() {
       );
     });
 
-    test('a signed-in account writing habits never touches the guest keys',
-        () async {
-      SharedPreferences.setMockInitialValues({'phone': 'a@gmail.com'});
-      final store = HabitStore.instance;
-      await store.reload();
-      store.habits.clear();
-      await store.add(Habit(
-        id: 'g1',
-        name: 'Drink water',
-        emoji: '💧',
-        colorValue: 0xFF00CC52,
-        frequency: 'Daily',
-      ));
+    test(
+      'a signed-in account writing habits never touches the guest keys',
+      () async {
+        SharedPreferences.setMockInitialValues({'phone': 'a@gmail.com'});
+        final store = HabitStore.instance;
+        await store.reload();
+        store.habits.clear();
+        await store.add(
+          Habit(
+            id: 'g1',
+            name: 'Drink water',
+            emoji: '💧',
+            colorValue: 0xFF00CC52,
+            frequency: 'Daily',
+          ),
+        );
 
-      final prefs = await SharedPreferences.getInstance();
-      expect(prefs.getString('habits_a_gmail_com'), isNotNull);
-      expect(prefs.getString('habits'), isNull);
+        final prefs = await SharedPreferences.getInstance();
+        expect(prefs.getString('habits_a_gmail_com'), isNotNull);
+        expect(prefs.getString('habits'), isNull);
 
-      // Logout (phone cleared) → guest reads the legacy keys, which are empty.
-      await prefs.remove('phone');
-      await store.reload();
-      expect(store.habits, isEmpty);
-    });
+        // Logout (phone cleared) → guest reads the legacy keys, which are empty.
+        await prefs.remove('phone');
+        await store.reload();
+        expect(store.habits, isEmpty);
+      },
+    );
   });
 }

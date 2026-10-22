@@ -72,7 +72,9 @@ class _VegPlanScreenState extends State<VegPlanScreen> {
           content: Text('✅ Logged "${item.name}" (${item.calories} kcal)'),
           behavior: SnackBarBehavior.floating,
           backgroundColor: MacroSnapTheme.neonGreen,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
           duration: const Duration(seconds: 2),
         ),
       );
@@ -102,8 +104,9 @@ class _VegPlanScreenState extends State<VegPlanScreen> {
     final groups = _filteredGroups;
 
     return Scaffold(
-      backgroundColor:
-          isDark ? MacroSnapTheme.surfaceDark : MacroSnapTheme.surfaceLight,
+      backgroundColor: isDark
+          ? MacroSnapTheme.surfaceDark
+          : MacroSnapTheme.surfaceLight,
       appBar: AppBar(
         leading: IconButton(
           icon: Icon(
@@ -201,7 +204,10 @@ class _VegPlanScreenState extends State<VegPlanScreen> {
             crossAxisAlignment: WrapCrossAlignment.center,
             children: [
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 6,
+                ),
                 decoration: BoxDecoration(
                   color: MacroSnapTheme.macroFiber.withValues(alpha: 0.12),
                   borderRadius: BorderRadius.circular(20),
@@ -228,7 +234,11 @@ class _VegPlanScreenState extends State<VegPlanScreen> {
           const SizedBox(height: 10),
           Row(
             children: [
-              _macroStat('Protein', plan.totalProtein, MacroSnapTheme.macroProtein),
+              _macroStat(
+                'Protein',
+                plan.totalProtein,
+                MacroSnapTheme.macroProtein,
+              ),
               const SizedBox(width: 10),
               _macroStat('Carbs', plan.totalCarbs, MacroSnapTheme.macroCarbs),
               const SizedBox(width: 10),
@@ -355,7 +365,9 @@ class _VegPlanScreenState extends State<VegPlanScreen> {
                         vertical: 4,
                       ),
                       decoration: BoxDecoration(
-                        color: MacroSnapTheme.macroFiber.withValues(alpha: 0.12),
+                        color: MacroSnapTheme.macroFiber.withValues(
+                          alpha: 0.12,
+                        ),
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: const Icon(
@@ -470,7 +482,10 @@ class _VegPlanScreenState extends State<VegPlanScreen> {
               ),
               const SizedBox(width: 8),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 5,
+                ),
                 decoration: BoxDecoration(
                   color: MacroSnapTheme.macroFiber.withValues(alpha: 0.12),
                   borderRadius: BorderRadius.circular(12),

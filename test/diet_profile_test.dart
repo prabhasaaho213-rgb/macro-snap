@@ -14,7 +14,8 @@ void main() {
     });
 
     expect(profile.gender, Gender.male);
-    expect(profile.goal, Goal.loseWeight);
+    // Neutral default: a missing goal must never silently become a deficit.
+    expect(profile.goal, Goal.maintain);
     expect(profile.activity, ActivityLevel.sedentary);
     // A profile saved before the food preference existed is vegetarian - the
     // plan those users were already being shown.

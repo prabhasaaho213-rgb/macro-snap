@@ -127,10 +127,14 @@ class _BmiScreenState extends State<BmiScreen> {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final bmi = _bmi;
+    // Round once, then use that same number for both the label and the
+    // printed score — 24.97 must read "25.0 · Overweight", not "25.0 · Normal".
+    final raw = _bmi;
+    final bmi = raw == null ? null : BmiCalculator.displayValue(raw);
     final category = bmi == null ? null : BmiCalculator.categoryFor(bmi);
-    final background =
-        isDark ? MacroSnapTheme.surfaceDark : MacroSnapTheme.surfaceLight;
+    final background = isDark
+        ? MacroSnapTheme.surfaceDark
+        : MacroSnapTheme.surfaceLight;
 
     return Scaffold(
       backgroundColor: background,
@@ -235,7 +239,8 @@ class _BmiScreenState extends State<BmiScreen> {
               Expanded(
                 child: _stat(
                   context,
-                  value: '${_weightKg.toStringAsFixed(_weightKg % 1 == 0 ? 0 : 1)} kg',
+                  value:
+                      '${_weightKg.toStringAsFixed(_weightKg % 1 == 0 ? 0 : 1)} kg',
                   label: 'Weight',
                   isDark: isDark,
                   onTap: () => _edit(weight: true),
@@ -381,11 +386,7 @@ class _BmiScreenState extends State<BmiScreen> {
     );
   }
 
-  Widget _buildLegend(
-    BuildContext context,
-    bool isDark,
-    BmiCategory? current,
-  ) {
+  Widget _buildLegend(BuildContext context, bool isDark, BmiCategory? current) {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
@@ -428,7 +429,9 @@ class _BmiScreenState extends State<BmiScreen> {
                             : FontWeight.w500,
                         color: category == current
                             ? category.color
-                            : (isDark ? Colors.white70 : const Color(0xFF4A4A4A)),
+                            : (isDark
+                                  ? Colors.white70
+                                  : const Color(0xFF4A4A4A)),
                       ),
                     ),
                   ),
@@ -481,8 +484,10 @@ class _BmiScreenState extends State<BmiScreen> {
     final sentence = delta == null
         ? 'Keep logging — two readings make a line.'
         : switch (direction) {
-            WeightTrend.losing => 'Down $absolute kg in ${summary.spanDays} days',
-            WeightTrend.gaining => 'Up $absolute kg in ${summary.spanDays} days',
+            WeightTrend.losing =>
+              'Down $absolute kg in ${summary.spanDays} days',
+            WeightTrend.gaining =>
+              'Up $absolute kg in ${summary.spanDays} days',
             WeightTrend.holding =>
               'Holding steady over ${summary.spanDays} days',
           };
@@ -546,7 +551,11 @@ class _BmiScreenState extends State<BmiScreen> {
               const SizedBox(width: 18),
               _trendStat(context, 'High', '${high.toStringAsFixed(1)} kg'),
               const SizedBox(width: 18),
-              _trendStat(context, 'Now', '${points.last.kg.toStringAsFixed(1)} kg'),
+              _trendStat(
+                context,
+                'Now',
+                '${points.last.kg.toStringAsFixed(1)} kg',
+              ),
             ],
           ),
         ],

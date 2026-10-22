@@ -25,17 +25,17 @@ void main() {
   });
 
   MealRecord meal(DateTime date, int kcal) => MealRecord(
-        id: '${date.millisecondsSinceEpoch}-$kcal',
-        date: date,
-        name: 'Test meal',
-        category: 'Lunch',
-        calories: kcal,
-        protein: 10,
-        carbs: 20,
-        fats: 5,
-        fiber: 2,
-        serving: '1 plate',
-      );
+    id: '${date.millisecondsSinceEpoch}-$kcal',
+    date: date,
+    name: 'Test meal',
+    category: 'Lunch',
+    calories: kcal,
+    protein: 10,
+    carbs: 20,
+    fats: 5,
+    fiber: 2,
+    serving: '1 plate',
+  );
 
   Future<void> pumpCard(WidgetTester tester) async {
     await tester.pumpWidget(
@@ -48,8 +48,7 @@ void main() {
     await tester.pump(const Duration(milliseconds: 400));
   }
 
-  testWidgets('empty store shows the placeholder, not a chart',
-      (tester) async {
+  testWidgets('empty store shows the placeholder, not a chart', (tester) async {
     await pumpCard(tester);
     expect(find.text('Log a meal to start your trend'), findsOneWidget);
     expect(find.byType(BarChart), findsNothing);
@@ -89,8 +88,9 @@ void main() {
     // 7-day view: seven rods with the expected daily totals (newest last).
     final chart = tester.widget<BarChart>(find.byType(BarChart));
     expect(chart.data.barGroups.length, 7);
-    final totals =
-        chart.data.barGroups.map((g) => g.barRods.first.toY).toList();
+    final totals = chart.data.barGroups
+        .map((g) => g.barRods.first.toY)
+        .toList();
     expect(totals[totals.length - 1], 1800, reason: "today's total");
     expect(totals[totals.length - 2], 2100, reason: "yesterday's total");
     expect(totals[totals.length - 3], 1650, reason: "two-days-ago total");

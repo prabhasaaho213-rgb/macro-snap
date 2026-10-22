@@ -8,8 +8,9 @@ import 'package:macro_snap/screens/result_screen.dart';
 /// nutrition in the same layout as a scan result — without running an AI
 /// analysis, and without the edit/log actions (the meal is already logged).
 void main() {
-  testWidgets('view mode shows logged meal nutrition, no analysis/actions',
-      (tester) async {
+  testWidgets('view mode shows logged meal nutrition, no analysis/actions', (
+    tester,
+  ) async {
     final meal = MealRecord(
       id: 'm1',
       date: DateTime.now(),
@@ -24,7 +25,9 @@ void main() {
     );
 
     await tester.pumpWidget(
-      MaterialApp(home: ResultScreen(imagePath: '', existingMeal: meal)),
+      MaterialApp(
+        home: ResultScreen(imagePath: '', existingMeal: meal),
+      ),
     );
     // The entrance animation must settle before asserting on visible text.
     await tester.pumpAndSettle();

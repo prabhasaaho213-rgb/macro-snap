@@ -79,8 +79,9 @@ void main() {
     expect(result, PaymentAction.retry);
   });
 
-  testWidgets('pending screen says it is unconfirmed when the check fails',
-      (tester) async {
+  testWidgets('pending screen says it is unconfirmed when the check fails', (
+    tester,
+  ) async {
     await tester.pumpWidget(
       MaterialApp(
         home: PaymentPendingScreen(
@@ -92,7 +93,10 @@ void main() {
     await tester.pump();
 
     expect(find.text('Confirming your payment'), findsOneWidget);
-    expect(find.text('Finish the payment in the page we opened.'), findsOneWidget);
+    expect(
+      find.text('Finish the payment in the page we opened.'),
+      findsOneWidget,
+    );
 
     await tester.tap(find.text('Check again'));
     await tester.pump();

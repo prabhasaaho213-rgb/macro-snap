@@ -67,10 +67,7 @@ void main() {
       expect(BmiCalculator.gaugePosition(BmiCalculator.scaleMax), 1);
       expect(BmiCalculator.gaugePosition(2), 0);
       expect(BmiCalculator.gaugePosition(80), 1);
-      expect(
-        BmiCalculator.gaugePosition(24.9),
-        closeTo(0.41, 0.02),
-      );
+      expect(BmiCalculator.gaugePosition(24.9), closeTo(0.41, 0.02));
     });
 
     test('height reads as feet and inches', () {
@@ -85,8 +82,9 @@ void main() {
       SharedPreferences.setMockInitialValues({});
     });
 
-    testWidgets('opens with the calculator, the score and the legend',
-        (tester) async {
+    testWidgets('opens with the calculator, the score and the legend', (
+      tester,
+    ) async {
       await tester.pumpWidget(const MaterialApp(home: BmiScreen()));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 900));
@@ -98,7 +96,9 @@ void main() {
       expect(find.text('24.2'), findsOneWidget);
       expect(find.text('Normal'), findsWidgets);
       expect(
-        find.text('Showing sample numbers — finish your diet profile to use your own.'),
+        find.text(
+          'Showing sample numbers — finish your diet profile to use your own.',
+        ),
         findsOneWidget,
       );
       // Every band is listed with its range.
@@ -108,7 +108,9 @@ void main() {
       }
     });
 
-    testWidgets('editing the weight recalculates the score live', (tester) async {
+    testWidgets('editing the weight recalculates the score live', (
+      tester,
+    ) async {
       await tester.pumpWidget(const MaterialApp(home: BmiScreen()));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 900));
@@ -151,7 +153,11 @@ void main() {
       expect(find.text('Your trend'), findsOneWidget);
       expect(find.text('Down 1.9 kg in 20 days'), findsOneWidget);
       expect(find.text('Low'), findsOneWidget);
-      expect(find.text('72.4 kg'), findsOneWidget, reason: 'high of the window');
+      expect(
+        find.text('72.4 kg'),
+        findsOneWidget,
+        reason: 'high of the window',
+      );
       expect(find.text('70.5 kg'), findsWidgets, reason: 'low = now');
     });
 
@@ -159,9 +165,7 @@ void main() {
       await tester.pumpWidget(
         const MaterialApp(
           home: Scaffold(
-            body: Center(
-              child: BmiGauge(bmi: 24.7, size: 200, animate: false),
-            ),
+            body: Center(child: BmiGauge(bmi: 24.7, size: 200, animate: false)),
           ),
         ),
       );

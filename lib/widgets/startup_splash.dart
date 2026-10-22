@@ -1,4 +1,7 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:lottie/lottie.dart';
 import '../core/theme.dart';
 
 /// The frame the user sees while startup work finishes.
@@ -35,6 +38,17 @@ class _StartupSplashState extends State<StartupSplash>
     end: 1,
   ).animate(_fade);
 
+  /// True once the intro animation has finished (or failed to load).
+  ///
+  /// The Lottie plays exactly once — 96 frames at 60 fps, 1.6 s — so a splash
+  /// that outlives a slow startup shows the settled logo, not a looped
+  /// animation that makes the wait feel longer than it is.
+  bool _introDone = false;
+
+  /// The delayed detach fired when the composition ends. Held so [dispose]
+  /// can cancel it — a timer outliving the widget leaks (and fails tests).
+  Timer? _introEnd;
+
   @override
   void initState() {
     super.initState();
@@ -43,6 +57,7 @@ class _StartupSplashState extends State<StartupSplash>
 
   @override
   void dispose() {
+    _introEnd?.cancel();
     _controller.dispose();
     super.dispose();
   }
@@ -53,8 +68,9 @@ class _StartupSplashState extends State<StartupSplash>
     // Must equal android/app/src/main/res/values{,-night}/colors.xml
     // (`window_background`) so the hand-off from the native launch window is
     // invisible — same colour, no flash, and never a black frame.
-    final background =
-        isDark ? MacroSnapTheme.surfaceDark : MacroSnapTheme.surfaceLight;
+    final background = isDark
+        ? MacroSnapTheme.surfaceDark
+        : MacroSnapTheme.surfaceLight;
     final wordmark = isDark ? Colors.white : const Color(0xFF1A1A1A);
 
     return Scaffold(
@@ -69,26 +85,68 @@ class _StartupSplashState extends State<StartupSplash>
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Container(
-                    width: 88,
-                    height: 88,
-                    decoration: BoxDecoration(
-                      gradient: MacroSnapTheme.accentGradient,
-                      borderRadius: BorderRadius.circular(26),
-                      boxShadow: [
-                        BoxShadow(
-                          color: MacroSnapTheme.neonOrange.withValues(
-                            alpha: isDark ? 0.28 : 0.22,
+                  SizedBox(
+                    width: 150,
+                    height: 150,
+                    child: Stack(
+                      alignment: Alignment.center,
+                      children: [
+                        // Logo intro: rings + sparks around the mark, plays
+                        // once while startup keeps running behind the splash.
+                        // errorBuilder: a corrupt asset degrades to the plain
+                        // logo instead of a broken screen on launch.
+                        if (!_introDone)
+                          Lottie.asset(
+                            'assets/animations/logo_intro.json',
+                            repeat: false,
+                            frameBuilder: (context, child, loaded) {
+                              if (loaded == null) {
+                                return const SizedBox.shrink();
+                              }
+                              return child;
+                            },
+                            errorBuilder: (context, error, stack) {
+                              WidgetsBinding.instance.addPostFrameCallback((_) {
+                                if (mounted && !_introDone) {
+                                  setState(() => _introDone = true);
+                                }
+                              });
+                              return const SizedBox.shrink();
+                            },
+                            onLoaded: (composition) {
+                              // Detach after the composition ends so the last
+                              // frame does not linger under the logo.
+                              _introEnd?.cancel();
+                              _introEnd = Timer(composition.duration, () {
+                                if (mounted && !_introDone) {
+                                  setState(() => _introDone = true);
+                                }
+                              });
+                            },
                           ),
-                          blurRadius: 28,
-                          offset: const Offset(0, 12),
+                        Container(
+                          width: 88,
+                          height: 88,
+                          decoration: BoxDecoration(
+                            gradient: MacroSnapTheme.accentGradient,
+                            borderRadius: BorderRadius.circular(26),
+                            boxShadow: [
+                              BoxShadow(
+                                color: MacroSnapTheme.neonOrange.withValues(
+                                  alpha: isDark ? 0.28 : 0.22,
+                                ),
+                                blurRadius: 28,
+                                offset: const Offset(0, 12),
+                              ),
+                            ],
+                          ),
+                          child: const Icon(
+                            Icons.local_fire_department_rounded,
+                            size: 46,
+                            color: Colors.white,
+                          ),
                         ),
                       ],
-                    ),
-                    child: const Icon(
-                      Icons.local_fire_department_rounded,
-                      size: 46,
-                      color: Colors.white,
                     ),
                   ),
                   const SizedBox(height: 22),

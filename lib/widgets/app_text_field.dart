@@ -25,7 +25,10 @@ class AppTextField extends StatelessWidget {
     return TextField(
       controller: controller,
       keyboardType: keyboardType,
-      style: TextStyle(fontSize: 15, color: isDark ? Colors.white : const Color(0xFF1A1A1A)),
+      style: TextStyle(
+        fontSize: 15,
+        color: isDark ? Colors.white : const Color(0xFF1A1A1A),
+      ),
       decoration: InputDecoration(
         labelText: label,
         hintText: hint,
@@ -44,10 +47,19 @@ class AppTextField extends StatelessWidget {
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(16),
-          borderSide: const BorderSide(color: MacroSnapTheme.neonGreen, width: 2),
+          borderSide: const BorderSide(
+            color: MacroSnapTheme.neonGreen,
+            width: 2,
+          ),
         ),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
-        labelStyle: TextStyle(fontSize: 14, color: MacroSnapTheme.textTertiary(context)),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 20,
+          vertical: 18,
+        ),
+        labelStyle: TextStyle(
+          fontSize: 14,
+          color: MacroSnapTheme.textTertiary(context),
+        ),
       ),
     );
   }

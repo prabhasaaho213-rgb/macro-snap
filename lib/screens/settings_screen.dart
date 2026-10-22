@@ -7,14 +7,12 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:url_launcher/url_launcher.dart';
-import 'package:package_info_plus/package_info_plus.dart';
-import 'package:permission_handler/permission_handler.dart';
 import '../core/haptics.dart';
 import '../core/theme.dart';
 import '../models/diet_profile.dart';
 import '../widgets/glass_card.dart';
 import '../widgets/animations.dart';
-import '../widgets/notification_prompt.dart';
+import '../services/badge_service.dart';
 import '../services/meal_store.dart';
 import '../services/meal_sync_service.dart';
 import '../services/habit_store.dart';
@@ -23,7 +21,9 @@ import '../services/subscription_service.dart';
 import '../services/gemini_service.dart';
 import 'subscription_screen.dart';
 import 'phone_login_screen.dart';
+import 'profile_screen.dart';
 import 'updates_screen.dart';
+import '../services/crash_reporting.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -40,15 +40,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
   String? _subscribedDate;
   String? _proUntil;
 
-
   /// True while the newest release has not been opened from here yet —
   /// drives the dot on the "What's New" row. (This used to live on the
   /// bottom-nav Updates tab; the tab is gone, the badge moved with it.)
   bool _hasUnseenUpdate = false;
-
-  /// Current OS notification permission. `null` means it could not be read
-  /// (platform channel unavailable) — the row stays tappable either way.
-  bool? _notificationsOn;
 
   @override
   void initState() {
@@ -65,12 +60,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   Future<void> _load() async {
     await SubscriptionService.instance.load();
-    // Real installed version from the platform (zero drift with pubspec);
-    // falls back to the constant when the platform channel is unavailable.
-    try {
-      final info = await PackageInfo.fromPlatform();
-      if (info.version.isNotEmpty) _packageVersion = info.version;
-    } catch (e) { debugPrint("Error: $e"); }
     final prefs = await SharedPreferences.getInstance();
     // _load() does several awaits; the screen can be popped before it
     // finishes, and setState() on a disposed State throws.
@@ -88,33 +77,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
     });
     _isAdmin = await SubscriptionService.instance.isAdmin();
     if (mounted) setState(() {});
-    _refreshNotificationStatus();
-  }
-
-  /// Reads the notification permission without blocking the screen.
-  Future<void> _refreshNotificationStatus() async {
-    bool? on;
-    try {
-      on = (await Permission.notification.status).isGranted;
-    } catch (_) {
-      on = null;
-    }
-    if (mounted) setState(() => _notificationsOn = on);
-  }
-
-  /// The way back to notifications after "Not now" (or a denial) — this is now
-  /// the only place the ask is guaranteed to be reachable, because startup no
-  /// longer fires the system dialog. Unlike the launch prompt it ignores the
-  /// three-day cooldown: the user came here on purpose.
-  Future<void> _changeNotificationPermission() async {
-    await maybeShowNotificationPrompt(context, force: true);
-    await _refreshNotificationStatus();
   }
 
   bool get _isGuest => _phone.isEmpty || _phone.startsWith('guest_');
 
   String _phone = '';
-  String _packageVersion = '1.4.66';
 
   Future<void> _upgradeFromGuest() async {
     final phone = await Navigator.push<String>(
@@ -127,6 +94,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       // Trigger cloud re-sync with new phone identifier
       await MealStore.instance.reload();
       await HabitStore.instance.reload();
+      await BadgeService.instance.reload();
       setState(() => _phone = phone);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -166,12 +134,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
     if (confirmed != true) return;
     try {
       await FirebaseAuth.instance.signOut();
-    } catch (e) { debugPrint("Error: $e"); }
+    } catch (e, st) {
+      logError('SettingsScreen._logout (FirebaseAuth)', e, st);
+    }
     // Also clear the GoogleSignIn session so the cached account doesn't
     // silently auto-select on the next login — the user must pick again.
     try {
       await GoogleSignIn().signOut();
-    } catch (e) { debugPrint("Error: $e"); }
+    } catch (e, st) {
+      logError('SettingsScreen._logout (GoogleSignIn)', e, st);
+    }
     final prefs = await SharedPreferences.getInstance();
     // Only clear auth/session keys — preserve subscription, habits, meals, settings
     await prefs.remove('phone');
@@ -181,6 +153,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     await prefs.remove('subscription_offered');
     unawaited(MealStore.instance.reload());
     unawaited(HabitStore.instance.reload());
+    unawaited(BadgeService.instance.reload());
     unawaited(DietPlanService.instance.load());
     if (context.mounted) {
       Navigator.pushAndRemoveUntil(
@@ -195,7 +168,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   ///
   /// 1. Shows a confirmation dialog explaining this is permanent.
   /// 2. Calls the backend `POST /account/delete`, which wipes all cloud data
-  ///    (Postgres + Firestore) but keeps a tombstone of the identifier + its
+  ///    (Firestore docs and the legacy tables) but keeps a tombstone of the identifier + its
   ///    original trial start — so re-registering can never re-claim the free
   ///    trial (no delete -> re-login trial-abuse loop).
   /// 3. Wipes this device's local data and signs out, returning to login.
@@ -600,6 +573,26 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   AnimatedEntrance(
                     delayMs: 50,
                     child: _settingTile(
+                      Icons.person_rounded,
+                      'Profile',
+                      _isAdmin
+                          ? '${_name.isNotEmpty ? _name : 'User'} · Lifetime Pro'
+                          : '${_name.isNotEmpty ? _name : 'User'} · ${_subscribed ? 'Pro Member' : 'Free User'}',
+                      () async {
+                        await Navigator.push(
+                          context,
+                          habitFlowRoute(const ProfileScreen()),
+                        );
+                        // The profile editor can rename the user.
+                        if (mounted) await _load();
+                      },
+                      isDark,
+                    ),
+                  ),
+                  const Divider(height: 24),
+                  AnimatedEntrance(
+                    delayMs: 120,
+                    child: _settingTile(
                       Icons.subscriptions_rounded,
                       _isAdmin
                           ? 'My Subscription'
@@ -643,32 +636,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       },
                       isDark,
                       showBadge: _hasUnseenUpdate,
-                    ),
-                  ),
-                  const Divider(height: 24),
-                  AnimatedEntrance(
-                    delayMs: 218,
-                    child: _settingTile(
-                      Icons.notifications_active_rounded,
-                      'Notifications',
-                      _notificationsOn == null
-                          ? 'Reminders for meals, habits and streaks'
-                          : (_notificationsOn!
-                                ? 'On — reminders for meals, habits and streaks'
-                                : 'Off — tap to turn reminders on'),
-                      _changeNotificationPermission,
-                      isDark,
-                    ),
-                  ),
-                  const Divider(height: 24),
-                  AnimatedEntrance(
-                    delayMs: 220,
-                    child: _settingTile(
-                      Icons.info_outline_rounded,
-                      'App Version',
-                      _packageVersion,
-                      null,
-                      isDark,
                     ),
                   ),
                   const Divider(height: 24),
@@ -717,7 +684,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       'How we handle your data',
                       () async {
                         final uri = Uri.parse(
-                          'https://prabhasaaho213-rgb.github.io/macro-snap-source-1.4.5/',
+                          'https://prabhasaaho213-rgb.github.io/macro-snap/',
                         );
                         if (await canLaunchUrl(uri)) {
                           await launchUrl(
@@ -897,9 +864,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
     String title,
     String subtitle,
     VoidCallback? onTap,
-    bool isDark,
-    {bool showBadge = false}
-  ) {
+    bool isDark, {
+    bool showBadge = false,
+  }) {
     return InkWell(
       // Settings rows had no haptics at all — every row now gives a tick, and
       // a disabled row stays silent.
@@ -935,9 +902,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       color: MacroSnapTheme.macroFiber,
                       shape: BoxShape.circle,
                       border: Border.all(
-                        color: isDark
-                            ? MacroSnapTheme.cardDark
-                            : Colors.white,
+                        color: isDark ? MacroSnapTheme.cardDark : Colors.white,
                         width: 2,
                       ),
                     ),

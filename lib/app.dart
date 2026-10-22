@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'core/app_nav.dart';
@@ -8,11 +10,14 @@ import 'screens/onboarding_screen.dart';
 import 'screens/phone_login_screen.dart';
 import 'widgets/startup_splash.dart';
 
-/// How long the branded splash waits for startup work before giving up and
-/// showing the app anyway. Every startup step is already error-guarded, so
-/// this only covers a plugin that never answers — without it a wedged
-/// platform call would leave the user on the splash forever.
-const Duration kStartupTimeout = Duration(seconds: 8);
+/// Last-resort cap on the whole splash.
+///
+/// Each startup step now has its own bound (`_guardStartup` in `main.dart`),
+/// so reaching this means something ignored its own timeout. When that
+/// happens the app opens with whatever did load rather than never opening —
+/// that is a deliberate trade: a missing list is recoverable, a permanent
+/// splash is not.
+const Duration kStartupTimeout = Duration(seconds: 12);
 
 class MacroSnapApp extends StatefulWidget {
   /// Startup work that must finish before the first real screen is built
@@ -44,13 +49,22 @@ class _MacroSnapAppState extends State<MacroSnapApp> {
     themeModeNotifier.addListener(_onThemeChanged);
   }
 
-  /// Holds the splash until the work `main()` handed over is done, so no
-  /// screen is ever built against half-loaded stores.
+  /// Holds the splash until the work `main()` handed over is done.
+  ///
+  /// Each step is bounded in `main.dart`, so this normally completes once the
+  /// stores are loaded. [kStartupTimeout] is the fallback for a step that
+  /// ignored its own limit; in that case the app opens anyway, with a log
+  /// line rather than a stuck splash.
   Future<void> _awaitStartup() async {
     final startup = widget.startup;
     if (startup == null) return;
     try {
       await startup.timeout(kStartupTimeout);
+    } on TimeoutException {
+      debugPrint(
+        '❌ startup exceeded ${kStartupTimeout.inSeconds}s — opening with the '
+        'data that did load',
+      );
     } catch (e) {
       debugPrint('❌ startup did not finish cleanly: $e');
     }
@@ -132,14 +146,12 @@ class _MacroSnapAppState extends State<MacroSnapApp> {
       home: _loading || _booting
           ? const StartupSplash()
           : _onboardingDone
-              ? (_savedPhone != null
+          ? (_savedPhone != null ? const MainShell() : const PhoneLoginScreen())
+          : OnboardingScreen(
+              nextScreen: _savedPhone != null
                   ? const MainShell()
-                  : const PhoneLoginScreen())
-              : OnboardingScreen(
-                  nextScreen: _savedPhone != null
-                      ? const MainShell()
-                      : const PhoneLoginScreen(),
-                ),
+                  : const PhoneLoginScreen(),
+            ),
     );
   }
 }

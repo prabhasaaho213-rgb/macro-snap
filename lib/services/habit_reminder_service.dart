@@ -8,6 +8,7 @@ import 'package:timezone/data/latest.dart' as tz_data;
 import '../models/habit.dart';
 import 'account_partition.dart';
 import 'notification_branding.dart';
+import 'crash_reporting.dart';
 
 class HabitReminderService {
   /// Public action ids referenced by [NotificationService] so the handler
@@ -171,7 +172,9 @@ Future<void> handleHabitReminderActionBackground(
     if (savedTz != null && savedTz.isNotEmpty) {
       try {
         tz.setLocalLocation(tz.getLocation(savedTz));
-      } catch (e) { debugPrint("Error: $e"); }
+      } catch (e, st) {
+        logError('handleHabitReminderActionBackground', e, st);
+      }
     }
     final plugin = FlutterLocalNotificationsPlugin();
     await plugin.initialize(
@@ -182,10 +185,10 @@ Future<void> handleHabitReminderActionBackground(
 
     // Partition by the active account (same rule as HabitStore) so a
     // notification action can never read or write another account's habits.
-    final habitsKey =
-        AccountPartition.key('habits', AccountPartition.suffix(
-              AccountPartition.activeFromPrefs(prefs),
-            ));
+    final habitsKey = AccountPartition.key(
+      'habits',
+      AccountPartition.suffix(AccountPartition.activeFromPrefs(prefs)),
+    );
     final raw = prefs.getString(habitsKey);
     if (raw == null || raw.isEmpty) {
       debugPrint('⚠️ Notification action: no habits saved to act on');

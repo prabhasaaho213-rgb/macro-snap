@@ -63,38 +63,50 @@ void main() {
   });
 
   testWidgets(
-      'a name change made on a pushed screen shows after popping back',
-      (tester) async {
-    SharedPreferences.setMockInitialValues({'name': 'Alice'});
+    'a name change made on a pushed screen shows after popping back',
+    (tester) async {
+      SharedPreferences.setMockInitialValues({'name': 'Alice'});
 
-    await tester.pumpWidget(
-      MaterialApp(
-        navigatorObservers: [routeObserver],
-        home: const _NameWidget(),
-      ),
-    );
-    await tester.pump();
-    expect(find.text('Alice'), findsOneWidget,
-        reason: 'initial name from prefs must render');
+      await tester.pumpWidget(
+        MaterialApp(
+          navigatorObservers: [routeObserver],
+          home: const _NameWidget(),
+        ),
+      );
+      await tester.pump();
+      expect(
+        find.text('Alice'),
+        findsOneWidget,
+        reason: 'initial name from prefs must render',
+      );
 
-    // Settings would write the new name to prefs (as _editName does):
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('name', 'Bob');
+      // Settings would write the new name to prefs (as _editName does):
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('name', 'Bob');
 
-    // Push a screen on top, then pop back (like Settings → back):
-    final nav = tester.state<NavigatorState>(find.byType(Navigator));
-    nav.push(
-      MaterialPageRoute<void>(builder: (_) => const Scaffold(body: SizedBox())),
-    );
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 400));
-    nav.pop();
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 400));
+      // Push a screen on top, then pop back (like Settings → back):
+      final nav = tester.state<NavigatorState>(find.byType(Navigator));
+      nav.push(
+        MaterialPageRoute<void>(
+          builder: (_) => const Scaffold(body: SizedBox()),
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+      nav.pop();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
 
-    expect(find.text('Bob'), findsOneWidget,
-        reason: 'didPopNext must re-read the name from prefs');
-    expect(find.text('Alice'), findsNothing,
-        reason: 'stale name must be gone after returning');
-  });
+      expect(
+        find.text('Bob'),
+        findsOneWidget,
+        reason: 'didPopNext must re-read the name from prefs',
+      );
+      expect(
+        find.text('Alice'),
+        findsNothing,
+        reason: 'stale name must be gone after returning',
+      );
+    },
+  );
 }

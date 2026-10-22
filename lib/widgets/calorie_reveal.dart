@@ -194,7 +194,8 @@ class _CalorieRevealState extends State<CalorieReveal>
         final scale = 1 + 0.14 * math.sin(p * math.pi);
 
         // Colour flash on landing: base -> accent -> base.
-        final base = baseStyle.color ??
+        final base =
+            baseStyle.color ??
             DefaultTextStyle.of(context).style.color ??
             Colors.white;
         final color = Color.lerp(base, flash, math.sin(p * math.pi))!;

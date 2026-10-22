@@ -6,6 +6,7 @@ import '../core/theme.dart';
 import '../services/rate_us_service.dart';
 import '../services/subscription_service.dart';
 import '../widgets/notification_prompt.dart';
+import '../widgets/badge_board.dart';
 import 'home_screen.dart';
 import 'habits_tab.dart';
 import 'scan_screen.dart';
@@ -290,34 +291,38 @@ class _MainShellState extends State<MainShell> {
 
   @override
   Widget build(BuildContext context) {
-    return PopScope(
-      // Back on the Scan tab returns Home (as before); on Home/Habits it
-      // leaves the app. Only the visible tab may claim the back gesture.
-      canPop: _currentIndex != 1,
-      onPopInvokedWithResult: (didPop, _) {
-        if (!didPop) _goToTab(0);
-      },
-      child: Scaffold(
-        body: GestureDetector(
-          behavior: HitTestBehavior.translucent,
-          // Swipe left/right anywhere on the tab body to move to the
-          // adjacent tab (Home ⇄ Scan ⇄ Habits). Instant switch.
-          onHorizontalDragEnd: (details) {
-            final velocity = details.primaryVelocity ?? 0;
-            if (velocity.abs() < 300) return;
-            if (velocity < 0) {
-              // Swipe left → next tab
-              if (_currentIndex < _tabPages.length - 1) {
-                _goToTab(_currentIndex + 1);
+    // BadgeCelebration overlays the whole shell, so a badge earned by any
+    // store (meal, weigh-in, streak) is announced without each screen caring.
+    return BadgeCelebration(
+      child: PopScope(
+        // Back on the Scan tab returns Home (as before); on Home/Habits it
+        // leaves the app. Only the visible tab may claim the back gesture.
+        canPop: _currentIndex != 1,
+        onPopInvokedWithResult: (didPop, _) {
+          if (!didPop) _goToTab(0);
+        },
+        child: Scaffold(
+          body: GestureDetector(
+            behavior: HitTestBehavior.translucent,
+            // Swipe left/right anywhere on the tab body to move to the
+            // adjacent tab (Home ⇄ Scan ⇄ Habits). Instant switch.
+            onHorizontalDragEnd: (details) {
+              final velocity = details.primaryVelocity ?? 0;
+              if (velocity.abs() < 300) return;
+              if (velocity < 0) {
+                // Swipe left → next tab
+                if (_currentIndex < _tabPages.length - 1) {
+                  _goToTab(_currentIndex + 1);
+                }
+              } else {
+                // Swipe right → previous tab
+                if (_currentIndex > 0) _goToTab(_currentIndex - 1);
               }
-            } else {
-              // Swipe right → previous tab
-              if (_currentIndex > 0) _goToTab(_currentIndex - 1);
-            }
-          },
-          child: _buildTabContent(),
+            },
+            child: _buildTabContent(),
+          ),
+          bottomNavigationBar: _buildBottomNav(context),
         ),
-        bottomNavigationBar: _buildBottomNav(context),
       ),
     );
   }

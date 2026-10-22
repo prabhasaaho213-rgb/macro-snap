@@ -53,10 +53,14 @@ void main() {
     );
   });
 
-  testWidgets('while analysing it shows the photo and no labels', (tester) async {
-    await tester.pumpWidget(MaterialApp(
-      home: Scaffold(body: ScanAnimationView(imagePath: imagePath)),
-    ));
+  testWidgets('while analysing it shows the photo and no labels', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(body: ScanAnimationView(imagePath: imagePath)),
+      ),
+    );
     await tester.pump(const Duration(milliseconds: 900));
 
     expect(tester.takeException(), isNull, reason: 'must render cleanly');
@@ -64,37 +68,49 @@ void main() {
     expect(find.text('Poha'), findsNothing);
   });
 
-  testWidgets('the revealed labels pop onto the photo, capped at maxLabels',
-      (tester) async {
+  testWidgets('the revealed labels pop onto the photo, capped at maxLabels', (
+    tester,
+  ) async {
     final names = ['Poha', 'Chai', 'Banana', 'Idli', 'Dosa', 'Upma', 'Vada'];
 
-    await tester.pumpWidget(MaterialApp(
-      home: Scaffold(
-        body: ScanAnimationView(imagePath: imagePath, labels: names),
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: ScanAnimationView(imagePath: imagePath, labels: names),
+        ),
       ),
-    ));
+    );
     // Let every scheduled pop fire (and finish) before the test ends, or the
     // pending timers fail the test.
     await tester.pump(ScanAnimationView.revealDuration(names.length));
 
     expect(tester.takeException(), isNull, reason: 'must render cleanly');
     for (final shown in names.take(ScanAnimationView.maxLabels)) {
-      expect(find.text(shown), findsOneWidget, reason: '$shown must be labelled');
+      expect(
+        find.text(shown),
+        findsOneWidget,
+        reason: '$shown must be labelled',
+      );
     }
-    expect(find.text('Upma'), findsNothing,
-        reason: 'the 6th dish is beyond maxLabels');
+    expect(
+      find.text('Upma'),
+      findsNothing,
+      reason: 'the 6th dish is beyond maxLabels',
+    );
     expect(find.text('Vada'), findsNothing);
   });
 
   testWidgets('blank dish names are never labelled', (tester) async {
-    await tester.pumpWidget(MaterialApp(
-      home: Scaffold(
-        body: ScanAnimationView(
-          imagePath: imagePath,
-          labels: const ['  ', 'Poha', ''],
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: ScanAnimationView(
+            imagePath: imagePath,
+            labels: const ['  ', 'Poha', ''],
+          ),
         ),
       ),
-    ));
+    );
     await tester.pump(const Duration(seconds: 3));
 
     expect(tester.takeException(), isNull);
@@ -105,21 +121,27 @@ void main() {
 
   testWidgets('switching from sweep to reveal stops the sweep', (tester) async {
     final key = GlobalKey();
-    await tester.pumpWidget(MaterialApp(
-      home: Scaffold(body: ScanAnimationView(key: key, imagePath: imagePath)),
-    ));
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: ScanAnimationView(key: key, imagePath: imagePath),
+        ),
+      ),
+    );
     await tester.pump(const Duration(milliseconds: 400));
 
     // Swap to the reveal phase on the same element.
-    await tester.pumpWidget(MaterialApp(
-      home: Scaffold(
-        body: ScanAnimationView(
-          key: key,
-          imagePath: imagePath,
-          labels: const ['Poha'],
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: ScanAnimationView(
+            key: key,
+            imagePath: imagePath,
+            labels: const ['Poha'],
+          ),
         ),
       ),
-    ));
+    );
     await tester.pump(const Duration(milliseconds: 2500));
 
     expect(tester.takeException(), isNull);

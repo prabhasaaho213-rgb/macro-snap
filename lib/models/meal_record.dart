@@ -10,6 +10,11 @@ class MealRecord {
   final double fiber;
   final String serving;
 
+  /// The user's own "how did it taste" verdict (`delicious` / `okay` /
+  /// `bland`), or null when they never rated it. Optional on purpose: meals
+  /// logged before this existed, and meals logged without rating, are valid.
+  final String? tastiness;
+
   MealRecord({
     required this.id,
     required this.date,
@@ -21,6 +26,7 @@ class MealRecord {
     required this.fats,
     required this.fiber,
     required this.serving,
+    this.tastiness,
   });
 
   Map<String, dynamic> toJson() => {
@@ -34,6 +40,7 @@ class MealRecord {
     'fats': fats,
     'fiber': fiber,
     'serving': serving,
+    if (tastiness != null) 'tastiness': tastiness,
   };
 
   factory MealRecord.fromJson(Map<String, dynamic> json) => MealRecord(
@@ -47,6 +54,7 @@ class MealRecord {
     fats: (json['fats'] as num).toDouble(),
     fiber: (json['fiber'] as num).toDouble(),
     serving: json['serving'] as String? ?? '',
+    tastiness: json['tastiness'] as String?,
   );
 
   /// Parses one stored/cloud record, returning null instead of throwing when
@@ -64,7 +72,7 @@ class MealRecord {
   }
 
   bool get isToday =>
-    date.year == DateTime.now().year &&
-    date.month == DateTime.now().month &&
-    date.day == DateTime.now().day;
+      date.year == DateTime.now().year &&
+      date.month == DateTime.now().month &&
+      date.day == DateTime.now().day;
 }

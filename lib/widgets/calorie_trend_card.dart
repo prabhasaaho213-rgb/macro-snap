@@ -91,7 +91,8 @@ class _CalorieTrendCardState extends State<CalorieTrendCard> {
                   )
                 else ...[
                   Semantics(
-                    label: 'Bar chart of daily calories for the last '
+                    label:
+                        'Bar chart of daily calories for the last '
                         '$_days days. Dashed line marks the '
                         '${widget.goalCalories} calorie goal.',
                     excludeSemantics: true,
@@ -206,10 +207,8 @@ class _CalorieTrendCardState extends State<CalorieTrendCard> {
         show: true,
         drawVerticalLine: false,
         horizontalInterval: (top / 2).toDouble(),
-        getDrawingHorizontalLine: (v) => FlLine(
-          color: MacroSnapTheme.borderSubtle(context),
-          strokeWidth: 1,
-        ),
+        getDrawingHorizontalLine: (v) =>
+            FlLine(color: MacroSnapTheme.borderSubtle(context), strokeWidth: 1),
       ),
       borderData: FlBorderData(show: false),
       extraLinesData: ExtraLinesData(
@@ -246,9 +245,7 @@ class _CalorieTrendCardState extends State<CalorieTrendCard> {
       titlesData: FlTitlesData(
         topTitles: const AxisTitles(),
         rightTitles: const AxisTitles(),
-        leftTitles: const AxisTitles(
-          sideTitles: SideTitles(showTitles: false),
-        ),
+        leftTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
         bottomTitles: AxisTitles(
           sideTitles: SideTitles(
             showTitles: true,

@@ -33,11 +33,7 @@ class WeightTrendChart extends StatelessWidget {
 
     Widget chart(double reveal) => CustomPaint(
       size: Size(double.infinity, height),
-      painter: _SparkPainter(
-        points: points,
-        color: lineColor,
-        reveal: reveal,
-      ),
+      painter: _SparkPainter(points: points, color: lineColor, reveal: reveal),
     );
 
     if (!animate) return chart(1);

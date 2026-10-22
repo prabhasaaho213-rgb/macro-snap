@@ -6,21 +6,19 @@ import 'package:flutter/material.dart';
 /// A Hero-style page route that slides up with a spring curve,
 /// mimicking the Habit Flow app feel.
 Route<T> habitFlowRoute<T>(Widget page) {
-  return PageRouteBuilder<T>(      pageBuilder: (_, animation, _) => page,
-      transitionsBuilder: (_, animation, _, child) {
+  return PageRouteBuilder<T>(
+    pageBuilder: (_, animation, _) => page,
+    transitionsBuilder: (_, animation, _, child) {
       return SlideTransition(
-        position: Tween<Offset>(
-          begin: const Offset(0, 0.08),
-          end: Offset.zero,
-        ).animate(CurvedAnimation(
-          parent: animation,
-          curve: Curves.easeOutCubic,
-          reverseCurve: Curves.easeInCubic,
-        )),
-        child: FadeTransition(
-          opacity: animation,
-          child: child,
-        ),
+        position: Tween<Offset>(begin: const Offset(0, 0.08), end: Offset.zero)
+            .animate(
+              CurvedAnimation(
+                parent: animation,
+                curve: Curves.easeOutCubic,
+                reverseCurve: Curves.easeInCubic,
+              ),
+            ),
+        child: FadeTransition(opacity: animation, child: child),
       );
     },
     transitionDuration: const Duration(milliseconds: 450),
@@ -30,21 +28,19 @@ Route<T> habitFlowRoute<T>(Widget page) {
 
 /// A route that slides from the right (like a push nav).
 Route<T> slideRightRoute<T>(Widget page) {
-  return PageRouteBuilder<T>(      pageBuilder: (_, animation, _) => page,
-      transitionsBuilder: (_, animation, _, child) {
+  return PageRouteBuilder<T>(
+    pageBuilder: (_, animation, _) => page,
+    transitionsBuilder: (_, animation, _, child) {
       return SlideTransition(
-        position: Tween<Offset>(
-          begin: const Offset(0.15, 0),
-          end: Offset.zero,
-        ).animate(CurvedAnimation(
-          parent: animation,
-          curve: Curves.easeOutCubic,
-          reverseCurve: Curves.easeInCubic,
-        )),
-        child: FadeTransition(
-          opacity: animation,
-          child: child,
-        ),
+        position: Tween<Offset>(begin: const Offset(0.15, 0), end: Offset.zero)
+            .animate(
+              CurvedAnimation(
+                parent: animation,
+                curve: Curves.easeOutCubic,
+                reverseCurve: Curves.easeInCubic,
+              ),
+            ),
+        child: FadeTransition(opacity: animation, child: child),
       );
     },
     transitionDuration: const Duration(milliseconds: 350),
@@ -82,13 +78,11 @@ class _ScaleOnPressState extends State<ScaleOnPress>
   @override
   void initState() {
     super.initState();
-    _controller = AnimationController(
-      vsync: this,
-      duration: widget.duration,
-    );
-    _scaleAnim = Tween<double>(begin: 1.0, end: widget.scaleAmount).animate(
-      CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
-    );
+    _controller = AnimationController(vsync: this, duration: widget.duration);
+    _scaleAnim = Tween<double>(
+      begin: 1.0,
+      end: widget.scaleAmount,
+    ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeInOut));
   }
 
   @override
@@ -107,10 +101,7 @@ class _ScaleOnPressState extends State<ScaleOnPress>
     return AnimatedBuilder(
       animation: _scaleAnim,
       builder: (context, child) {
-        return Transform.scale(
-          scale: _scaleAnim.value,
-          child: child,
-        );
+        return Transform.scale(scale: _scaleAnim.value, child: child);
       },
       child: GestureDetector(
         onTap: widget.onTap,
@@ -188,17 +179,11 @@ class _StaggeredItemState extends State<_StaggeredItem>
       vsync: this,
       duration: const Duration(milliseconds: 400),
     );
-    _fadeAnim = CurvedAnimation(
-      parent: _controller,
-      curve: Curves.easeOut,
-    );
+    _fadeAnim = CurvedAnimation(parent: _controller, curve: Curves.easeOut);
     _slideAnim = Tween<Offset>(
       begin: const Offset(0, 0.06),
       end: Offset.zero,
-    ).animate(CurvedAnimation(
-      parent: _controller,
-      curve: Curves.easeOutCubic,
-    ));
+    ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeOutCubic));
 
     Future.delayed(widget.staggerDelay * widget.index, () {
       if (mounted) _controller.forward();
@@ -215,10 +200,7 @@ class _StaggeredItemState extends State<_StaggeredItem>
   Widget build(BuildContext context) {
     return SlideTransition(
       position: _slideAnim,
-      child: FadeTransition(
-        opacity: _fadeAnim,
-        child: widget.child,
-      ),
+      child: FadeTransition(opacity: _fadeAnim, child: widget.child),
     );
   }
 }
@@ -373,10 +355,7 @@ class AnimatedProgressRing extends StatelessWidget {
                 padding: const EdgeInsets.all(10),
                 child: FittedBox(
                   fit: BoxFit.scaleDown,
-                  child: Text(
-                    '${(v * 100).round()}%',
-                    style: labelStyle,
-                  ),
+                  child: Text('${(v * 100).round()}%', style: labelStyle),
                 ),
               ),
             ],
@@ -435,10 +414,7 @@ class _AnimatedEntranceState extends State<AnimatedEntrance>
       position: Tween<Offset>(begin: offset, end: Offset.zero).animate(
         CurvedAnimation(parent: _controller, curve: Curves.easeOutCubic),
       ),
-      child: FadeTransition(
-        opacity: _controller,
-        child: widget.child,
-      ),
+      child: FadeTransition(opacity: _controller, child: widget.child),
     );
   }
 }
@@ -449,11 +425,7 @@ class ShakeWidget extends StatefulWidget {
   final AnimationController controller;
   final Widget child;
 
-  const ShakeWidget({
-    super.key,
-    required this.controller,
-    required this.child,
-  });
+  const ShakeWidget({super.key, required this.controller, required this.child});
 
   @override
   State<ShakeWidget> createState() => _ShakeWidgetState();
@@ -623,7 +595,8 @@ class AnimatedProgressBar extends StatelessWidget {
           child: LinearProgressIndicator(
             value: v,
             minHeight: height,
-            backgroundColor: backgroundColor ??
+            backgroundColor:
+                backgroundColor ??
                 (isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0)),
             valueColor: AlwaysStoppedAnimation<Color>(color),
           ),

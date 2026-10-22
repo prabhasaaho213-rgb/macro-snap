@@ -6,10 +6,11 @@ import 'sync_status_service.dart';
 
 /// Cloud backup/sync of ALL user data to **Cloud Firestore (Firebase)**.
 ///
-/// Phase 3 of the Firestore migration: this replaces the old HTTP sync to the
-/// Railway/Postgres backend. Every meal, habit and water write lands directly
-/// in Firestore, keyed by the Firebase Auth UID, so a reinstall or a new
-/// device restores everything from Firebase — no backend required.
+/// Firestore is the storage layer: every meal, habit and water write lands
+/// directly in Firestore, keyed by the Firebase Auth UID, so a reinstall or a
+/// new device restores everything without any request to our own backend.
+/// The HTTP backend is only used for things Firebase cannot decide alone
+/// (payments, scan limits via the Admin SDK).
 ///
 /// Collection layout (matches docs/firestore-migration.md):
 ///   meals/{mealId}      — one doc per meal, uid field for security rules
@@ -35,10 +36,10 @@ class MealSyncService {
     final uid = await _uid();
     if (_isGuestUid(uid)) return false;
     try {
-      await _db.collection('meals').doc(meal.id).set(
-            {...meal.toJson(), 'uid': uid},
-            SetOptions(merge: true),
-          );
+      await _db.collection('meals').doc(meal.id).set({
+        ...meal.toJson(),
+        'uid': uid,
+      }, SetOptions(merge: true));
       SyncStatusService.instance.reportSuccess();
       return true;
     } catch (e) {
@@ -100,7 +101,8 @@ class MealSyncService {
   }
 
   static MealRecord _mealFromDoc(
-      QueryDocumentSnapshot<Map<String, dynamic>> doc) {
+    QueryDocumentSnapshot<Map<String, dynamic>> doc,
+  ) {
     return mealFromMap(Map<String, dynamic>.from(doc.data()), doc.id);
   }
 
@@ -146,11 +148,10 @@ class MealSyncService {
         }
       }
       for (final meal in meals) {
-        batch.set(
-          col.doc(meal.id),
-          {...meal.toJson(), 'uid': uid},
-          SetOptions(merge: true),
-        );
+        batch.set(col.doc(meal.id), {
+          ...meal.toJson(),
+          'uid': uid,
+        }, SetOptions(merge: true));
         ops++;
       }
       if (ops > 0) await batch.commit();
@@ -205,8 +206,7 @@ class MealSyncService {
       final data = doc.data() ?? const <String, dynamic>{};
       SyncStatusService.instance.reportSuccess();
       return {
-        'habits':
-            (data['habits'] as List?)?.cast<Map<String, dynamic>>() ?? [],
+        'habits': (data['habits'] as List?)?.cast<Map<String, dynamic>>() ?? [],
         'waterLog': Map<String, int>.from(data['waterLog'] as Map? ?? {}),
         'waterGoal': (data['waterGoal'] as num?)?.toInt() ?? 8,
       };
@@ -265,7 +265,9 @@ class MealSyncService {
   // ═══════════════════════════════════════════════════════════════
 
   /// Sync recent foods list to Firestore.
-  static Future<bool> syncRecentFoods(List<Map<String, dynamic>> foodsJson) async {
+  static Future<bool> syncRecentFoods(
+    List<Map<String, dynamic>> foodsJson,
+  ) async {
     final uid = await _uid();
     if (_isGuestUid(uid)) return false;
     try {
@@ -308,7 +310,9 @@ class MealSyncService {
   // ═══════════════════════════════════════════════════════════════
 
   /// Sync the user's custom recipes to Firestore (one recipes doc per user).
-  static Future<bool> syncRecipes(List<Map<String, dynamic>> recipesJson) async {
+  static Future<bool> syncRecipes(
+    List<Map<String, dynamic>> recipesJson,
+  ) async {
     final uid = await _uid();
     if (_isGuestUid(uid)) return false;
     try {

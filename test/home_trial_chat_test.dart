@@ -31,17 +31,22 @@ void main() {
     await MealStore.instance.reload();
   });
 
-  testWidgets('trial banner shows the days left while the free plan runs',
-      (tester) async {
+  testWidgets('trial banner shows the days left while the free plan runs', (
+    tester,
+  ) async {
     SharedPreferences.setMockInitialValues({
-      'trial_ends_at':
-          DateTime.now().add(const Duration(days: 7, hours: 3)).toIso8601String(),
+      'trial_ends_at': DateTime.now()
+          .add(const Duration(days: 7, hours: 3))
+          .toIso8601String(),
     });
     await pumpHome(tester);
 
     expect(tester.takeException(), isNull, reason: 'Home must render cleanly');
-    expect(SubscriptionService.instance.trialActive, isTrue,
-        reason: 'service must observe the seeded trial');
+    expect(
+      SubscriptionService.instance.trialActive,
+      isTrue,
+      reason: 'service must observe the seeded trial',
+    );
     expect(find.textContaining('Free plan'), findsOneWidget);
     expect(find.textContaining('days left'), findsOneWidget);
     expect(find.text('View plans'), findsOneWidget);
@@ -49,8 +54,9 @@ void main() {
 
   testWidgets('no banner once the free plan has expired', (tester) async {
     SharedPreferences.setMockInitialValues({
-      'trial_ends_at':
-          DateTime.now().subtract(const Duration(hours: 1)).toIso8601String(),
+      'trial_ends_at': DateTime.now()
+          .subtract(const Duration(hours: 1))
+          .toIso8601String(),
     });
     await pumpHome(tester);
 
@@ -67,8 +73,9 @@ void main() {
     expect(find.textContaining('Free plan'), findsNothing);
   });
 
-  testWidgets('fixed chat button opens the nutrition assistant for Pro',
-      (tester) async {
+  testWidgets('fixed chat button opens the nutrition assistant for Pro', (
+    tester,
+  ) async {
     // Guru is a Pro feature (the backend 403s a free user), so the button only
     // opens the assistant for a subscribed / in-trial account.
     SharedPreferences.setMockInitialValues({'subscribed': true});
@@ -82,8 +89,11 @@ void main() {
 
     expect(find.byType(ChatScreen), findsOneWidget);
     expect(find.text('Guru'), findsOneWidget);
-    expect(find.textContaining('nutrition assistant'), findsOneWidget,
-        reason: 'the greeting must advertise the food/protein focus');
+    expect(
+      find.textContaining('nutrition assistant'),
+      findsOneWidget,
+      reason: 'the greeting must advertise the food/protein focus',
+    );
   });
 
   testWidgets('a free user tapping the chat button is sent to the plans, not '
@@ -95,18 +105,25 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
 
-    expect(find.byType(ChatScreen), findsNothing,
-        reason: 'a free user must never reach a chat the backend would refuse');
-    expect(find.byType(SubscriptionScreen), findsOneWidget,
-        reason: 'the button must route them to the upgrade path instead');
+    expect(
+      find.byType(ChatScreen),
+      findsNothing,
+      reason: 'a free user must never reach a chat the backend would refuse',
+    );
+    expect(
+      find.byType(SubscriptionScreen),
+      findsOneWidget,
+      reason: 'the button must route them to the upgrade path instead',
+    );
   });
 
   testWidgets('a user inside the free plan still gets Guru', (tester) async {
     // The one-time 30-day free plan counts as Pro on both sides: the backend
     // reports subscribed=true for an active trial, so the app must match.
     SharedPreferences.setMockInitialValues({
-      'trial_ends_at':
-          DateTime.now().add(const Duration(days: 5)).toIso8601String(),
+      'trial_ends_at': DateTime.now()
+          .add(const Duration(days: 5))
+          .toIso8601String(),
     });
     await pumpHome(tester);
 
@@ -114,7 +131,10 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
 
-    expect(find.byType(ChatScreen), findsOneWidget,
-        reason: 'an active free plan counts as Pro, exactly like the server');
+    expect(
+      find.byType(ChatScreen),
+      findsOneWidget,
+      reason: 'an active free plan counts as Pro, exactly like the server',
+    );
   });
 }

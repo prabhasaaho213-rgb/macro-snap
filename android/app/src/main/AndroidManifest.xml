@@ -1,16 +1,38 @@
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
     <uses-permission android:name="android.permission.INTERNET"/>
     <uses-permission android:name="android.permission.CAMERA"/>
+    <!-- The camera is how meals are scanned, but manual entry, barcode typing
+         and every other screen work without one. Without required="false"
+         Play hides the app from tablets and other camera-less devices. -->
+    <uses-feature android:name="android.hardware.camera" android:required="false"/>
+    <uses-feature android:name="android.hardware.camera.autofocus" android:required="false"/>
+    <!-- `camera.any` is NOT covered by the lines above: the camera plugin's own
+         manifest declares it without a `required` attribute, and the manifest
+         default is TRUE — so Play still filtered out camera-less devices even
+         with `android.hardware.camera` marked optional. Declaring it here makes
+         the app installable there (scanning falls back to manual entry). -->
+    <!-- tools:replace is required: the merged manifest otherwise keeps the
+         library's implied required="true" for this feature. -->
+    <uses-feature
+        android:name="android.hardware.camera.any"
+        android:required="false"
+        tools:replace="android:required"/>
+
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
     <!-- Required by flutter_local_notifications for scheduled reminders: -->
     <!-- re-schedule after reboot/update and vibrate when they fire. -->
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>
     <uses-permission android:name="android.permission.VIBRATE"/>
+    <!-- allowBackup=false: preferences hold the local Pro flag, and an Android
+         cloud backup would restore it onto a different device during setup. -->
     <application
         android:label="MacroSnap"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher"
-        android:usesCleartextTraffic="false">
+        android:usesCleartextTraffic="false"
+        android:allowBackup="false"
+        android:fullBackupContent="false">
         <activity
             android:name=".MainActivity"
             android:exported="true"

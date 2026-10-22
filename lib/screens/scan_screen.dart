@@ -1,4 +1,4 @@
-﻿import 'dart:async';
+import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -23,12 +23,12 @@ class ScanScreen extends StatefulWidget {
   State<ScanScreen> createState() => _ScanScreenState();
 }
 
-class _ScanScreenState extends State<ScanScreen>
-    with WidgetsBindingObserver {
+class _ScanScreenState extends State<ScanScreen> with WidgetsBindingObserver {
   CameraController? _controller;
   List<CameraDescription> _cameras = [];
   bool _initialized = false;
   bool _cameraError = false;
+
   /// True when camera access is permanently blocked ("Don't ask again") — in
   /// that state request() never re-shows the dialog, so the user must be
   /// sent to the system Settings screen instead.
@@ -217,7 +217,9 @@ class _ScanScreenState extends State<ScanScreen>
       HapticFeedback.mediumImpact();
       final xfile = await _controller!.takePicture();
       final tempDir = Directory.systemTemp;
-      final tempFile = File('${tempDir.path}/food_${DateTime.now().millisecondsSinceEpoch}.jpg');
+      final tempFile = File(
+        '${tempDir.path}/food_${DateTime.now().millisecondsSinceEpoch}.jpg',
+      );
       await xfile.saveTo(tempFile.path);
       // Scan is only counted AFTER successful AI analysis (in ResultScreen),
       // so failed analyses don't consume the free limit.
@@ -227,7 +229,10 @@ class _ScanScreenState extends State<ScanScreen>
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Capture failed: $e'), backgroundColor: MacroSnapTheme.neonPink),
+          SnackBar(
+            content: Text('Capture failed: $e'),
+            backgroundColor: MacroSnapTheme.neonPink,
+          ),
         );
       }
     }
@@ -250,7 +255,9 @@ class _ScanScreenState extends State<ScanScreen>
     if (image != null && mounted) {
       final bytes = await image.readAsBytes();
       final tempDir = Directory.systemTemp;
-      final tempFile = File('${tempDir.path}/food_${DateTime.now().millisecondsSinceEpoch}.jpg');
+      final tempFile = File(
+        '${tempDir.path}/food_${DateTime.now().millisecondsSinceEpoch}.jpg',
+      );
       await tempFile.writeAsBytes(bytes);
       // Scan is only counted AFTER successful AI analysis (in ResultScreen),
       // so failed analyses don't consume the free limit.
@@ -266,47 +273,73 @@ class _ScanScreenState extends State<ScanScreen>
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: Theme.of(context).brightness == Brightness.dark
-            ? MacroSnapTheme.cardDark : Colors.white,
+            ? MacroSnapTheme.cardDark
+            : Colors.white,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
         content: Padding(
           padding: const EdgeInsets.symmetric(vertical: 12),
-          child: Column(mainAxisSize: MainAxisSize.min, children: [
-            Container(
-              width: 64, height: 64,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: MacroSnapTheme.neonOrange.withValues(alpha:  0.1),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 64,
+                height: 64,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: MacroSnapTheme.neonOrange.withValues(alpha: 0.1),
+                ),
+                child: const Icon(
+                  Icons.flash_on_rounded,
+                  color: MacroSnapTheme.neonOrange,
+                  size: 32,
+                ),
               ),
-              child: const Icon(Icons.flash_on_rounded,
-                  color: MacroSnapTheme.neonOrange, size: 32),
-            ),
-            const SizedBox(height: 16),
-            Text('Free scans used up today',
-                style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800,
-                    color: isDark ? Colors.white : const Color(0xFF1A1A1A))),
-            const SizedBox(height: 8),
-            Text('You get ${ScanGate.freeLimitPerDay} free AI scans per day.\nCome back tomorrow or go Pro for unlimited scans.',
+              const SizedBox(height: 16),
+              Text(
+                'Free scans used up today',
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.w800,
+                  color: isDark ? Colors.white : const Color(0xFF1A1A1A),
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'You get ${ScanGate.freeLimitPerDay} free AI scans per day.\nCome back tomorrow or go Pro for unlimited scans.',
                 textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 14,
-                    color: MacroSnapTheme.textSecondary(context), height: 1.4)),
-            const SizedBox(height: 24),
-            GradientButton(
-              label: 'Go Pro - \u20B929/mo',
-              onPressed: () {
-                Navigator.of(ctx).pop();
-                Navigator.push(context,
-                    MaterialPageRoute(builder: (_) => const SubscriptionScreen()));
-              },
-              height: 48,
-            ),
-            const SizedBox(height: 10),
-            TextButton(
-              onPressed: () => Navigator.of(ctx).pop(),
-              child: Text('Maybe later',
-                  style: TextStyle(fontSize: 14,
-                      color: MacroSnapTheme.textTertiary(context))),
-            ),
-          ]),
+                style: TextStyle(
+                  fontSize: 14,
+                  color: MacroSnapTheme.textSecondary(context),
+                  height: 1.4,
+                ),
+              ),
+              const SizedBox(height: 24),
+              GradientButton(
+                label: 'Go Pro - \u20B929/mo',
+                onPressed: () {
+                  Navigator.of(ctx).pop();
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => const SubscriptionScreen(),
+                    ),
+                  );
+                },
+                height: 48,
+              ),
+              const SizedBox(height: 10),
+              TextButton(
+                onPressed: () => Navigator.of(ctx).pop(),
+                child: Text(
+                  'Maybe later',
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: MacroSnapTheme.textTertiary(context),
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -319,11 +352,18 @@ class _ScanScreenState extends State<ScanScreen>
 
     if (_cameraError) {
       return Scaffold(
-        backgroundColor: isDark ? MacroSnapTheme.surfaceDark : MacroSnapTheme.surfaceLight,
+        backgroundColor: isDark
+            ? MacroSnapTheme.surfaceDark
+            : MacroSnapTheme.surfaceLight,
         appBar: AppBar(
-          backgroundColor: Colors.transparent, elevation: 0,
+          backgroundColor: Colors.transparent,
+          elevation: 0,
           leading: IconButton(
-            icon: const Icon(Icons.close_rounded, color: Colors.white, size: 24),
+            icon: const Icon(
+              Icons.close_rounded,
+              color: Colors.white,
+              size: 24,
+            ),
             onPressed: () => Navigator.pop(context),
           ),
         ),
@@ -333,16 +373,22 @@ class _ScanScreenState extends State<ScanScreen>
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(Icons.videocam_off_rounded,
-                    color: MacroSnapTheme.textTertiary(context), size: 64),
+                Icon(
+                  Icons.videocam_off_rounded,
+                  color: MacroSnapTheme.textTertiary(context),
+                  size: 64,
+                ),
                 const SizedBox(height: 16),
-                Text('Camera unavailable',
-                    style: TextStyle(
-                        color: isDark
-                            ? Colors.white.withValues(alpha: 0.6)
-                            : const Color(0xFF475569),
-                        fontSize: 18,
-                        fontWeight: FontWeight.w700)),
+                Text(
+                  'Camera unavailable',
+                  style: TextStyle(
+                    color: isDark
+                        ? Colors.white.withValues(alpha: 0.6)
+                        : const Color(0xFF475569),
+                    fontSize: 18,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
                 const SizedBox(height: 8),
                 Text(
                   'Allow camera access to scan your meals.',
@@ -359,8 +405,9 @@ class _ScanScreenState extends State<ScanScreen>
                     icon: const Icon(Icons.settings_rounded),
                     label: const Text('Open Settings'),
                     style: FilledButton.styleFrom(
-                        backgroundColor: MacroSnapTheme.neonPink,
-                        foregroundColor: Colors.black),
+                      backgroundColor: MacroSnapTheme.neonPink,
+                      foregroundColor: Colors.black,
+                    ),
                   )
                 else
                   FilledButton.icon(
@@ -368,8 +415,9 @@ class _ScanScreenState extends State<ScanScreen>
                     icon: const Icon(Icons.camera_alt_rounded),
                     label: const Text('Grant Camera Access'),
                     style: FilledButton.styleFrom(
-                        backgroundColor: MacroSnapTheme.neonGreen,
-                        foregroundColor: Colors.black),
+                      backgroundColor: MacroSnapTheme.neonGreen,
+                      foregroundColor: Colors.black,
+                    ),
                   ),
                 const SizedBox(height: 12),
                 FilledButton.tonalIcon(
@@ -386,16 +434,19 @@ class _ScanScreenState extends State<ScanScreen>
 
     if (!_initialized) {
       return Scaffold(
-        backgroundColor: isDark ? MacroSnapTheme.surfaceDark : MacroSnapTheme.surfaceLight,
+        backgroundColor: isDark
+            ? MacroSnapTheme.surfaceDark
+            : MacroSnapTheme.surfaceLight,
         body: Center(
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               const CircularProgressIndicator(color: MacroSnapTheme.neonGreen),
               const SizedBox(height: 16),
-              Text('Starting camera...',
-                  style: TextStyle(
-                      color: MacroSnapTheme.textSecondary(context))),
+              Text(
+                'Starting camera...',
+                style: TextStyle(color: MacroSnapTheme.textSecondary(context)),
+              ),
             ],
           ),
         ),
@@ -412,7 +463,8 @@ class _ScanScreenState extends State<ScanScreen>
             Positioned.fill(
               child: LayoutBuilder(
                 builder: (context, constraints) {
-                  final screenAspect = constraints.maxWidth / constraints.maxHeight;
+                  final screenAspect =
+                      constraints.maxWidth / constraints.maxHeight;
                   final cameraAspect = _controller!.value.aspectRatio;
                   return ClipRect(
                     child: OverflowBox(
@@ -472,11 +524,15 @@ class _ScanScreenState extends State<ScanScreen>
                     ),
                     Positioned(
                       bottom: 40,
-                      left: 0, right: 0,
+                      left: 0,
+                      right: 0,
                       child: Column(
                         children: [
                           Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 20,
+                              vertical: 10,
+                            ),
                             decoration: BoxDecoration(
                               color: Colors.black.withValues(alpha: 0.4),
                               borderRadius: BorderRadius.circular(20),
@@ -484,24 +540,32 @@ class _ScanScreenState extends State<ScanScreen>
                             child: const Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                Icon(Icons.auto_awesome_rounded, color: MacroSnapTheme.neonGreen, size: 18),
+                                Icon(
+                                  Icons.auto_awesome_rounded,
+                                  color: MacroSnapTheme.neonGreen,
+                                  size: 18,
+                                ),
                                 SizedBox(width: 8),
-                                Text('Analyzing your meal...',
-                                    style: TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 14,
-                                      fontWeight: FontWeight.w600,
-                                    )),
+                                Text(
+                                  'Analyzing your meal...',
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
                               ],
                             ),
                           ),
                           const SizedBox(height: 8),
-                          Text('Tap anywhere to continue',
-                              style: TextStyle(
-                                color: Colors.white.withValues(alpha: 0.5),
-                                fontSize: 12,
-                                fontWeight: FontWeight.w500,
-                              )),
+                          Text(
+                            'Tap anywhere to continue',
+                            style: TextStyle(
+                              color: Colors.white.withValues(alpha: 0.5),
+                              fontSize: 12,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
                         ],
                       ),
                     ),
@@ -512,185 +576,240 @@ class _ScanScreenState extends State<ScanScreen>
 
           // ─── Camera overlays (hidden during preview) ───────
           if (_capturedImagePath == null) ...[
-
-          // Dark gradient overlay at bottom for button visibility
-          Positioned(
-            left: 0, right: 0, bottom: 0,
-            child: Container(
-              height: 200,
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.bottomCenter,
-                  end: Alignment.topCenter,
-                  colors: [
-                    Colors.black.withValues(alpha:  0.7),
-                    Colors.transparent,
-                  ],
-                ),
-              ),
-            ),
-          ),
-
-          // Top bar
-          Positioned(
-            top: 0, left: 0, right: 0,
-            child: SafeArea(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 8),
-                child: Row(
-                  children: [
-                    IconButton(
-                      icon: const Icon(Icons.close_rounded, color: Colors.white, size: 26),
-                      onPressed: () => Navigator.pop(context),
-                    ),
-                    const Spacer(),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                      decoration: BoxDecoration(
-                        color: (canUse ? MacroSnapTheme.neonGreen : MacroSnapTheme.neonPink).withValues(alpha:  0.25),
-                        borderRadius: BorderRadius.circular(20),
-                        border: Border.all(
-                          color: (canUse ? MacroSnapTheme.neonGreen : MacroSnapTheme.neonPink).withValues(alpha:  0.3),
-                        ),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(Icons.flash_on_rounded, size: 14,
-                              color: canUse ? MacroSnapTheme.neonGreen : MacroSnapTheme.neonPink),
-                          const SizedBox(width: 4),
-                          Text(
-                            _scansLeft >= 99 ? 'Unlimited' : '$_scansLeft left',
-                            style: TextStyle(
-                              fontSize: 12, fontWeight: FontWeight.w700,
-                              color: canUse ? MacroSnapTheme.greenText(context) : MacroSnapTheme.neonPink,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(width: 4),
-                    // Settings button
-                    GestureDetector(
-                      onTap: () => Navigator.push(context,
-                          habitFlowRoute(const SettingsScreen())),
-                      child: Container(
-                        width: 38, height: 38,
-                        decoration: BoxDecoration(
-                          color: Colors.white.withValues(alpha:  0.12),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: const Icon(Icons.settings_rounded,
-                            color: Colors.white60, size: 20),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-
-          // Small hint above the action bar: how many free scans are left
-          // today (unlimited/Pro users see nothing).
-          if (_scansLeft < 99)
+            // Dark gradient overlay at bottom for button visibility
             Positioned(
-              left: 0, right: 0, bottom: 118,
-              child: Center(
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: Colors.black.withValues(alpha: 0.35),
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: Text(
-                    _scansLeft == 0
-                        ? 'No free scans left today'
-                        : '$_scansLeft of ${ScanGate.freeLimitPerDay} scans left today',
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w700,
-                      color: _scansLeft == 0
-                          ? MacroSnapTheme.neonPink
-                          : Colors.white,
-                    ),
+              left: 0,
+              right: 0,
+              bottom: 0,
+              child: Container(
+                height: 200,
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.bottomCenter,
+                    end: Alignment.topCenter,
+                    colors: [
+                      Colors.black.withValues(alpha: 0.7),
+                      Colors.transparent,
+                    ],
                   ),
                 ),
               ),
             ),
 
-          // Bottom action bar
-          Positioned(
-            left: 0, right: 0, bottom: 0,
-            child: SafeArea(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(32, 0, 32, 28),
-                child: Row(
-                  children: [
-                    // Gallery button
-                    GestureDetector(
-                      onTap: _pickFromGallery,
-                      child: Container(
-                        width: 52, height: 52,
-                        decoration: BoxDecoration(
-                          color: Colors.white.withValues(alpha:  0.15),
-                          borderRadius: BorderRadius.circular(16),
-                          border: Border.all(color: Colors.white.withValues(alpha:  0.2)),
+            // Top bar
+            Positioned(
+              top: 0,
+              left: 0,
+              right: 0,
+              child: SafeArea(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  child: Row(
+                    children: [
+                      IconButton(
+                        icon: const Icon(
+                          Icons.close_rounded,
+                          color: Colors.white,
+                          size: 26,
                         ),
-                        child: Icon(Icons.photo_library_rounded,
-                            color: Colors.white.withValues(alpha:  0.8), size: 24),
+                        onPressed: () => Navigator.pop(context),
                       ),
-                    ),
-                    const Spacer(),
-                    // Capture button
-                    GestureDetector(
-                      onTap: _capture,
-                      child: Container(
-                        width: 76, height: 76,
+                      const Spacer(),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 6,
+                        ),
                         decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          border: Border.all(color: Colors.white, width: 4),
+                          color:
+                              (canUse
+                                      ? MacroSnapTheme.neonGreen
+                                      : MacroSnapTheme.neonPink)
+                                  .withValues(alpha: 0.25),
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(
+                            color:
+                                (canUse
+                                        ? MacroSnapTheme.neonGreen
+                                        : MacroSnapTheme.neonPink)
+                                    .withValues(alpha: 0.3),
+                          ),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              Icons.flash_on_rounded,
+                              size: 14,
+                              color: canUse
+                                  ? MacroSnapTheme.neonGreen
+                                  : MacroSnapTheme.neonPink,
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              _scansLeft >= 99
+                                  ? 'Unlimited'
+                                  : '$_scansLeft left',
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w700,
+                                color: canUse
+                                    ? MacroSnapTheme.greenText(context)
+                                    : MacroSnapTheme.neonPink,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 4),
+                      // Settings button
+                      GestureDetector(
+                        onTap: () => Navigator.push(
+                          context,
+                          habitFlowRoute(const SettingsScreen()),
                         ),
                         child: Container(
-                          margin: const EdgeInsets.all(4),
-                          decoration: const BoxDecoration(
-                            shape: BoxShape.circle,
-                            gradient: MacroSnapTheme.accentGradient,
+                          width: 38,
+                          height: 38,
+                          decoration: BoxDecoration(
+                            color: Colors.white.withValues(alpha: 0.12),
+                            borderRadius: BorderRadius.circular(12),
                           ),
-                          child: const Icon(Icons.camera_alt_rounded,
-                              color: Colors.black, size: 28),
+                          child: const Icon(
+                            Icons.settings_rounded,
+                            color: Colors.white60,
+                            size: 20,
+                          ),
                         ),
                       ),
-                    ),
-                    const Spacer(),
-                    // Recent foods button
-                    GestureDetector(
-                      onTap: () => Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => const RecentFoodsScreen(),
-                        ),
-                      ),
-                      child: Container(
-                        width: 52, height: 52,
-                        decoration: BoxDecoration(
-                          color: Colors.white.withValues(alpha:  0.15),
-                          borderRadius: BorderRadius.circular(16),
-                          border: Border.all(color: Colors.white.withValues(alpha:  0.2)),
-                        ),
-                        child: Icon(Icons.history_rounded,
-                            color: Colors.white.withValues(alpha:  0.8), size: 24),
-                      ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
             ),
-          ),
 
+            // Small hint above the action bar: how many free scans are left
+            // today (unlimited/Pro users see nothing).
+            if (_scansLeft < 99)
+              Positioned(
+                left: 0,
+                right: 0,
+                bottom: 118,
+                child: Center(
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 6,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.black.withValues(alpha: 0.35),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Text(
+                      _scansLeft == 0
+                          ? 'No free scans left today'
+                          : '$_scansLeft of ${ScanGate.freeLimitPerDay} scans left today',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        color: _scansLeft == 0
+                            ? MacroSnapTheme.neonPink
+                            : Colors.white,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+
+            // Bottom action bar
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: 0,
+              child: SafeArea(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(32, 0, 32, 28),
+                  child: Row(
+                    children: [
+                      // Gallery button
+                      GestureDetector(
+                        onTap: _pickFromGallery,
+                        child: Container(
+                          width: 52,
+                          height: 52,
+                          decoration: BoxDecoration(
+                            color: Colors.white.withValues(alpha: 0.15),
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(
+                              color: Colors.white.withValues(alpha: 0.2),
+                            ),
+                          ),
+                          child: Icon(
+                            Icons.photo_library_rounded,
+                            color: Colors.white.withValues(alpha: 0.8),
+                            size: 24,
+                          ),
+                        ),
+                      ),
+                      const Spacer(),
+                      // Capture button
+                      GestureDetector(
+                        onTap: _capture,
+                        child: Container(
+                          width: 76,
+                          height: 76,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            border: Border.all(color: Colors.white, width: 4),
+                          ),
+                          child: Container(
+                            margin: const EdgeInsets.all(4),
+                            decoration: const BoxDecoration(
+                              shape: BoxShape.circle,
+                              gradient: MacroSnapTheme.accentGradient,
+                            ),
+                            child: const Icon(
+                              Icons.camera_alt_rounded,
+                              color: Colors.black,
+                              size: 28,
+                            ),
+                          ),
+                        ),
+                      ),
+                      const Spacer(),
+                      // Recent foods button
+                      GestureDetector(
+                        onTap: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => const RecentFoodsScreen(),
+                          ),
+                        ),
+                        child: Container(
+                          width: 52,
+                          height: 52,
+                          decoration: BoxDecoration(
+                            color: Colors.white.withValues(alpha: 0.15),
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(
+                              color: Colors.white.withValues(alpha: 0.2),
+                            ),
+                          ),
+                          child: Icon(
+                            Icons.history_rounded,
+                            color: Colors.white.withValues(alpha: 0.8),
+                            size: 24,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
           ], // end if _capturedImagePath == null
         ],
       ),
     );
   }
 }
-

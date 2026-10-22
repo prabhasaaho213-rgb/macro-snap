@@ -37,8 +37,14 @@ void main() {
 
   test('the day boundary is IST midnight, not UTC', () {
     // 18:29 UTC is 23:59 IST on the 16th; one minute later it is the 17th.
-    expect(ScanGate.istDayKey(DateTime.utc(2026, 10, 16, 18, 29)), '2026-10-16');
-    expect(ScanGate.istDayKey(DateTime.utc(2026, 10, 16, 18, 30)), '2026-10-17');
+    expect(
+      ScanGate.istDayKey(DateTime.utc(2026, 10, 16, 18, 29)),
+      '2026-10-16',
+    );
+    expect(
+      ScanGate.istDayKey(DateTime.utc(2026, 10, 16, 18, 30)),
+      '2026-10-17',
+    );
     // 05:30 UTC is 11:00 IST, still the same IST day.
     expect(ScanGate.istDayKey(DateTime.utc(2026, 10, 17, 5, 30)), '2026-10-17');
     expect(ScanGate.freeLimitPerDay, 3);
@@ -60,10 +66,16 @@ void main() {
       await ScanGate.incrementScan();
     }
 
-    expect(await ScanGate.getScansRemaining(), 0,
-        reason: 'the local estimate says 0 left');
-    expect(await ScanGate.canScan(), isTrue,
-        reason: 'the server decides — the request must still go out');
+    expect(
+      await ScanGate.getScansRemaining(),
+      0,
+      reason: 'the local estimate says 0 left',
+    );
+    expect(
+      await ScanGate.canScan(),
+      isTrue,
+      reason: 'the server decides — the request must still go out',
+    );
   });
 
   test('a server count of 3/3 today stops offering scans', () async {
@@ -82,10 +94,16 @@ void main() {
     });
     await SubscriptionService.instance.load();
 
-    expect(await ScanGate.canScan(), isTrue,
-        reason: 'a stale count must never block today');
-    expect(await ScanGate.getScansRemaining(), ScanGate.freeLimitPerDay,
-        reason: 'nor may it be shown as today\'s usage');
+    expect(
+      await ScanGate.canScan(),
+      isTrue,
+      reason: 'a stale count must never block today',
+    );
+    expect(
+      await ScanGate.getScansRemaining(),
+      ScanGate.freeLimitPerDay,
+      reason: 'nor may it be shown as today\'s usage',
+    );
   });
 
   test('the local estimate resets when the IST day changes', () async {
@@ -98,15 +116,17 @@ void main() {
     expect(await ScanGate.getScansRemaining(), ScanGate.freeLimitPerDay);
   });
 
-  test('a 403 sets the stored count to the limit, so the UI shows 0 left',
-      () async {
-    await reset();
-    await ScanGate.markLimitReached();
+  test(
+    'a 403 sets the stored count to the limit, so the UI shows 0 left',
+    () async {
+      await reset();
+      await ScanGate.markLimitReached();
 
-    expect(await ScanGate.getScansRemaining(), 0);
-    expect(await ScanGate.getScansUsed(), ScanGate.freeLimitPerDay);
-    expect(await ScanGate.canScan(), isFalse);
-  });
+      expect(await ScanGate.getScansRemaining(), 0);
+      expect(await ScanGate.getScansUsed(), ScanGate.freeLimitPerDay);
+      expect(await ScanGate.canScan(), isFalse);
+    },
+  );
 
   test('Pro shows unlimited and is never blocked', () async {
     await reset(subscribed: true);

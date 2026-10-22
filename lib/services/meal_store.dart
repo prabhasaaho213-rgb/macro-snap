@@ -6,7 +6,9 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:io';
 import '../models/meal_record.dart';
 import 'account_partition.dart';
+import 'badge_service.dart';
 import 'meal_sync_service.dart';
+import 'crash_reporting.dart';
 
 class MealStore {
   static final MealStore _instance = MealStore._();
@@ -27,17 +29,16 @@ class MealStore {
   /// The account whose local partition is loaded. Null until [load] runs
   /// (guests and unknown states use the legacy `meals.json` file).
   String? _activeAccount;
-  String get _suffix =>
-      AccountPartition.suffix(_activeAccount ?? '');
+  String get _suffix => AccountPartition.suffix(_activeAccount ?? '');
 
   /// Local file for the active account's partition: `meals.json` for guests,
   /// `meals_{suffix}.json` for signed-in accounts — one device holds many
   /// accounts without any data leaking between them.
-  String get _fileName =>
-      '${AccountPartition.key('meals', _suffix)}.json';
+  String get _fileName => '${AccountPartition.key('meals', _suffix)}.json';
 
   List<MealRecord> get todayMeals =>
-    _meals.where((m) => m.isToday).toList()..sort((a, b) => b.date.compareTo(a.date));
+      _meals.where((m) => m.isToday).toList()
+        ..sort((a, b) => b.date.compareTo(a.date));
 
   List<MealRecord> get allMeals => List.unmodifiable(_meals);
 
@@ -48,8 +49,9 @@ class MealStore {
 
   Future<void> load() async {
     if (_loaded) return;
-    _activeAccount =
-        AccountPartition.activeFromPrefs(await SharedPreferences.getInstance());
+    _activeAccount = AccountPartition.activeFromPrefs(
+      await SharedPreferences.getInstance(),
+    );
     try {
       final dir = await getApplicationDocumentsDirectory();
       final file = File('${dir.path}/$_fileName');
@@ -74,8 +76,9 @@ class MealStore {
             // aborting the loop (which used to reset the whole history).
             _meals = data
                 .whereType<Map>()
-                .map((e) => MealRecord.tryFromJson(
-                    Map<String, dynamic>.from(e)))
+                .map(
+                  (e) => MealRecord.tryFromJson(Map<String, dynamic>.from(e)),
+                )
                 .whereType<MealRecord>()
                 .toList();
           }
@@ -136,24 +139,33 @@ class MealStore {
       if (added) {
         await _save();
       }
-    } catch (e) { debugPrint("Error: $e"); } // Silently fail — local data is primary
+    } catch (e, st) {
+      logError('MealStore._doSyncFromCloud', e, st);
+    } // Silently fail — local data is primary
   }
 
   Future<void> add(MealRecord meal) async {
     _meals.add(meal);
-    await _save();
-    // Async sync to cloud (fire-and-forget)
-    MealSyncService.syncMeal(meal);
+    // Announce before persisting: the list is the source of truth for the UI,
+    // and a slow (or wedged) disk write must not delay the calorie ring, the
+    // "first meal" moment or the meal card appearing.
     changeNotifier.value++;
     mealAddedNotifier.value++;
+    await _save();
+    // Achievements are a side effect of logging, never a gate on it: the meal
+    // is already stored and on screen by the time this runs.
+    unawaited(BadgeService.instance.noteMealLogged(_meals.length));
+    // Async sync to cloud (fire-and-forget)
+    MealSyncService.syncMeal(meal);
   }
 
   Future<void> remove(String id) async {
     _meals.removeWhere((m) => m.id == id);
+    // Same rule as add(): the row leaves the screen now, the write follows.
+    changeNotifier.value++;
     await _save();
     // Async remove from cloud (fire-and-forget)
     MealSyncService.removeMeal(id);
-    changeNotifier.value++;
   }
 
   Future<void> _save() async {
@@ -163,6 +175,8 @@ class MealStore {
       await file.writeAsString(
         jsonEncode(_meals.map((m) => m.toJson()).toList()),
       );
-    } catch (e) { debugPrint("Error: $e"); }
+    } catch (e, st) {
+      logError('MealStore._save', e, st);
+    }
   }
 }

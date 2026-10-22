@@ -25,10 +25,7 @@ void main() {
     return null;
   }
 
-  DietProfile profile({
-    Goal goal = Goal.loseWeight,
-    double weightKg = 70,
-  }) =>
+  DietProfile profile({Goal goal = Goal.loseWeight, double weightKg = 70}) =>
       DietProfile(
         weightKg: weightKg,
         heightCm: 175,
@@ -40,11 +37,16 @@ void main() {
       );
 
   group('CalorieReveal', () {
-    testWidgets('spins up from 0 and lands exactly on the target',
-        (tester) async {
-      await tester.pumpWidget(const MaterialApp(
-        home: Scaffold(body: Center(child: CalorieReveal(calories: 420, protein: 10))),
-      ));
+    testWidgets('spins up from 0 and lands exactly on the target', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: Scaffold(
+            body: Center(child: CalorieReveal(calories: 420, protein: 10)),
+          ),
+        ),
+      );
 
       expect(shownNumber(tester), 0, reason: 'the reveal starts at 0');
 
@@ -55,42 +57,53 @@ void main() {
       expect(mid, lessThan(420), reason: 'still spinning');
 
       await tester.pump(const Duration(milliseconds: 1200)); // finish
-      expect(shownNumber(tester), 420, reason: 'it must land on the exact value');
+      expect(
+        shownNumber(tester),
+        420,
+        reason: 'it must land on the exact value',
+      );
       expect(tester.takeException(), isNull);
     });
 
     testWidgets('animate: false shows the number immediately', (tester) async {
-      await tester.pumpWidget(const MaterialApp(
-        home: Scaffold(
-          body: Center(
-            child: CalorieReveal(calories: 512, protein: 20, animate: false),
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: Scaffold(
+            body: Center(
+              child: CalorieReveal(calories: 512, protein: 20, animate: false),
+            ),
           ),
         ),
-      ));
+      );
       await tester.pump();
 
-      expect(shownNumber(tester), 512,
-          reason: 'a saved meal must not replay the spin');
+      expect(
+        shownNumber(tester),
+        512,
+        reason: 'a saved meal must not replay the spin',
+      );
       expect(tester.takeException(), isNull);
     });
 
     testWidgets('an edited value glides to the new number', (tester) async {
       var calories = 400;
-      await tester.pumpWidget(MaterialApp(
-        home: Scaffold(
-          body: StatefulBuilder(
-            builder: (context, setState) => Column(
-              children: [
-                CalorieReveal(calories: calories, protein: 5),
-                ElevatedButton(
-                  onPressed: () => setState(() => calories = 600),
-                  child: const Text('edit grams'),
-                ),
-              ],
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: StatefulBuilder(
+              builder: (context, setState) => Column(
+                children: [
+                  CalorieReveal(calories: calories, protein: 5),
+                  ElevatedButton(
+                    onPressed: () => setState(() => calories = 600),
+                    child: const Text('edit grams'),
+                  ),
+                ],
+              ),
             ),
           ),
         ),
-      ));
+      );
       await tester.pump(const Duration(milliseconds: 500));
       await tester.pump(const Duration(milliseconds: 1700));
       expect(shownNumber(tester), 400);
@@ -99,8 +112,11 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 600));
 
-      expect(shownNumber(tester), 600,
-          reason: 'the number follows the edited grams');
+      expect(
+        shownNumber(tester),
+        600,
+        reason: 'the number follows the edited grams',
+      );
       expect(tester.takeException(), isNull);
     });
   });
@@ -114,17 +130,22 @@ void main() {
       expect(GoalFit.check(calories: 300, protein: 30), isNull);
     });
 
-    test('losing weight celebrates while the meal fits today\'s budget',
-        () async {
-      final p = profile(goal: Goal.loseWeight);
-      await DietPlanService.instance.save(p);
-      final budget = p.targetCalories; // nothing logged yet today
+    test(
+      'losing weight celebrates while the meal fits today\'s budget',
+      () async {
+        final p = profile(goal: Goal.loseWeight);
+        await DietPlanService.instance.save(p);
+        final budget = p.targetCalories; // nothing logged yet today
 
-      expect(GoalFit.check(calories: budget - 10, protein: 20), isTrue);
-      expect(GoalFit.check(calories: budget + 10, protein: 20), isFalse,
-          reason: 'a meal over the remaining budget earns no confetti');
-      expect(GoalFit.check(calories: budget, protein: 20), isTrue);
-    });
+        expect(GoalFit.check(calories: budget - 10, protein: 20), isTrue);
+        expect(
+          GoalFit.check(calories: budget + 10, protein: 20),
+          isFalse,
+          reason: 'a meal over the remaining budget earns no confetti',
+        );
+        expect(GoalFit.check(calories: budget, protein: 20), isTrue);
+      },
+    );
 
     test('gaining muscle needs 20% of the daily protein target', () async {
       final p = profile(goal: Goal.gainMuscle);
@@ -147,7 +168,10 @@ void main() {
       await DietPlanService.instance.save(p);
 
       expect(GoalFit.check(calories: p.targetCalories - 5, protein: 5), isTrue);
-      expect(GoalFit.check(calories: p.targetCalories + 5, protein: 5), isFalse);
+      expect(
+        GoalFit.check(calories: p.targetCalories + 5, protein: 5),
+        isFalse,
+      );
     });
   });
 }

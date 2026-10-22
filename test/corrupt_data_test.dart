@@ -34,8 +34,11 @@ void main() {
     });
 
     test('returns null for a truncated record instead of throwing', () {
-      expect(MealRecord.tryFromJson({'id': 'm2'}), isNull,
-          reason: 'date/name/macros are required');
+      expect(
+        MealRecord.tryFromJson({'id': 'm2'}),
+        isNull,
+        reason: 'date/name/macros are required',
+      );
     });
 
     test('returns null for an unparseable date', () {
@@ -91,8 +94,11 @@ void main() {
 
       await HabitStore.instance.reload();
 
-      expect(HabitStore.instance.habits, hasLength(1),
-          reason: 'the valid habit must survive a corrupt neighbour');
+      expect(
+        HabitStore.instance.habits,
+        hasLength(1),
+        reason: 'the valid habit must survive a corrupt neighbour',
+      );
       expect(HabitStore.instance.habits.single.id, 'good-1');
     });
   });

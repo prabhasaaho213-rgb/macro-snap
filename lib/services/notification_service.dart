@@ -1,7 +1,8 @@
 import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart' show debugPrint, visibleForTesting;
-import 'package:flutter/widgets.dart' show AppLifecycleState, WidgetsBinding, WidgetsBindingObserver;
+import 'package:flutter/widgets.dart'
+    show AppLifecycleState, WidgetsBinding, WidgetsBindingObserver;
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_timezone/flutter_timezone.dart';
 import 'package:timezone/timezone.dart' as tz;
@@ -16,6 +17,7 @@ import 'meal_store.dart';
 import 'notification_branding.dart';
 import 'reminder_registry.dart';
 import 'subscription_service.dart';
+import 'crash_reporting.dart';
 
 /// Where a built-in (non-habit) notification tap should take the user.
 enum NotificationTapDestination { home, subscription, none }
@@ -74,7 +76,9 @@ class NotificationService with WidgetsBindingObserver {
       try {
         final prefs = await SharedPreferences.getInstance();
         await prefs.setString(_keyTz, tzName);
-      } catch (e) { debugPrint("Error: $e"); }
+      } catch (e, st) {
+        logError('NotificationService.init', e, st);
+      }
 
       // Warm the large-icon asset cache before any reminder is scheduled.
       await NotificationBranding.prewarm();
@@ -112,7 +116,9 @@ class NotificationService with WidgetsBindingObserver {
       //    restore all apply the reminder plan through scheduleForSubscription-
       MealStore.instance.mealAddedNotifier.addListener(_onMealsChanged);
       SubscriptionService.instance.addListener(_onSubscriptionChanged);
-      HabitStore.instance.remindersChangedNotifier.addListener(_onHabitsChanged);
+      HabitStore.instance.remindersChangedNotifier.addListener(
+        _onHabitsChanged,
+      );
       WidgetsBinding.instance.addObserver(this);
 
       // The launch `resumed` lifecycle event fires immediately after runApp —
@@ -155,7 +161,9 @@ class NotificationService with WidgetsBindingObserver {
       try {
         final prefs = await SharedPreferences.getInstance();
         await prefs.setString(_keyTz, tzName);
-      } catch (e) { debugPrint("Error: $e"); }
+      } catch (e, st) {
+        logError('NotificationService._rearmAfterResume', e, st);
+      }
     } catch (e) {
       debugPrint('⚠️ resume tz refresh failed (continuing restore): $e');
     }
@@ -268,8 +276,9 @@ class NotificationService with WidgetsBindingObserver {
   Future<Habit?> _findHabitFromPrefs(String habitId) async {
     try {
       final p = await SharedPreferences.getInstance();
-      final suffix =
-          AccountPartition.suffix(AccountPartition.activeFromPrefs(p));
+      final suffix = AccountPartition.suffix(
+        AccountPartition.activeFromPrefs(p),
+      );
       final raw = p.getString(AccountPartition.key('habits', suffix));
       if (raw == null || raw.isEmpty) return null;
       final decoded = jsonDecode(raw);
@@ -338,8 +347,7 @@ class NotificationService with WidgetsBindingObserver {
   /// store, whose `save()` serializes its own (empty) list.
   Future<void> _persistCompletionToPrefs(Habit habit) async {
     final p = await SharedPreferences.getInstance();
-    final suffix =
-        AccountPartition.suffix(AccountPartition.activeFromPrefs(p));
+    final suffix = AccountPartition.suffix(AccountPartition.activeFromPrefs(p));
     final habitsKey = AccountPartition.key('habits', suffix);
     final raw = p.getString(habitsKey);
     if (raw == null || raw.isEmpty) return;
@@ -365,16 +373,17 @@ class NotificationService with WidgetsBindingObserver {
   }
 
   /// The subscriber-gated reminder ids (for tests / diagnostics).
-  static List<int> get subscriberGatedIds => ReminderRegistry.subscriberGatedIds;
+  static List<int> get subscriberGatedIds =>
+      ReminderRegistry.subscriberGatedIds;
 
   /// Human-readable plan of the built-in reminders plus the current
   /// subscription state and enabled-habit count, logged at startup.
   static List<String> debugDescribe() => ReminderRegistry.debugDescribe(
-        subscribed: SubscriptionService.instance.isSubscribed,
-        enabledHabits: HabitStore.instance.habits
-            .where((h) => h.reminderEnabled)
-            .length,
-      );
+    subscribed: SubscriptionService.instance.isSubscribed,
+    enabledHabits: HabitStore.instance.habits
+        .where((h) => h.reminderEnabled)
+        .length,
+  );
 
   /// Reconciles every habit reminder against the current list — arms every
   /// enabled habit and cancels every disabled one. THE single funnel for all
@@ -393,14 +402,18 @@ class NotificationService with WidgetsBindingObserver {
   Future<void> cancelHabitReminder(Habit h) async {
     try {
       await HabitReminderService.cancel(h, _plugin);
-    } catch (e) { debugPrint("Error: $e"); }
+    } catch (e, st) {
+      logError('NotificationService.cancelHabitReminder', e, st);
+    }
   }
 
   /// Cancel just the one-off snoozed reminder (keeps the daily one).
   Future<void> cancelHabitReminderSnooze(Habit h) async {
     try {
       await HabitReminderService.cancelSnooze(h, _plugin);
-    } catch (e) { debugPrint("Error: $e"); }
+    } catch (e, st) {
+      logError('NotificationService.cancelHabitReminderSnooze', e, st);
+    }
   }
 
   /// Suppress today's remaining daily reminder for [h] by cancelling the
@@ -409,7 +422,13 @@ class NotificationService with WidgetsBindingObserver {
   Future<void> rescheduleHabitReminderFromTomorrow(Habit h) async {
     try {
       await HabitReminderService.rescheduleTomorrow(h, _plugin);
-    } catch (e) { debugPrint("Error: $e"); }
+    } catch (e, st) {
+      logError(
+        'NotificationService.rescheduleHabitReminderFromTomorrow',
+        e,
+        st,
+      );
+    }
   }
 
   /// Full startup safety net: re-create every reminder so a lost alarm

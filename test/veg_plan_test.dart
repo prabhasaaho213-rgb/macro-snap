@@ -20,7 +20,8 @@ void main() {
     expect(
       nonVegNames,
       isEmpty,
-      reason: 'meat must be excluded from the vegetarian list, found $nonVegNames',
+      reason:
+          'meat must be excluded from the vegetarian list, found $nonVegNames',
     );
     expect(
       FoodDatabase.vegetarian.map((i) => i.name),
@@ -130,15 +131,15 @@ void main() {
   });
 
   test('the same day is reproducible and the next day differs', () {
-    final today = VegPlanService.dayPlan(day: 7).slots
-        .map((s) => s.items.map((i) => i.name).toList())
-        .toList();
-    final sameDay = VegPlanService.dayPlan(day: 7).slots
-        .map((s) => s.items.map((i) => i.name).toList())
-        .toList();
-    final tomorrow = VegPlanService.dayPlan(day: 8).slots
-        .map((s) => s.items.map((i) => i.name).toList())
-        .toList();
+    final today = VegPlanService.dayPlan(
+      day: 7,
+    ).slots.map((s) => s.items.map((i) => i.name).toList()).toList();
+    final sameDay = VegPlanService.dayPlan(
+      day: 7,
+    ).slots.map((s) => s.items.map((i) => i.name).toList()).toList();
+    final tomorrow = VegPlanService.dayPlan(
+      day: 8,
+    ).slots.map((s) => s.items.map((i) => i.name).toList()).toList();
 
     expect(sameDay, today, reason: 'same day + same target = same plan');
     expect(
@@ -152,10 +153,7 @@ void main() {
     final groups = VegPlanService.suggestions();
 
     expect(groups, isNotEmpty);
-    expect(
-      VegPlanService.suggestionCount,
-      FoodDatabase.vegetarian.length,
-    );
+    expect(VegPlanService.suggestionCount, FoodDatabase.vegetarian.length);
 
     final seen = <String>[];
     for (final group in groups) {

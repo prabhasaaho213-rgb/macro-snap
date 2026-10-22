@@ -49,10 +49,10 @@ class Habit {
     int? weeklyDay,
     DateTime? createdAt,
     this.order = 0,
-  })  : completedDates = completedDates ?? [],
-        skippedDates = skippedDates ?? [],
-        weeklyDay = weeklyDay ?? (createdAt ?? DateTime.now()).weekday,
-        createdAt = createdAt ?? DateTime.now();
+  }) : completedDates = completedDates ?? [],
+       skippedDates = skippedDates ?? [],
+       weeklyDay = weeklyDay ?? (createdAt ?? DateTime.now()).weekday,
+       createdAt = createdAt ?? DateTime.now();
 
   Color get color => Color(colorValue);
 
@@ -95,7 +95,9 @@ class Habit {
     var d = ref;
 
     // If today is due but NOT completed (still pending), count from yesterday
-    if (isDueOn(ref) && !isCompleted(ref) && !(streakProtection && isSkipped(ref))) {
+    if (isDueOn(ref) &&
+        !isCompleted(ref) &&
+        !(streakProtection && isSkipped(ref))) {
       d = ref.subtract(const Duration(days: 1));
     }
 
@@ -155,22 +157,22 @@ class Habit {
   }
 
   Map<String, dynamic> toJson() => {
-        'id': id,
-        'name': name,
-        'emoji': emoji,
-        'colorValue': colorValue,
-        'frequency': frequency,
-        'completedDates': completedDates,
-        'skippedDates': skippedDates,
-        'paused': paused,
-        'streakProtection': streakProtection,
-        'reminderEnabled': reminderEnabled,
-        'reminderHour': reminderHour,
-        'reminderMinute': reminderMinute,
-        'weeklyDay': weeklyDay,
-        'order': order,
-        'createdAt': createdAt.toIso8601String(),
-      };
+    'id': id,
+    'name': name,
+    'emoji': emoji,
+    'colorValue': colorValue,
+    'frequency': frequency,
+    'completedDates': completedDates,
+    'skippedDates': skippedDates,
+    'paused': paused,
+    'streakProtection': streakProtection,
+    'reminderEnabled': reminderEnabled,
+    'reminderHour': reminderHour,
+    'reminderMinute': reminderMinute,
+    'weeklyDay': weeklyDay,
+    'order': order,
+    'createdAt': createdAt.toIso8601String(),
+  };
 
   /// Parses one habit, returning null instead of throwing when the entry is
   /// malformed. One corrupt row must not cost the user every other habit.
@@ -183,21 +185,23 @@ class Habit {
   }
 
   factory Habit.fromJson(Map<String, dynamic> j) => Habit(
-        id: j['id'] as String,
-        name: j['name'] as String,
-        emoji: j['emoji'] as String? ?? '✨',
-        colorValue: j['colorValue'] as int? ?? defaultColorValue,
-        frequency: j['frequency'] as String? ?? 'Daily',
-        completedDates: List<String>.from(j['completedDates'] ?? const []),
-        skippedDates: List<String>.from(j['skippedDates'] ?? const []),
-        paused: j['paused'] as bool? ?? false,
-        streakProtection: j['streakProtection'] as bool? ?? false,
-        reminderEnabled: j['reminderEnabled'] as bool? ?? false,
-        reminderHour: j['reminderHour'] as int? ?? 20,
-        reminderMinute: j['reminderMinute'] as int? ?? 0,
-        weeklyDay: j['weeklyDay'] as int? ??
-            (DateTime.tryParse(j['createdAt'] as String? ?? '')?.weekday ?? 1),
-        order: j['order'] as int? ?? 0,
-        createdAt: DateTime.tryParse(j['createdAt'] as String? ?? '') ?? DateTime.now(),
-      );
+    id: j['id'] as String,
+    name: j['name'] as String,
+    emoji: j['emoji'] as String? ?? '✨',
+    colorValue: j['colorValue'] as int? ?? defaultColorValue,
+    frequency: j['frequency'] as String? ?? 'Daily',
+    completedDates: List<String>.from(j['completedDates'] ?? const []),
+    skippedDates: List<String>.from(j['skippedDates'] ?? const []),
+    paused: j['paused'] as bool? ?? false,
+    streakProtection: j['streakProtection'] as bool? ?? false,
+    reminderEnabled: j['reminderEnabled'] as bool? ?? false,
+    reminderHour: j['reminderHour'] as int? ?? 20,
+    reminderMinute: j['reminderMinute'] as int? ?? 0,
+    weeklyDay:
+        j['weeklyDay'] as int? ??
+        (DateTime.tryParse(j['createdAt'] as String? ?? '')?.weekday ?? 1),
+    order: j['order'] as int? ?? 0,
+    createdAt:
+        DateTime.tryParse(j['createdAt'] as String? ?? '') ?? DateTime.now(),
+  );
 }

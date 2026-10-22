@@ -35,12 +35,14 @@ void main() {
     expect(SyncStatusService.instance.backendUnreachable, false);
   });
 
-  test('guest (no Firebase) removeMeal is a silent no-op — no banner',
-      () async {
-    final ok = await MealSyncService.removeMeal('test-meal-1');
-    expect(ok, false);
-    expect(SyncStatusService.instance.backendUnreachable, false);
-  });
+  test(
+    'guest (no Firebase) removeMeal is a silent no-op — no banner',
+    () async {
+      final ok = await MealSyncService.removeMeal('test-meal-1');
+      expect(ok, false);
+      expect(SyncStatusService.instance.backendUnreachable, false);
+    },
+  );
 
   test('guest fetchMeals returns empty list — no banner', () async {
     final meals = await MealSyncService.fetchMeals();
@@ -64,16 +66,18 @@ void main() {
     expect(SyncStatusService.instance.backendUnreachable, false);
   });
 
-  test('syncAllMeals and backupAll complete without throwing as guest',
-      () async {
-    await MealSyncService.syncAllMeals([meal]);
-    final backedUp = await MealSyncService.backupAll(
-      meals: [meal],
-      habitsJson: const [],
-      waterLog: const {},
-      waterGoal: 8,
-    );
-    expect(backedUp, false);
-    expect(SyncStatusService.instance.backendUnreachable, false);
-  });
+  test(
+    'syncAllMeals and backupAll complete without throwing as guest',
+    () async {
+      await MealSyncService.syncAllMeals([meal]);
+      final backedUp = await MealSyncService.backupAll(
+        meals: [meal],
+        habitsJson: const [],
+        waterLog: const {},
+        waterGoal: 8,
+      );
+      expect(backedUp, false);
+      expect(SyncStatusService.instance.backendUnreachable, false);
+    },
+  );
 }

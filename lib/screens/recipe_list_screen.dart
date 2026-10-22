@@ -71,7 +71,6 @@ class _RecipeListScreenState extends State<RecipeListScreen> {
         serving: '$servings serving(s) of ${recipe.name}',
       ),
     );
-
   }
 
   @override

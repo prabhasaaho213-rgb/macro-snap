@@ -21,7 +21,9 @@ class MacroSnapTheme {
   /// everywhere, the way POP uses its coin-orange.
   static const Color neonGreen = Color(0xFFFF6B2B); // kept name for API compat
   /// Deep violet — hero/card gradient family (POP's "curtain" background).
-  static const Color neonPink = Color(0xFFB0281F); // kept name; now "danger/rose"
+  static const Color neonPink = Color(
+    0xFFB0281F,
+  ); // kept name; now "danger/rose"
   static const Color neonPurple = Color(0xFF8B3FE8);
   static const Color neonOrange = Color(0xFFFF6B2B);
   static const Color neonCyan = Color(0xFF9B7BFF); // lighter violet, kept name
@@ -544,5 +546,4 @@ class MacroSnapTheme {
             ],
           );
   }
-
 }

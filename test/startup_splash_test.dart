@@ -54,8 +54,9 @@ void main() {
     expect(find.byType(StartupSplash), findsNothing);
   });
 
-  testWidgets('a startup step that never returns cannot wedge the app',
-      (tester) async {
+  testWidgets('a startup step that never returns cannot wedge the app', (
+    tester,
+  ) async {
     final never = Completer<void>(); // deliberately never completed
     await tester.pumpWidget(MacroSnapApp(startup: never.future));
     expect(find.byType(StartupSplash), findsOneWidget);
@@ -67,8 +68,9 @@ void main() {
     expect(find.byType(StartupSplash), findsNothing);
   });
 
-  testWidgets('splash background matches the native launch window',
-      (tester) async {
+  testWidgets('splash background matches the native launch window', (
+    tester,
+  ) async {
     await tester.pumpWidget(wrap(const StartupSplash()));
     await tester.pump(const Duration(milliseconds: 500));
 
@@ -77,8 +79,9 @@ void main() {
     expect(scaffold.backgroundColor, MacroSnapTheme.surfaceLight);
   });
 
-  testWidgets('splash background follows dark mode without a black frame',
-      (tester) async {
+  testWidgets('splash background follows dark mode without a black frame', (
+    tester,
+  ) async {
     await tester.pumpWidget(
       wrap(const StartupSplash(), brightness: Brightness.dark),
     );

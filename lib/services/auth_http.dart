@@ -57,10 +57,7 @@ class AuthHttp {
     };
   }
 
-  static Future<http.Response> get(
-    Uri url, {
-    Map<String, String>? headers,
-  }) =>
+  static Future<http.Response> get(Uri url, {Map<String, String>? headers}) =>
       _send((h) => client.get(url, headers: h), headers);
 
   static Future<http.Response> post(
@@ -68,11 +65,10 @@ class AuthHttp {
     Map<String, String>? headers,
     Object? body,
     Encoding? encoding,
-  }) =>
-      _send(
-        (h) => client.post(url, headers: h, body: body, encoding: encoding),
-        headers,
-      );
+  }) => _send(
+    (h) => client.post(url, headers: h, body: body, encoding: encoding),
+    headers,
+  );
 
   /// Authenticated multipart POST (image upload). The request is rebuilt for
   /// the retry because a `MultipartRequest` can only be sent once.

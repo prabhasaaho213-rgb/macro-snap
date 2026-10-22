@@ -1,7 +1,7 @@
 rules_version = '2';
 // MacroSnap Firestore security rules
 //
-// Equivalent of the old Postgres Row-Level-Security model:
+// Model:
 //   - Only authenticated users can touch data.
 //   - Users can only read/write their OWN documents (keyed by Firebase UID).
 //   - Money / entitlement records (subscriptions, payments) are
@@ -17,12 +17,15 @@ service cloud.firestore {
     }
     function isOwner(uid) {
       return request.auth.uid == uid;
-    }
+    }    // Admin/owner entitlement comes from the `admin` CUSTOM CLAIM, set by the
+    // backend's Admin SDK. It used to compare the token's email against a
+    // hardcoded address, which kept a personal address in the rules file and
+    // made the privilege depend on an email string rather than on a claim only
+    // the server can mint.
     function hasPro(uid) {
       let userPath = /databases/$(database)/documents/users/$(uid);
-      return (request.auth.token.email == 'prabhasaaho213@gmail.com'
-          && request.auth.token.email_verified == true)
-        || (exists(userPath) && (
+      return request.auth.token.admin == true
+        || (exists(userPath) && (
           get(userPath).data.subscribed == true
           || (get(userPath).data.pro_until_at is timestamp
             && get(userPath).data.pro_until_at > request.time)
@@ -57,12 +60,36 @@ service cloud.firestore {
     // The `uid` field must equal the caller's uid on CREATE **and** UPDATE:
     // checking only the stored copy would let a user move their meal to
     // another account (or claim someone else's meal) with an update.
+    //
+    // `validMeal()` bounds the payload as well. Without it a client could write
+    // a 10 MB document, arbitrary fields, or a negative/absurd calorie value
+    // that every restore path then has to survive. Optional fields are only
+    // type-checked when present, so old/backfilled docs can still be updated.
+    function validMeal() {
+      let d = request.resource.data;
+      return d.uid == request.auth.uid
+        && d.name is string
+        && d.name.size() > 0
+        && d.name.size() <= 80
+        && d.calories is int
+        && d.calories >= 0
+        && d.calories <= 10000
+        && d.date is string
+        && d.date.size() <= 40
+        && d.size() <= 20
+        && (!('serving' in d) || (d.serving is string && d.serving.size() <= 200))
+        && (!('category' in d) || (d.category is string && d.category.size() <= 40))
+        && (!('protein' in d) || (d.protein is number && d.protein >= 0 && d.protein <= 1000))
+        && (!('carbs' in d) || (d.carbs is number && d.carbs >= 0 && d.carbs <= 1000))
+        && (!('fats' in d) || (d.fats is number && d.fats >= 0 && d.fats <= 1000))
+        && (!('fiber' in d) || (d.fiber is number && d.fiber >= 0 && d.fiber <= 1000));
+    }
+
     match /meals/{mealId} {
-      allow create: if signedIn()
-        && request.resource.data.uid == request.auth.uid;
+      allow create: if signedIn() && validMeal();
       allow update: if signedIn()
         && resource.data.uid == request.auth.uid
-        && request.resource.data.uid == request.auth.uid;
+        && validMeal();
       allow read, delete: if signedIn()
         && resource.data.uid == request.auth.uid;
     }
@@ -122,12 +149,17 @@ service cloud.firestore {
     }
 
     // ─── referrals/{code} — referral-code index ─────────────────────────
-    // Reward grants run server-side (Admin SDK); clients may read any code
-    // but only create their own.
+    // Reward grants run server-side (Admin SDK, which bypasses these rules).
+    // A client may create and read only ITS OWN code: the previous
+    // `allow read: if signedIn()` let any signed-in account read every other
+    // user's referral document (uid, code, reward state). Code redemption is
+    // a backend operation, so nothing legitimate needs cross-user reads.
     match /referrals/{code} {
       allow create: if signedIn()
-        && request.resource.data.uid == request.auth.uid;
-      allow read: if signedIn();
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.size() <= 10;
+      allow read: if signedIn()
+        && resource.data.uid == request.auth.uid;
       allow update, delete: if false;
     }
   }

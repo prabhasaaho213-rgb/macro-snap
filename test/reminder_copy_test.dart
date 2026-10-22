@@ -22,19 +22,18 @@ void main() {
     double protein = 30,
     double carbs = 60,
     double fats = 15,
-  }) =>
-      MealRecord(
-        id: 'm-${date.millisecondsSinceEpoch}',
-        name: 'Meal',
-        category: 'Test',
-        calories: calories,
-        protein: protein,
-        carbs: carbs,
-        fats: fats,
-        fiber: 5,
-        serving: '1 serving',
-        date: date,
-      );
+  }) => MealRecord(
+    id: 'm-${date.millisecondsSinceEpoch}',
+    name: 'Meal',
+    category: 'Test',
+    calories: calories,
+    protein: protein,
+    carbs: carbs,
+    fats: fats,
+    fiber: 5,
+    serving: '1 serving',
+    date: date,
+  );
 
   test('dateStr formats YYYY-MM-DD', () {
     expect(ReminderCopy.dateStr(DateTime(2026, 8, 3)), '2026-8-3');
@@ -50,8 +49,11 @@ void main() {
     expect(when.hour, 12);
     expect(when.minute, 0);
     final dayDiff = when.day - now.day;
-    expect(dayDiff, inInclusiveRange(0, 1),
-        reason: 'nextDaily must be today or tomorrow');
+    expect(
+      dayDiff,
+      inInclusiveRange(0, 1),
+      reason: 'nextDaily must be today or tomorrow',
+    );
   });
 
   test('nextSunday returns the coming Sunday (1..7 days out)', () {
@@ -65,21 +67,28 @@ void main() {
   });
 
   test('daysAfter returns the exact date, null when past or missing', () {
-    final future = DateTime.now().add(const Duration(days: 10)).toIso8601String();
+    final future = DateTime.now()
+        .add(const Duration(days: 10))
+        .toIso8601String();
     final when = ReminderCopy.daysAfter(future, 5);
     expect(when, isNotNull);
-    expect(when!.day, DateTime.now().add(const Duration(days: 15)).day,
-        reason: 'subscribed + 5 days from a date 10 days out = 15 days out');
+    expect(
+      when!.day,
+      DateTime.now().add(const Duration(days: 15)).day,
+      reason: 'subscribed + 5 days from a date 10 days out = 15 days out',
+    );
 
     expect(ReminderCopy.daysAfter(null, 5), isNull);
     expect(ReminderCopy.daysAfter('', 5), isNull);
     expect(ReminderCopy.daysAfter('not-a-date', 5), isNull);
     expect(
-        ReminderCopy.daysAfter(
-            DateTime.now().subtract(const Duration(days: 60)).toIso8601String(),
-            5),
-        isNull,
-        reason: 'a date already past must never be scheduled');
+      ReminderCopy.daysAfter(
+        DateTime.now().subtract(const Duration(days: 60)).toIso8601String(),
+        5,
+      ),
+      isNull,
+      reason: 'a date already past must never be scheduled',
+    );
   });
 
   test('yesterdayCalories sums only yesterday, null when nothing logged', () {
@@ -94,7 +103,10 @@ void main() {
     expect(ReminderCopy.yesterdayCalories(meals: meals, now: now), 700);
 
     final noYesterday = [meal(date: now, calories: 500)];
-    expect(ReminderCopy.yesterdayCalories(meals: noYesterday, now: now), isNull);
+    expect(
+      ReminderCopy.yesterdayCalories(meals: noYesterday, now: now),
+      isNull,
+    );
   });
 
   test('weeklyStats counts days hitting all macro targets and total kcal', () {
@@ -129,7 +141,11 @@ void main() {
         fats: 20,
       ),
     ];
-    final stats = ReminderCopy.weeklyStats(meals: meals, profile: profile, now: now);
+    final stats = ReminderCopy.weeklyStats(
+      meals: meals,
+      profile: profile,
+      now: now,
+    );
     expect(stats.daysHit, 1);
     expect(stats.totalCalories, 3000);
   });

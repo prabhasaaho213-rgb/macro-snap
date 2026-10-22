@@ -31,28 +31,43 @@ void main() {
   });
 
   group('NotificationBranding.androidDetails', () {
-    test('every details block carries icon, largeIcon and brand color', () async {
-      final details = await NotificationBranding.androidDetails(
-        channelId: 'test_channel',
-        channelName: 'Test Channel',
-        channelDescription: 'A test channel',
-      );
+    test(
+      'every details block carries icon, largeIcon and brand color',
+      () async {
+        final details = await NotificationBranding.androidDetails(
+          channelId: 'test_channel',
+          channelName: 'Test Channel',
+          channelDescription: 'A test channel',
+        );
 
-      expect(details.color, const Color(0xFF059669),
-          reason: 'the brand green must be present on every notification');
-      expect(details.icon, '@drawable/ic_notification',
-          reason: 'the small icon must never be omitted');
-      expect(details.largeIcon, isNotNull,
-          reason: 'the large logo icon must never be omitted');
+        expect(
+          details.color,
+          const Color(0xFF059669),
+          reason: 'the brand green must be present on every notification',
+        );
+        expect(
+          details.icon,
+          '@drawable/ic_notification',
+          reason: 'the small icon must never be omitted',
+        );
+        expect(
+          details.largeIcon,
+          isNotNull,
+          reason: 'the large logo icon must never be omitted',
+        );
 
-      // Large icon must be the byte-array (Flutter asset) flavor — R8 can
-      // never strip a Flutter asset, which is exactly why we moved it there.
-      expect(details.largeIcon, isA<ByteArrayAndroidBitmap>());
-      final bytes = await NotificationBranding.largeIconBytes();
-      expect(bytes, isNotNull);
-      expect(bytes!.length, greaterThan(1000),
-          reason: 'the large icon must be a real PNG, not an empty stub');
-    });
+        // Large icon must be the byte-array (Flutter asset) flavor — R8 can
+        // never strip a Flutter asset, which is exactly why we moved it there.
+        expect(details.largeIcon, isA<ByteArrayAndroidBitmap>());
+        final bytes = await NotificationBranding.largeIconBytes();
+        expect(bytes, isNotNull);
+        expect(
+          bytes!.length,
+          greaterThan(1000),
+          reason: 'the large icon must be a real PNG, not an empty stub',
+        );
+      },
+    );
 
     test('habit channel keeps the snooze + mark-done actions', () async {
       // The habit reminder details are built through the same factory — but
@@ -100,15 +115,20 @@ void main() {
     });
 
     test('weekly copy names real stats from the last 7 days', () {
-      final copy =
-          NotificationBranding.weeklyCopy(daysHit: 5, totalCalories: 12400);
+      final copy = NotificationBranding.weeklyCopy(
+        daysHit: 5,
+        totalCalories: 12400,
+      );
       expect(copy.title, 'Your weekly nutrition summary');
       expect(copy.body, contains('5 of the last 7 days'));
       expect(copy.body, contains('12400 kcal'));
     });
 
     test('weekly copy falls back to the generic line without data', () {
-      final copy = NotificationBranding.weeklyCopy(daysHit: 0, totalCalories: 0);
+      final copy = NotificationBranding.weeklyCopy(
+        daysHit: 0,
+        totalCalories: 0,
+      );
       expect(copy.title, 'Your weekly nutrition summary');
       expect(copy.body, isNot(contains('last 7 days')));
     });
@@ -119,49 +139,56 @@ void main() {
       final calls = <int>[];
       TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
           .setMockMethodCallHandler(channel, (call) async {
-        if (call.method == 'zonedSchedule') {
-          final args = Map<dynamic, dynamic>.from(call.arguments as Map);
-          calls.add(args['id'] as int);
-        }
-        return null;
-      });
+            if (call.method == 'zonedSchedule') {
+              final args = Map<dynamic, dynamic>.from(call.arguments as Map);
+              calls.add(args['id'] as int);
+            }
+            return null;
+          });
 
-      await NotificationService().restoreAllReminders(
-        [Habit(
+      await NotificationService().restoreAllReminders([
+        Habit(
           id: 'h1',
           name: 'Test',
           emoji: '💧',
           colorValue: 0xFF00FF66,
           reminderEnabled: false,
-        )],
-        subscribedDate: DateTime.now().toIso8601String(),
-      );
+        ),
+      ], subscribedDate: DateTime.now().toIso8601String());
 
-      expect(calls.toSet(), containsAll(<int>{2, 3, 4, 5, 6}),
-          reason: 'the registry must arm every built-in reminder for subscribers');
+      expect(
+        calls.toSet(),
+        containsAll(<int>{2, 3, 4, 5, 6}),
+        reason: 'the registry must arm every built-in reminder for subscribers',
+      );
     });
 
     test('free restore arms only the non-subscriber ids (4,6)', () async {
       final calls = <int>[];
       TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
           .setMockMethodCallHandler(channel, (call) async {
-        if (call.method == 'zonedSchedule') {
-          final args = Map<dynamic, dynamic>.from(call.arguments as Map);
-          calls.add(args['id'] as int);
-        }
-        return null;
-      });
+            if (call.method == 'zonedSchedule') {
+              final args = Map<dynamic, dynamic>.from(call.arguments as Map);
+              calls.add(args['id'] as int);
+            }
+            return null;
+          });
 
-      await NotificationService().restoreAllReminders([Habit(
-        id: 'h1',
-        name: 'Test',
-        emoji: '💧',
-        colorValue: 0xFF00FF66,
-        reminderEnabled: false,
-      )]);
+      await NotificationService().restoreAllReminders([
+        Habit(
+          id: 'h1',
+          name: 'Test',
+          emoji: '💧',
+          colorValue: 0xFF00FF66,
+          reminderEnabled: false,
+        ),
+      ]);
 
-      expect(calls.toSet(), <int>{4, 6},
-          reason: 'weekly (5) and expiry (2,3) must stay subscriber-only');
+      expect(
+        calls.toSet(),
+        <int>{4, 6},
+        reason: 'weekly (5) and expiry (2,3) must stay subscriber-only',
+      );
     });
   });
 }

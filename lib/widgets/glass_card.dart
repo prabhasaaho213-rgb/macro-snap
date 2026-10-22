@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import '../core/theme.dart';
 
 class GlassCard extends StatelessWidget {
@@ -6,12 +6,7 @@ class GlassCard extends StatelessWidget {
   final EdgeInsetsGeometry? padding;
   final double? height;
 
-  const GlassCard({
-    super.key,
-    required this.child,
-    this.padding,
-    this.height,
-  });
+  const GlassCard({super.key, required this.child, this.padding, this.height});
 
   @override
   Widget build(BuildContext context) {
@@ -24,4 +19,3 @@ class GlassCard extends StatelessWidget {
     );
   }
 }
-

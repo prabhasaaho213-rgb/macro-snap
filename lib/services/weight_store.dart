@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'account_partition.dart';
+import 'badge_service.dart';
 
 /// One weigh-in. The date is stored as a calendar day (local midnight) so a
 /// day can only ever hold one value — re-weighing updates today's point
@@ -15,10 +16,7 @@ class WeightEntry {
 
   const WeightEntry({required this.date, required this.kg});
 
-  Map<String, dynamic> toJson() => {
-    'date': date.toIso8601String(),
-    'kg': kg,
-  };
+  Map<String, dynamic> toJson() => {'date': date.toIso8601String(), 'kg': kg};
 
   factory WeightEntry.fromJson(Map<String, dynamic> json) {
     final date = DateTime.tryParse(json['date'] as String? ?? '');
@@ -108,12 +106,16 @@ class WeightStore extends ChangeNotifier {
         if (decoded is List) {
           // Parsed per entry: one corrupt row must not throw away the whole
           // year of history.
-          _entries = decoded
-              .whereType<Map>()
-              .map((e) => WeightEntry.tryFromJson(Map<String, dynamic>.from(e)))
-              .whereType<WeightEntry>()
-              .toList()
-            ..sort((a, b) => a.date.compareTo(b.date));
+          _entries =
+              decoded
+                  .whereType<Map>()
+                  .map(
+                    (e) =>
+                        WeightEntry.tryFromJson(Map<String, dynamic>.from(e)),
+                  )
+                  .whereType<WeightEntry>()
+                  .toList()
+                ..sort((a, b) => a.date.compareTo(b.date));
         }
       }
     } catch (_) {
@@ -140,6 +142,9 @@ class WeightStore extends ChangeNotifier {
     }
     notifyListeners();
     unawaited(_save());
+    // Achievement side effect: one recorded weigh-in earns the badge, whatever
+    // the number says. Fire-and-forget so the save is never gated on it.
+    unawaited(BadgeService.instance.noteWeighIn());
   }
 
   /// The last [days] days of history, oldest first (at least the newest point

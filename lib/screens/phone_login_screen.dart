@@ -12,12 +12,14 @@ import 'package:url_launcher/url_launcher.dart';
 import '../core/theme.dart';
 import '../models/diet_profile.dart';
 import '../services/gemini_service.dart';
+import '../services/badge_service.dart';
 import '../services/meal_store.dart';
 import '../services/habit_store.dart';
 import '../services/rate_us_service.dart';
 import '../services/subscription_service.dart';
 import '../widgets/nickname_prompt.dart';
 import 'main_shell.dart';
+import '../services/crash_reporting.dart';
 
 class PhoneLoginScreen extends StatefulWidget {
   final String? returnRoute;
@@ -70,7 +72,9 @@ class _PhoneLoginScreenState extends State<PhoneLoginScreen>
       // appears — never silently reuse the last signed-in account.
       try {
         await _googleSignIn.signOut();
-      } catch (e) { debugPrint("Error: $e"); }
+      } catch (e, st) {
+        logError('PhoneLoginScreen._signInWithGoogle', e, st);
+      }
       final googleUser = await _googleSignIn.signIn();
       if (googleUser == null) {
         if (mounted) setState(() => _loading = false);
@@ -139,7 +143,9 @@ class _PhoneLoginScreenState extends State<PhoneLoginScreen>
           headers: {'Content-Type': 'application/json'},
           body: jsonEncode({'name': nickname ?? name}),
         );
-      } catch (e) { debugPrint("Error: $e"); }
+      } catch (e, st) {
+        logError('PhoneLoginScreen._signInWithGoogle (register)', e, st);
+      }
 
       // Brand-new users get a one-shot Play Store rating button right after
       // their first login. Shown before navigating so the context is valid.
@@ -163,7 +169,14 @@ class _PhoneLoginScreenState extends State<PhoneLoginScreen>
       // also what existing users get right after updating + logging in.
       unawaited(SubscriptionService.instance.verifyServerSubscription());
       unawaited(MealStore.instance.reload());
-      unawaited(HabitStore.instance.reload().catchError((e) { debugPrint('HabitStore reload error: $e'); }));
+      // Badges are partitioned per account too — without this the previous
+      // account's trophy case stays on screen after a switch.
+      unawaited(BadgeService.instance.reload());
+      unawaited(
+        HabitStore.instance.reload().catchError((e) {
+          debugPrint('HabitStore reload error: $e');
+        }),
+      );
     } catch (e) {
       if (mounted) {
         setState(() {
@@ -197,203 +210,212 @@ class _PhoneLoginScreenState extends State<PhoneLoginScreen>
                   mainAxisAlignment: MainAxisAlignment.center,
                   crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
-                Container(
-                  width: 96,
-                  height: 96,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: MacroSnapTheme.neonGreen.withValues(alpha: 0.15),
-                  ),
-                  child: const Icon(
-                    Icons.restaurant_rounded,
-                    size: 48,
-                    color: MacroSnapTheme.neonGreen,
-                  ),
-                ),
-                const SizedBox(height: 16),
-                Text(
-                  'Welcome to MacroSnap',
-                  textAlign: TextAlign.center,
-                  style: Theme.of(context).textTheme.displayMedium?.copyWith(
-                    color: isDark ? Colors.white : const Color(0xFF1A1A1A),
-                  ),
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  'Snap a photo, get your macros',
-                  textAlign: TextAlign.center,
-                  style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                    color: MacroSnapTheme.textTertiary(context),
-                  ),
-                ),
-                const SizedBox(height: 24),
-
-                // Google Sign-In
-                SizedBox(
-                  width: double.infinity,
-                  height: 56,
-                  child: DecoratedBox(
-                    decoration: BoxDecoration(
-                      color: isDark ? MacroSnapTheme.cardDark : Colors.white,
-                      borderRadius: BorderRadius.circular(16),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withValues(
-                            alpha: isDark ? 0.3 : 0.06,
-                          ),
-                          blurRadius: 12,
-                          offset: const Offset(0, 3),
-                        ),
-                      ],
+                    Container(
+                      width: 96,
+                      height: 96,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: MacroSnapTheme.neonGreen.withValues(alpha: 0.15),
+                      ),
+                      child: const Icon(
+                        Icons.restaurant_rounded,
+                        size: 48,
+                        color: MacroSnapTheme.neonGreen,
+                      ),
                     ),
-                    child: Material(
-                      color: Colors.transparent,
-                      child: InkWell(
-                        borderRadius: BorderRadius.circular(16),
-                        onTap: _loading ? null : _signInWithGoogle,
-                        child: Center(
-                          child: _loading
-                              ? const SizedBox(
-                                  width: 22,
-                                  height: 22,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2.5,
-                                  ),
-                                )
-                              : Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Image.network(
-                                      'https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg',
+                    const SizedBox(height: 16),
+                    Text(
+                      'Welcome to MacroSnap',
+                      textAlign: TextAlign.center,
+                      style: Theme.of(context).textTheme.displayMedium
+                          ?.copyWith(
+                            color: isDark
+                                ? Colors.white
+                                : const Color(0xFF1A1A1A),
+                          ),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      'Snap a photo, get your macros',
+                      textAlign: TextAlign.center,
+                      style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                        color: MacroSnapTheme.textTertiary(context),
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+
+                    // Google Sign-In
+                    SizedBox(
+                      width: double.infinity,
+                      height: 56,
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          color: isDark
+                              ? MacroSnapTheme.cardDark
+                              : Colors.white,
+                          borderRadius: BorderRadius.circular(16),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withValues(
+                                alpha: isDark ? 0.3 : 0.06,
+                              ),
+                              blurRadius: 12,
+                              offset: const Offset(0, 3),
+                            ),
+                          ],
+                        ),
+                        child: Material(
+                          color: Colors.transparent,
+                          child: InkWell(
+                            borderRadius: BorderRadius.circular(16),
+                            onTap: _loading ? null : _signInWithGoogle,
+                            child: Center(
+                              child: _loading
+                                  ? const SizedBox(
                                       width: 22,
                                       height: 22,
-                                      errorBuilder: (_, _, _) => const Icon(
-                                        Icons.g_mobiledata,
-                                        size: 26,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2.5,
                                       ),
-                                    ),
-                                    const SizedBox(width: 12),
-                                    Flexible(
-                                      child: Text(
-                                        'Log in with Google',
-                                        maxLines: 1,
-                                        softWrap: false,
-                                        overflow: TextOverflow.ellipsis,
-                                        style: TextStyle(
-                                          fontSize: 15,
-                                          fontWeight: FontWeight.w600,
-                                          color: isDark
-                                              ? Colors.white
-                                              : const Color(0xFF1A1A1A),
+                                    )
+                                  : Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Image.network(
+                                          'https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg',
+                                          width: 22,
+                                          height: 22,
+                                          errorBuilder: (_, _, _) => const Icon(
+                                            Icons.g_mobiledata,
+                                            size: 26,
+                                          ),
                                         ),
-                                      ),
+                                        const SizedBox(width: 12),
+                                        Flexible(
+                                          child: Text(
+                                            'Log in with Google',
+                                            maxLines: 1,
+                                            softWrap: false,
+                                            overflow: TextOverflow.ellipsis,
+                                            style: TextStyle(
+                                              fontSize: 15,
+                                              fontWeight: FontWeight.w600,
+                                              color: isDark
+                                                  ? Colors.white
+                                                  : const Color(0xFF1A1A1A),
+                                            ),
+                                          ),
+                                        ),
+                                      ],
                                     ),
-                                  ],
-                                ),
+                            ),
+                          ),
                         ),
                       ),
                     ),
-                  ),
-                ),
 
-                // Error banner
-                if (_error.isNotEmpty) ...[
-                  const SizedBox(height: 20),
-                  AnimatedBuilder(
-                    animation: _shakeController,
-                    builder: (context, child) {
-                      return Transform.translate(
-                        offset: Offset(
-                          sin(_shakeController.value * 4 * 3.14) * 6,
-                          0,
-                        ),
-                        child: child,
-                      );
-                    },
-                    child: Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.symmetric(
-                        vertical: 12,
-                        horizontal: 16,
-                      ),
-                      decoration: BoxDecoration(
-                        color: isDark
-                            ? MacroSnapTheme.neonPink.withValues(alpha: 0.15)
-                            : const Color(0xFFFEF2F2),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Row(
-                        children: [
-                          Icon(
-                            Icons.error_outline,
-                            size: 18,
-                            color: isDark
-                                ? MacroSnapTheme.neonPink
-                                : const Color(0xFFDC2626),
+                    // Error banner
+                    if (_error.isNotEmpty) ...[
+                      const SizedBox(height: 20),
+                      AnimatedBuilder(
+                        animation: _shakeController,
+                        builder: (context, child) {
+                          return Transform.translate(
+                            offset: Offset(
+                              sin(_shakeController.value * 4 * 3.14) * 6,
+                              0,
+                            ),
+                            child: child,
+                          );
+                        },
+                        child: Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.symmetric(
+                            vertical: 12,
+                            horizontal: 16,
                           ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Text(
-                              _error,
-                              style: TextStyle(
-                                fontSize: 13,
+                          decoration: BoxDecoration(
+                            color: isDark
+                                ? MacroSnapTheme.neonPink.withValues(
+                                    alpha: 0.15,
+                                  )
+                                : const Color(0xFFFEF2F2),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(
+                                Icons.error_outline,
+                                size: 18,
                                 color: isDark
                                     ? MacroSnapTheme.neonPink
                                     : const Color(0xFFDC2626),
                               ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  _error,
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    color: isDark
+                                        ? MacroSnapTheme.neonPink
+                                        : const Color(0xFFDC2626),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+
+                    const SizedBox(height: 28),
+                    Text(
+                      'Your meals, habits and progress are securely backed up to your Google account.',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 13,
+                        height: 1.4,
+                        color: MacroSnapTheme.textTertiary(context),
+                      ),
+                    ),
+
+                    const SizedBox(height: 32),
+                    RichText(
+                      textAlign: TextAlign.center,
+                      text: TextSpan(
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: MacroSnapTheme.textQuaternary(context),
+                        ),
+                        children: [
+                          const TextSpan(
+                            text: 'By continuing, you agree to our ',
+                          ),
+                          TextSpan(
+                            text: 'Privacy Policy',
+                            style: TextStyle(
+                              color: MacroSnapTheme.greenText(context),
+                              decoration: TextDecoration.underline,
                             ),
+                            recognizer: TapGestureRecognizer()
+                              ..onTap = () async {
+                                final uri = Uri.parse(
+                                  'https://raw.githubusercontent.com/prabhasaaho213-rgb/macro-snap/master/PRIVACY_POLICY.md',
+                                );
+                                if (await canLaunchUrl(uri)) {
+                                  await launchUrl(
+                                    uri,
+                                    mode: LaunchMode.externalApplication,
+                                  );
+                                }
+                              },
                           ),
                         ],
                       ),
                     ),
-                  ),
-                ],
-
-                const SizedBox(height: 28),
-                Text(
-                  'Your meals, habits and progress are securely backed up to your Google account.',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize: 13,
-                    height: 1.4,
-                    color: MacroSnapTheme.textTertiary(context),
-                  ),
-                ),
-
-                const SizedBox(height: 32),
-                RichText(
-                  textAlign: TextAlign.center,
-                  text: TextSpan(
-                    style: TextStyle(
-                      fontSize: 11,
-                      color: MacroSnapTheme.textQuaternary(context),
-                    ),
-                    children: [
-                      const TextSpan(text: 'By continuing, you agree to our '),
-                      TextSpan(
-                        text: 'Privacy Policy',
-                        style: TextStyle(
-                          color: MacroSnapTheme.greenText(context),
-                          decoration: TextDecoration.underline,
-                        ),
-                        recognizer: TapGestureRecognizer()
-                          ..onTap = () async {
-                            final uri = Uri.parse(
-                              'https://raw.githubusercontent.com/prabhasaaho213-rgb/macro-snap-source-1.4.5/master/PRIVACY_POLICY.md',
-                            );
-                            if (await canLaunchUrl(uri)) {
-                              await launchUrl(
-                                uri,
-                                mode: LaunchMode.externalApplication,
-                              );
-                            }
-                          },
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 8),
-              ],
+                    const SizedBox(height: 8),
+                  ],
                 ),
               ),
             ),

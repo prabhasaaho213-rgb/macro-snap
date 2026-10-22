@@ -14,7 +14,14 @@ class ReminderCopy {
   /// The next occurrence of [hour]:[minute] today (or tomorrow if past).
   static tz.TZDateTime nextDaily(int hour, int minute) {
     final now = tz.TZDateTime.now(tz.local);
-    var when = tz.TZDateTime(tz.local, now.year, now.month, now.day, hour, minute);
+    var when = tz.TZDateTime(
+      tz.local,
+      now.year,
+      now.month,
+      now.day,
+      hour,
+      minute,
+    );
     if (when.isBefore(now)) when = when.add(const Duration(days: 1));
     return when;
   }
@@ -90,10 +97,12 @@ class ReminderCopy {
     for (var i = 0; i < 7; i++) {
       final day = DateTime(today.year, today.month, today.day - i);
       final dayMeals = meals
-          .where((m) =>
-              m.date.year == day.year &&
-              m.date.month == day.month &&
-              m.date.day == day.day)
+          .where(
+            (m) =>
+                m.date.year == day.year &&
+                m.date.month == day.month &&
+                m.date.day == day.day,
+          )
           .toList();
       if (dayMeals.isEmpty) continue;
       final protein = dayMeals.fold(0.0, (s, m) => s + m.protein);

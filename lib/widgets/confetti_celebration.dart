@@ -21,7 +21,10 @@ class ConfettiCelebration extends StatefulWidget {
   });
 
   /// Convenience method to show the celebration overlay.
-  static Future<void> show(BuildContext context, {int particleCount = 60}) async {
+  static Future<void> show(
+    BuildContext context, {
+    int particleCount = 60,
+  }) async {
     HapticFeedback.heavyImpact();
     await showGeneralDialog(
       context: context,
@@ -29,9 +32,8 @@ class ConfettiCelebration extends StatefulWidget {
       barrierColor: Colors.transparent,
       barrierLabel: 'celebration',
       transitionDuration: const Duration(milliseconds: 300),
-      pageBuilder: (_, _, _) => ConfettiCelebration(
-        particleCount: particleCount,
-      ),
+      pageBuilder: (_, _, _) =>
+          ConfettiCelebration(particleCount: particleCount),
     );
   }
 
@@ -62,10 +64,7 @@ class _ConfettiCelebrationState extends State<ConfettiCelebration>
   @override
   void initState() {
     super.initState();
-    _controller = AnimationController(
-      vsync: this,
-      duration: widget.duration,
-    );
+    _controller = AnimationController(vsync: this, duration: widget.duration);
 
     _controller.forward().then((_) {
       if (mounted) Navigator.of(context).pop();
@@ -131,26 +130,27 @@ class _ConfettiCelebrationState extends State<ConfettiCelebration>
             Positioned.fill(
               child: GestureDetector(
                 onTap: () {}, // Absorb taps
-                child: Container(
-                  color: Colors.black.withValues(alpha: 0.05),
-                ),
+                child: Container(color: Colors.black.withValues(alpha: 0.05)),
               ),
             ),
             // Particles
             ...List.generate(_particles.length, (i) {
               final p = _particles[i];
               final currentX = p.x + p.vx * t * 60;
-              final currentY = p.y + p.vy * t * 60 + 0.5 * p.gravity * (t * 60) * (t * 60);
+              final currentY =
+                  p.y + p.vy * t * 60 + 0.5 * p.gravity * (t * 60) * (t * 60);
               final currentRotation = p.rotation + p.rotationSpeed * t * 60;
 
               // Fade out in last 30% (clamped — at t == 1.0 the raw formula
               // can dip a hair below 0 and Opacity asserts opacity >= 0).
-              final fade =
-                  t > 0.7 ? (1.0 - (t - 0.7) / 0.3).clamp(0.0, 1.0) : 1.0;
+              final fade = t > 0.7
+                  ? (1.0 - (t - 0.7) / 0.3).clamp(0.0, 1.0)
+                  : 1.0;
 
               // Scale down at the end
-              final scale =
-                  t > 0.8 ? (1.0 - (t - 0.8) / 0.2 * 0.5).clamp(0.0, 1.0) : 1.0;
+              final scale = t > 0.8
+                  ? (1.0 - (t - 0.8) / 0.2 * 0.5).clamp(0.0, 1.0)
+                  : 1.0;
 
               return Positioned(
                 left: currentX - p.size / 2,
@@ -188,10 +188,7 @@ class _ConfettiCelebrationState extends State<ConfettiCelebration>
         return Container(
           width: p.size,
           height: p.size,
-          decoration: BoxDecoration(
-            color: p.color,
-            shape: BoxShape.circle,
-          ),
+          decoration: BoxDecoration(color: p.color, shape: BoxShape.circle),
         );
       case 2: // Rectangle (paper strip)
         return Container(

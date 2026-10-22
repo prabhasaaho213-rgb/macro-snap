@@ -32,3 +32,19 @@
 # flutter_local_notifications: keep the plugin's model classes and receivers
 # intact (they are serialized to/from JSON and referenced from the manifest).
 -keep class com.dexterous.flutterlocalnotifications.** { *; }
+
+# Razorpay checkout --------------------------------------------------------
+# Release builds run R8 with minify + shrink enabled. The Razorpay SDK is
+# driven from Dart through reflection and serializes its own models, so
+# shrinking it breaks checkout in release APKs only — the exact class of bug
+# that never shows up in a debug build. Keep the SDK and the WebView bridge.
+-keep class com.razorpay.** { *; }
+-keep interface com.razorpay.** { *; }
+-dontwarn com.razorpay.**
+-keepclassmembers class * {
+  @android.webkit.JavascriptInterface <methods>;
+}
+-keepclassmembers class * {
+  public static final <fields>;
+}
+-keepattributes *Annotation*,Signature,InnerClasses,EnclosingMethod

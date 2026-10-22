@@ -90,7 +90,8 @@ extension BmiCategoryInfo on BmiCategory {
     BmiCategory.normal => 'Right in the healthy range. Keep it up.',
     BmiCategory.overweight =>
       'Just above the healthy range — a small deficit goes a long way.',
-    BmiCategory.obeseI => 'Above the healthy range. Steady, sustainable losses win.',
+    BmiCategory.obeseI =>
+      'Above the healthy range. Steady, sustainable losses win.',
     BmiCategory.obeseII =>
       'Well above the healthy range. A plan and a doctor make this easier.',
     BmiCategory.obeseIII =>
@@ -114,6 +115,13 @@ class BmiCalculator {
     if (bmi.isNaN || bmi.isInfinite) return null;
     return bmi;
   }
+
+  /// The score exactly as the UI prints it: one decimal place.
+  ///
+  /// Category lookups must use this value too. Rounding only at print time
+  /// made 24.97 read as "25.0 · Normal" while the legend says Normal ends at
+  /// 24.9 — a number that contradicts its own label.
+  static double displayValue(double bmi) => (bmi * 10).round() / 10;
 
   static BmiCategory categoryFor(double bmi) {
     for (final category in BmiCategory.values) {

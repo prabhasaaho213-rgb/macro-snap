@@ -36,8 +36,11 @@ void main() {
     expect(SyncStatusService.instance.backendUnreachable, isFalse);
 
     SyncStatusService.instance.reportFailure('y');
-    expect(SyncStatusService.instance.backendUnreachable, isTrue,
-        reason: 'a fresh failure must re-show state even after dismiss');
+    expect(
+      SyncStatusService.instance.backendUnreachable,
+      isTrue,
+      reason: 'a fresh failure must re-show state even after dismiss',
+    );
   });
 
   test('notifyListeners fires on every state transition', () {
@@ -50,8 +53,11 @@ void main() {
     SyncStatusService.instance.reportFailure('b');
     SyncStatusService.instance.reportSuccess();
     SyncStatusService.instance.dismiss();
-    expect(notified, greaterThan(baseline),
-        reason: 'each state change must notify listeners');
+    expect(
+      notified,
+      greaterThan(baseline),
+      reason: 'each state change must notify listeners',
+    );
     SyncStatusService.instance.removeListener(onNotify);
   });
 }

@@ -4,6 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../core/theme.dart';
 import '../widgets/gradient_button.dart';
+import 'crash_reporting.dart';
 
 /// Redirects users to the MacroSnap Play Store listing to leave a rating,
 /// and shows a polite, once-in-a-while rate prompt (inspired by Spotify,
@@ -39,7 +40,8 @@ class RateUsService {
   static Future<bool> openPlayStore() async {
     final market = Uri.parse('market://details?id=$_packageName');
     final web = Uri.parse(
-        'https://play.google.com/store/apps/details?id=$_packageName');
+      'https://play.google.com/store/apps/details?id=$_packageName',
+    );
 
     // 1) Native explicit intent (Play Store package only) — can't be
     //    intercepted by V-Appstore / GetApps / etc.
@@ -54,14 +56,20 @@ class RateUsService {
 
     // 2) url_launcher fallback: market:// first, then the web listing.
     try {
-      final opened =
-          await launchUrl(market, mode: LaunchMode.externalApplication);
+      final opened = await launchUrl(
+        market,
+        mode: LaunchMode.externalApplication,
+      );
       if (opened) return true;
-    } catch (e) { debugPrint("Error: $e"); }
+    } catch (e, st) {
+      logError('RateUsService.openPlayStore (market)', e, st);
+    }
 
     try {
       return await launchUrl(web, mode: LaunchMode.externalApplication);
-    } catch (e) { debugPrint("Error: $e"); }
+    } catch (e, st) {
+      logError('RateUsService.openPlayStore (web)', e, st);
+    }
     return false;
   }
 
@@ -81,7 +89,8 @@ class RateUsService {
       final reminders = prefs.getInt(_laterKey) ?? 0;
       if (reminders >= _maxReminders) return;
 
-      final needed = _minLaunchesBeforePrompt + (reminders * _launchesPerReminder);
+      final needed =
+          _minLaunchesBeforePrompt + (reminders * _launchesPerReminder);
       if (launches < needed) return;
 
       // Wait a moment so the prompt never overlaps the first screen build.
@@ -108,7 +117,9 @@ class RateUsService {
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setBool(_ratedKey, true);
-    } catch (e) { debugPrint("Error: $e"); }
+    } catch (e, st) {
+      logError('RateUsService.prefsMarkRated', e, st);
+    }
   }
 
   /// One-shot "Rate us" button shown to brand-new users right after their

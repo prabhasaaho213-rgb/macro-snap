@@ -7,6 +7,7 @@ import '../models/habit.dart';
 import 'account_partition.dart';
 import 'meal_sync_service.dart';
 import 'subscription_service.dart';
+import 'crash_reporting.dart';
 
 class HabitStore extends ChangeNotifier {
   static final HabitStore _instance = HabitStore._();
@@ -35,8 +36,10 @@ class HabitStore extends ChangeNotifier {
 
   /// Whether cloud restore has been attempted
   bool _cloudRestored = false;
+
   /// Whether a cloud restore is currently in progress
   bool _restoring = false;
+
   /// The in-flight restore, so [reload] can await it before re-fetching
   /// for a newly active account.
   Future<void>? _restoreFuture;
@@ -60,10 +63,12 @@ class HabitStore extends ChangeNotifier {
           // the catch and cleared every habit the user had.
           habits
             ..clear()
-            ..addAll(decoded
-                .whereType<Map>()
-                .map((e) => Habit.tryFromJson(Map<String, dynamic>.from(e)))
-                .whereType<Habit>());
+            ..addAll(
+              decoded
+                  .whereType<Map>()
+                  .map((e) => Habit.tryFromJson(Map<String, dynamic>.from(e)))
+                  .whereType<Habit>(),
+            );
         }
       }
     } catch (_) {
@@ -72,8 +77,7 @@ class HabitStore extends ChangeNotifier {
 
     // Water log — same defensive parsing.
     try {
-      final waterRaw =
-          p.getString(AccountPartition.key('water_log', suffix));
+      final waterRaw = p.getString(AccountPartition.key('water_log', suffix));
       if (waterRaw != null && waterRaw.isNotEmpty) {
         final decoded = jsonDecode(waterRaw);
         if (decoded is Map) {
@@ -107,12 +111,10 @@ class HabitStore extends ChangeNotifier {
   /// their existing habits/water; the legacy keys are then removed so a
   /// different account signing in later can never inherit them. Guests (no
   /// account) already own the legacy keys and need no migration.
-  static Future<void> _migrateLegacy(
-    SharedPreferences p,
-    String suffix,
-  ) async {
+  static Future<void> _migrateLegacy(SharedPreferences p, String suffix) async {
     if (suffix.isEmpty) return;
-    final hasPartition = p.containsKey('habits_$suffix') ||
+    final hasPartition =
+        p.containsKey('habits_$suffix') ||
         p.containsKey('water_log_$suffix') ||
         p.containsKey('water_goal_$suffix');
     if (hasPartition) return;
@@ -167,7 +169,8 @@ class HabitStore extends ChangeNotifier {
         bool changed = false;
 
         // Restore habits not already present locally
-        final cloudHabits = (cloud['habits'] as List?)
+        final cloudHabits =
+            (cloud['habits'] as List?)
                 ?.whereType<Map>()
                 .map((e) => Habit.tryFromJson(Map<String, dynamic>.from(e)))
                 .whereType<Habit>()
@@ -197,7 +200,9 @@ class HabitStore extends ChangeNotifier {
       }
 
       remindersChangedNotifier.value++;
-    } catch (e) { debugPrint("Error: $e"); }
+    } catch (e, st) {
+      logError('HabitStore._doRestoreFromCloud', e, st);
+    }
     _restoring = false;
     _cloudRestored = true;
     _restoreFuture = null;
@@ -263,8 +268,6 @@ class HabitStore extends ChangeNotifier {
     _syncToCloud();
   }
 
-
-
   /// Water tracking
   void addWater() {
     final key = dateKey(DateTime.now());
@@ -318,7 +321,8 @@ class HabitStore extends ChangeNotifier {
       habits.where((h) => !h.paused && h.isDueOn(DateTime.now())).toList();
 
   /// Today's completed habits count
-  int get todayCompleted => todayHabits.where((h) => h.isCompleted(DateTime.now())).length;
+  int get todayCompleted =>
+      todayHabits.where((h) => h.isCompleted(DateTime.now())).length;
 
   /// Best current streak across all habits (most consecutive days)
   int get totalStreakPower {

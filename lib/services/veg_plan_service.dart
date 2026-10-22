@@ -57,14 +57,21 @@ class VegPlanService {
 
   /// Calorie split across the day - mirrors DietPlanScreen's own breakdown.
   static const List<_SlotSpec> _specs = [
-    _SlotSpec('Breakfast', '7:00 - 9:00 AM', 0.25,
-        ['Breakfast', 'South Indian']),
+    _SlotSpec('Breakfast', '7:00 - 9:00 AM', 0.25, [
+      'Breakfast',
+      'South Indian',
+    ]),
     _SlotSpec('Mid-Morning Snack', '11:00 AM', 0.10, ['Fruits', 'Dairy']),
     _SlotSpec('Lunch', '12:30 - 2:00 PM', 0.30, ['Lunch/Dinner', 'Rice/Bread']),
-    _SlotSpec('Evening Snack', '5:00 - 6:30 PM', 0.10,
-        ['Snacks', 'Salads/Soups']),
-    _SlotSpec('Dinner', '7:30 - 9:00 PM', 0.25,
-        ['Lunch/Dinner', 'South Indian', 'Salads/Soups']),
+    _SlotSpec('Evening Snack', '5:00 - 6:30 PM', 0.10, [
+      'Snacks',
+      'Salads/Soups',
+    ]),
+    _SlotSpec('Dinner', '7:30 - 9:00 PM', 0.25, [
+      'Lunch/Dinner',
+      'South Indian',
+      'Salads/Soups',
+    ]),
   ];
 
   /// A plan for [profile]'s targets (or [defaultTargetCalories] without one),
@@ -76,11 +83,13 @@ class VegPlanService {
     final slots = <VegMealSlot>[];
     for (final spec in _specs) {
       final budget = (target * spec.share).round();
-      slots.add(VegMealSlot(
-        title: spec.title,
-        time: spec.time,
-        items: _fill(spec, budget, day, used, preferProtein),
-      ));
+      slots.add(
+        VegMealSlot(
+          title: spec.title,
+          time: spec.time,
+          items: _fill(spec, budget, day, used, preferProtein),
+        ),
+      );
     }
     return VegDayPlan(slots: slots, targetCalories: target);
   }
@@ -113,7 +122,8 @@ class VegPlanService {
     bool preferProtein,
   ) {
     var pool = <FoodItem>[
-      for (final category in spec.categories) ...FoodDatabase.getByCategory(category),
+      for (final category in spec.categories)
+        ...FoodDatabase.getByCategory(category),
     ].where((item) => item.isVeg && !used.contains(item.name)).toList();
     if (pool.isEmpty) {
       // Every candidate in this slot is already used - fall back to anything
@@ -154,12 +164,7 @@ class VegPlanService {
     return chosen;
   }
 
-  static double _score(
-    FoodItem item,
-    int index,
-    int day,
-    bool preferProtein,
-  ) {
+  static double _score(FoodItem item, int index, int day, bool preferProtein) {
     final base = preferProtein ? item.protein * 4 : item.calories.toDouble();
     final jitter = (((index * 37) + (day * 101)) % 61) - 30;
     return base + (preferProtein ? jitter * 0.35 : jitter.toDouble());

@@ -43,8 +43,11 @@ void main() {
     routeTo(status: http.Response('{"subscribed": false}', 200));
     await SubscriptionService.instance.verifyServerSubscription();
 
-    expect(SubscriptionService.instance.isSubscribed, isFalse,
-        reason: 'an authoritative subscribed:false must downgrade');
+    expect(
+      SubscriptionService.instance.isSubscribed,
+      isFalse,
+      reason: 'an authoritative subscribed:false must downgrade',
+    );
     final prefs = await SharedPreferences.getInstance();
     expect(prefs.getBool('subscribed'), isNot(true));
     expect(prefs.getString('subscribed_at'), isNull);
@@ -88,31 +91,42 @@ void main() {
 
     routeTo(
       trial: http.Response(
-          '{"active": true, "endsAt": "${endsAt.toIso8601String()}"}', 200),
+        '{"active": true, "endsAt": "${endsAt.toIso8601String()}"}',
+        200,
+      ),
       status: http.Response('{"subscribed": false}', 200),
     );
     await SubscriptionService.instance.verifyServerSubscription();
 
-    expect(SubscriptionService.instance.isSubscribed, isTrue,
-        reason: 'a live trial must not be cleared by subscribed:false');
+    expect(
+      SubscriptionService.instance.isSubscribed,
+      isTrue,
+      reason: 'a live trial must not be cleared by subscribed:false',
+    );
     expect(SubscriptionService.instance.trialActive, isTrue);
   });
 
-  test('subscribed:true stores pro_until so Settings can show the end date',
-      () async {
-    final until =
-        DateTime.now().add(const Duration(days: 25)).toIso8601String();
-    SharedPreferences.setMockInitialValues({'email': 'user@example.com'});
-    await SubscriptionService.instance.load();
+  test(
+    'subscribed:true stores pro_until so Settings can show the end date',
+    () async {
+      final until = DateTime.now()
+          .add(const Duration(days: 25))
+          .toIso8601String();
+      SharedPreferences.setMockInitialValues({'email': 'user@example.com'});
+      await SubscriptionService.instance.load();
 
-    routeTo(
-        status:
-            http.Response('{"subscribed": true, "pro_until": "$until"}', 200));
-    await SubscriptionService.instance.verifyServerSubscription();
+      routeTo(
+        status: http.Response(
+          '{"subscribed": true, "pro_until": "$until"}',
+          200,
+        ),
+      );
+      await SubscriptionService.instance.verifyServerSubscription();
 
-    expect(SubscriptionService.instance.isSubscribed, isTrue);
-    expect(SubscriptionService.instance.proUntil, until);
-    final prefs = await SharedPreferences.getInstance();
-    expect(prefs.getString('pro_until'), until);
-  });
+      expect(SubscriptionService.instance.isSubscribed, isTrue);
+      expect(SubscriptionService.instance.proUntil, until);
+      final prefs = await SharedPreferences.getInstance();
+      expect(prefs.getString('pro_until'), until);
+    },
+  );
 }

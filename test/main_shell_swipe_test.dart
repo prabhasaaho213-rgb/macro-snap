@@ -29,8 +29,9 @@ Future<void> flushEntranceTimers(WidgetTester tester) async {
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  const permissionChannel =
-      MethodChannel('flutter.baseflow.com/permissions/methods');
+  const permissionChannel = MethodChannel(
+    'flutter.baseflow.com/permissions/methods',
+  );
   const cameraChannel = MethodChannel('plugins.flutter.io/camera');
 
   setUp(() {
@@ -46,18 +47,18 @@ void main() {
     // the screen lands in its safe "Camera unavailable" state.
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(permissionChannel, (call) async {
-      if (call.method == 'requestPermissions') {
-        final args = (call.arguments as List).cast<int>();
-        return <int, int>{for (final a in args) a: 1}; // granted
-      }
-      if (call.method == 'checkPermissionStatus') return 1; // granted
-      return null;
-    });
+          if (call.method == 'requestPermissions') {
+            final args = (call.arguments as List).cast<int>();
+            return <int, int>{for (final a in args) a: 1}; // granted
+          }
+          if (call.method == 'checkPermissionStatus') return 1; // granted
+          return null;
+        });
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(cameraChannel, (call) async {
-      if (call.method == 'availableCameras') return <dynamic>[];
-      return null;
-    });
+          if (call.method == 'availableCameras') return <dynamic>[];
+          return null;
+        });
   });
 
   tearDown(() {
@@ -79,24 +80,38 @@ void main() {
   testWidgets('swipe left moves Home → Scan → Habits', (tester) async {
     await pumpShell(tester);
 
-    expect(find.byType(HomeScreen), findsOneWidget,
-        reason: 'shell must start on the Home tab');
+    expect(
+      find.byType(HomeScreen),
+      findsOneWidget,
+      reason: 'shell must start on the Home tab',
+    );
 
     // Swipe left (negative velocity) → next tab (Scan).
     await tester.fling(find.byType(MainShell), const Offset(-300, 0), 1000);
     await tester.pump();
-    await tester.pump(const Duration(milliseconds: 450)); // AnimatedSwitcher 400ms
-    expect(find.byType(ScanScreen), findsOneWidget,
-        reason: 'swipe left on Home must open the Scan tab');
-    expect(find.byType(HomeScreen), findsNothing,
-        reason: 'Home must be removed after the transition completes');
+    await tester.pump(
+      const Duration(milliseconds: 450),
+    ); // AnimatedSwitcher 400ms
+    expect(
+      find.byType(ScanScreen),
+      findsOneWidget,
+      reason: 'swipe left on Home must open the Scan tab',
+    );
+    expect(
+      find.byType(HomeScreen),
+      findsNothing,
+      reason: 'Home must be removed after the transition completes',
+    );
 
     // Swipe left again → Habits.
     await tester.fling(find.byType(MainShell), const Offset(-300, 0), 1000);
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 450));
-    expect(find.byType(HabitsTab), findsOneWidget,
-        reason: 'swipe left on Scan must open the Habits tab');
+    expect(
+      find.byType(HabitsTab),
+      findsOneWidget,
+      reason: 'swipe left on Scan must open the Habits tab',
+    );
     expect(find.byType(ScanScreen), findsNothing);
 
     await flushEntranceTimers(tester);
@@ -118,40 +133,54 @@ void main() {
     await tester.fling(find.byType(MainShell), const Offset(300, 0), 1000);
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 450));
-    expect(find.byType(ScanScreen), findsOneWidget,
-        reason: 'swipe right on Habits must open the Scan tab');
+    expect(
+      find.byType(ScanScreen),
+      findsOneWidget,
+      reason: 'swipe right on Habits must open the Scan tab',
+    );
     expect(find.byType(HabitsTab), findsNothing);
 
     // Swipe right again → Home.
     await tester.fling(find.byType(MainShell), const Offset(300, 0), 1000);
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 450));
-    expect(find.byType(HomeScreen), findsOneWidget,
-        reason: 'swipe right on Scan must open the Home tab');
+    expect(
+      find.byType(HomeScreen),
+      findsOneWidget,
+      reason: 'swipe right on Scan must open the Home tab',
+    );
 
     await flushEntranceTimers(tester);
   });
 
-  testWidgets('slow drag (below 300 px/s velocity) does NOT switch tabs',
-      (tester) async {
+  testWidgets('slow drag (below 300 px/s velocity) does NOT switch tabs', (
+    tester,
+  ) async {
     await pumpShell(tester);
     expect(find.byType(HomeScreen), findsOneWidget);
 
     // 300px over 2s → 150 px/s < the 300 px/s threshold.
     await tester.timedDrag(
-        find.byType(MainShell), const Offset(-300, 0), const Duration(seconds: 2));
+      find.byType(MainShell),
+      const Offset(-300, 0),
+      const Duration(seconds: 2),
+    );
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 450));
 
-    expect(find.byType(HomeScreen), findsOneWidget,
-        reason: 'a slow drag under the velocity threshold must not switch tabs');
+    expect(
+      find.byType(HomeScreen),
+      findsOneWidget,
+      reason: 'a slow drag under the velocity threshold must not switch tabs',
+    );
     expect(find.byType(ScanScreen), findsNothing);
 
     await flushEntranceTimers(tester);
   });
 
-  testWidgets('swipe left on the last tab (Habits) stays on Habits',
-      (tester) async {
+  testWidgets('swipe left on the last tab (Habits) stays on Habits', (
+    tester,
+  ) async {
     await pumpShell(tester);
 
     // Two left swipes: Home → Scan → Habits. Updates no longer owns a tab —
@@ -168,60 +197,79 @@ void main() {
     await tester.fling(find.byType(MainShell), const Offset(-300, 0), 1000);
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 450));
-    expect(find.byType(HabitsTab), findsOneWidget,
-        reason: 'swiping left past the last tab must stay on the Habits tab');
+    expect(
+      find.byType(HabitsTab),
+      findsOneWidget,
+      reason: 'swiping left past the last tab must stay on the Habits tab',
+    );
 
     await flushEntranceTimers(tester);
   });
 
   // ─── TAB KEEP-ALIVE (no black re-init on every switch) ────
 
-  testWidgets('switching tabs keeps each tab mounted instead of rebuilding it',
-      (tester) async {
-    var cameraLookups = 0;
-    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-        .setMockMethodCallHandler(cameraChannel, (call) async {
-      if (call.method == 'availableCameras') {
-        cameraLookups++;
-        return <dynamic>[];
-      }
-      return null;
-    });
+  testWidgets(
+    'switching tabs keeps each tab mounted instead of rebuilding it',
+    (tester) async {
+      var cameraLookups = 0;
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(cameraChannel, (call) async {
+            if (call.method == 'availableCameras') {
+              cameraLookups++;
+              return <dynamic>[];
+            }
+            return null;
+          });
 
-    await pumpShell(tester);
-    final homeState = tester.state(find.byType(HomeScreen));
+      await pumpShell(tester);
+      final homeState = tester.state(find.byType(HomeScreen));
 
-    // Home → Scan.
-    await tester.fling(find.byType(MainShell), const Offset(-300, 0), 1000);
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 450));
+      // Home → Scan.
+      await tester.fling(find.byType(MainShell), const Offset(-300, 0), 1000);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 450));
 
-    expect(find.byType(ScanScreen), findsOneWidget);
-    expect(find.byType(HomeScreen, skipOffstage: false), findsOneWidget,
-        reason: 'Home must stay mounted (offstage) while Scan is on screen');
-    expect(cameraLookups, 1,
-        reason: 'the Scan tab opens the camera once, on first visit');
+      expect(find.byType(ScanScreen), findsOneWidget);
+      expect(
+        find.byType(HomeScreen, skipOffstage: false),
+        findsOneWidget,
+        reason: 'Home must stay mounted (offstage) while Scan is on screen',
+      );
+      expect(
+        cameraLookups,
+        1,
+        reason: 'the Scan tab opens the camera once, on first visit',
+      );
 
-    // Scan → Home.
-    await tester.fling(find.byType(MainShell), const Offset(300, 0), 1000);
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 450));
+      // Scan → Home.
+      await tester.fling(find.byType(MainShell), const Offset(300, 0), 1000);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 450));
 
-    expect(tester.state(find.byType(HomeScreen)), same(homeState),
-        reason: 'returning must reuse the original State — rebuilding it '
+      expect(
+        tester.state(find.byType(HomeScreen)),
+        same(homeState),
+        reason:
+            'returning must reuse the original State — rebuilding it '
             'replays every entrance animation from zero, which is what '
-            'looked like a black screen on each switch');
-    expect(find.byType(ScanScreen, skipOffstage: false), findsOneWidget,
-        reason: 'the Scan tab stays mounted so the camera is never re-opened');
-    expect(cameraLookups, 1);
+            'looked like a black screen on each switch',
+      );
+      expect(
+        find.byType(ScanScreen, skipOffstage: false),
+        findsOneWidget,
+        reason: 'the Scan tab stays mounted so the camera is never re-opened',
+      );
+      expect(cameraLookups, 1);
 
-    await flushEntranceTimers(tester);
-  });
+      await flushEntranceTimers(tester);
+    },
+  );
 
   // ─── NOTIFICATION TAP → HABITS TAB (via shellTabIndex) ────
 
-  testWidgets('openShellTab(2) switches the shell to the Habits tab',
-      (tester) async {
+  testWidgets('openShellTab(2) switches the shell to the Habits tab', (
+    tester,
+  ) async {
     await pumpShell(tester);
     expect(find.byType(HomeScreen), findsOneWidget);
 
@@ -231,10 +279,16 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 450));
 
-    expect(shellTabIndex.value, 2,
-        reason: 'openShellTab must update the shared tab index');
-    expect(find.byType(HabitsTab), findsOneWidget,
-        reason: 'the shell must listen to shellTabIndex and switch to Habits');
+    expect(
+      shellTabIndex.value,
+      2,
+      reason: 'openShellTab must update the shared tab index',
+    );
+    expect(
+      find.byType(HabitsTab),
+      findsOneWidget,
+      reason: 'the shell must listen to shellTabIndex and switch to Habits',
+    );
 
     await flushEntranceTimers(tester);
   });

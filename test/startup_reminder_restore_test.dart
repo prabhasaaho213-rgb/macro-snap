@@ -22,24 +22,24 @@ void main() {
     final calls = <(int, String)>[];
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(channel, (call) async {
-      if (call.method == 'zonedSchedule') {
-        final args = Map<dynamic, dynamic>.from(call.arguments as Map);
-        calls.add((args['id'] as int, args['payload'] as String? ?? ''));
-      }
-      return null;
-    });
+          if (call.method == 'zonedSchedule') {
+            final args = Map<dynamic, dynamic>.from(call.arguments as Map);
+            calls.add((args['id'] as int, args['payload'] as String? ?? ''));
+          }
+          return null;
+        });
     return calls;
   }
 
   Habit habit(String id, {bool reminder = true}) => Habit(
-        id: id,
-        name: 'Habit $id',
-        emoji: '💧',
-        colorValue: 0xFF00E65C,
-        reminderEnabled: reminder,
-        reminderHour: 9,
-        reminderMinute: 0,
-      );
+    id: id,
+    name: 'Habit $id',
+    emoji: '💧',
+    colorValue: 0xFF00E65C,
+    reminderEnabled: reminder,
+    reminderHour: 9,
+    reminderMinute: 0,
+  );
 
   setUp(() {
     // Mirrors NotificationService.init(): the timezone database must be
@@ -87,10 +87,9 @@ void main() {
     () async {
       final calls = captureCalls();
 
-      await NotificationService().restoreAllReminders(
-        [habit('enabled-a')],
-        subscribedDate: DateTime.now().toIso8601String(),
-      );
+      await NotificationService().restoreAllReminders([
+        habit('enabled-a'),
+      ], subscribedDate: DateTime.now().toIso8601String());
 
       // 2 built-ins + 1 habit + expiry (2) + expired (3) + weekly = 6 calls.
       expect(calls.length, 6);

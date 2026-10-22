@@ -1,34 +1,82 @@
+# MacroSnap — Codemagic build config.
+#
+# Rewritten 21 Oct 2026. The previous version was unsafe and could not produce
+# a usable build:
+#   * the keystore password was written in plain text in this file,
+#   * it generated a NEW keystore on every run (so the signing key changed each
+#     build and would not match the certificate registered in Firebase/Play),
+#   * PACKAGE_NAME was com.macrosnapai.app, not this app's
+#     com.macrosnap.macro_snap,
+#   * it cd'd into a version-named subfolder that is not in the repo,
+#   * it published the .jks as a build artifact.
+#
+# Signing now comes from Codemagic environment variables (create an environment
+# variable group called `macrosnap_signing` in the Codemagic UI):
+#   CM_KEYSTORE            base64 of android/upload-keystore.jks
+#   CM_KEYSTORE_PASSWORD   keystore password
+#   CM_KEY_ALIAS           key alias (upload)
+#   CM_KEY_PASSWORD        key password
+# Nothing secret belongs in this file or in git.
 workflows:
   macrosnap-workflow:
-    name: MacroSnap
+    name: MacroSnap (APK + AAB)
     max_build_duration: 60
     environment:
       flutter: stable
+      java: 17
+      groups:
+        - macrosnap_signing
       vars:
-        PACKAGE_NAME: "com.macrosnapai.app"
+        # Must match applicationId in android/app/build.gradle.kts.
+        PACKAGE_NAME: "com.macrosnap.macro_snap"
     scripts:
-      - name: Generate keystore
+      - name: Check signing secrets are present
         script: |
-          keytool -genkey -v -keystore $CM_BUILD_DIR/macrosnap-release.jks -keyalg RSA -keysize 2048 -validity 10000 -alias macrosnap -storepass MacroSnap@2026 -keypass MacroSnap@2026 -dname "CN=Prabhas, OU=MacroSnap, O=MacroSnap, L=Hyderabad, ST=Telangana, C=IN"
+          test -n "$CM_KEYSTORE" || { echo "CM_KEYSTORE is not set"; exit 1; }
+          test -n "$CM_KEYSTORE_PASSWORD" || { echo "CM_KEYSTORE_PASSWORD is not set"; exit 1; }
+          test -n "$CM_KEY_PASSWORD" || { echo "CM_KEY_PASSWORD is not set"; exit 1; }
+
+      - name: Restore the existing upload keystore
+        script: |
+          # The SAME keystore the Play build uses. Generating a new one here
+          # would break Google Sign-In (its SHA-1 is registered in Firebase)
+          # and make the update un-installable over the published app.
+          echo "$CM_KEYSTORE" | base64 --decode > android/upload-keystore.jks
 
       - name: Configure signing
         script: |
-          cat > "macro-snap-source-1.4.5/android/key.properties" <<EOF
-          storePassword=MacroSnap@2026
-          keyPassword=MacroSnap@2026
-          keyAlias=macrosnap
-          storeFile=$CM_BUILD_DIR/macrosnap-release.jks
+          cat > android/key.properties <<EOF
+          storePassword=$CM_KEYSTORE_PASSWORD
+          keyPassword=$CM_KEY_PASSWORD
+          keyAlias=${CM_KEY_ALIAS:-upload}
+          storeFile=upload-keystore.jks
           EOF
 
       - name: Get Flutter packages
+        script: flutter pub get
+
+      - name: Analyze
         script: |
-          cd "macro-snap-source-1.4.5"
-          flutter packages pub get
+          flutter analyze || {
+            echo "flutter analyze reported issues — failing the build so they are not shipped silently"
+            exit 1
+          }
+
+      - name: Tests
+        script: flutter test
 
       - name: Build AAB
+        script: flutter build appbundle --release
+
+      - name: Build APK
+        script: flutter build apk --release
+
+      - name: Verify the build is signed with the upload key
         script: |
-          cd "macro-snap-source-1.4.5"
-          flutter build appbundle --release
+          SDK="$ANDROID_HOME/build-tools/$(ls "$ANDROID_HOME/build-tools" | sort -V | tail -1)"
+          "$SDK/apksigner" verify --print-certs build/app/outputs/flutter-apk/app-release.apk
+
     artifacts:
-      - macrosnap-release.jks
-      - macro-snap-source-1.4.5/build/**/outputs/**/*.aab
+      # Only the shipped binaries. The keystore is never an artifact.
+      - build/app/outputs/flutter-apk/app-release.apk
+      - build/app/outputs/bundle/release/app-release.aab

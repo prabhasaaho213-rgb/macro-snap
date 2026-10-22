@@ -11,9 +11,13 @@ void main() {
   group('headline styles', () {
     test('dark-theme display styles are upright', () {
       final text = MacroSnapTheme.dark.textTheme;
-      expect(text.displayLarge?.fontStyle, isNot(FontStyle.italic),
-          reason: '"Welcome to MacroSnap" uses displayMedium — it must not '
-              'lean');
+      expect(
+        text.displayLarge?.fontStyle,
+        isNot(FontStyle.italic),
+        reason:
+            '"Welcome to MacroSnap" uses displayMedium — it must not '
+            'lean',
+      );
       expect(text.displayMedium?.fontStyle, isNot(FontStyle.italic));
     });
 
@@ -31,19 +35,27 @@ void main() {
       await tester.pumpWidget(
         MaterialApp(
           theme: MacroSnapTheme.light,
-          home: Scaffold(body: Center(child: StreakFlame(streak: streak))),
+          home: Scaffold(
+            body: Center(child: StreakFlame(streak: streak)),
+          ),
         ),
       );
       await tester.pump(const Duration(milliseconds: 100));
     }
 
-    testWidgets('draws a bright fire icon instead of the emoji', (tester) async {
+    testWidgets('draws a bright fire icon instead of the emoji', (
+      tester,
+    ) async {
       await pumpFlame(tester, 1);
 
       expect(find.byIcon(Icons.local_fire_department_rounded), findsOneWidget);
-      expect(find.text('🔥'), findsNothing,
-          reason: 'the emoji rendered dim on Android; it is drawn as an icon '
-              'now so it can carry a gradient and a glow');
+      expect(
+        find.text('🔥'),
+        findsNothing,
+        reason:
+            'the emoji rendered dim on Android; it is drawn as an icon '
+            'now so it can carry a gradient and a glow',
+      );
     });
 
     testWidgets('flame count follows the streak tier', (tester) async {
@@ -52,11 +64,17 @@ void main() {
 
       await pumpFlame(tester, 5);
       await tester.pump(const Duration(milliseconds: 400));
-      expect(find.byIcon(Icons.local_fire_department_rounded), findsNWidgets(2));
+      expect(
+        find.byIcon(Icons.local_fire_department_rounded),
+        findsNWidgets(2),
+      );
 
       await pumpFlame(tester, 9);
       await tester.pump(const Duration(milliseconds: 400));
-      expect(find.byIcon(Icons.local_fire_department_rounded), findsNWidgets(3));
+      expect(
+        find.byIcon(Icons.local_fire_department_rounded),
+        findsNWidgets(3),
+      );
       expect(find.text('Lv 1'), findsOneWidget);
     });
 

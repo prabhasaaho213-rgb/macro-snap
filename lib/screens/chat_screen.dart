@@ -78,8 +78,8 @@ class _ChatScreenState extends State<ChatScreen> {
       final reply = data['reply'] is String
           ? data['reply'] as String
           : (data['message']?.toString() ??
-              data['error']?.toString() ??
-              'Something went wrong. Please try again.');
+                data['error']?.toString() ??
+                'Something went wrong. Please try again.');
       if (mounted) {
         setState(() {
           _messages.add(_ChatMessage(role: _Role.assistant, text: reply));
@@ -101,11 +101,14 @@ class _ChatScreenState extends State<ChatScreen> {
     } catch (_) {
       if (mounted) {
         setState(() {
-          _messages.add(const _ChatMessage(
-            role: _Role.assistant,
-            text: 'I couldn\u2019t reach the server. Check your connection '
-                'and try again.',
-          ));
+          _messages.add(
+            const _ChatMessage(
+              role: _Role.assistant,
+              text:
+                  'I couldn\u2019t reach the server. Check your connection '
+                  'and try again.',
+            ),
+          );
           _busy = false;
         });
       }
@@ -172,7 +175,9 @@ class _ChatScreenState extends State<ChatScreen> {
       child: Container(
         padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
         decoration: BoxDecoration(
-          color: isDark ? MacroSnapTheme.surfaceDark : MacroSnapTheme.surfaceLight,
+          color: isDark
+              ? MacroSnapTheme.surfaceDark
+              : MacroSnapTheme.surfaceLight,
           border: Border(
             top: BorderSide(
               color: isDark ? Colors.white10 : const Color(0xFFE5E5E5),
@@ -184,8 +189,11 @@ class _ChatScreenState extends State<ChatScreen> {
           children: [
             Row(
               children: [
-                const Icon(Icons.lock_outline_rounded,
-                    size: 18, color: Color(0xFF7C3AED)),
+                const Icon(
+                  Icons.lock_outline_rounded,
+                  size: 18,
+                  color: Color(0xFF7C3AED),
+                ),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
@@ -204,8 +212,7 @@ class _ChatScreenState extends State<ChatScreen> {
               child: ElevatedButton(
                 onPressed: () => Navigator.push(
                   context,
-                  MaterialPageRoute(
-                      builder: (_) => const SubscriptionScreen()),
+                  MaterialPageRoute(builder: (_) => const SubscriptionScreen()),
                 ),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFF7C3AED),
@@ -260,7 +267,9 @@ class _ChatScreenState extends State<ChatScreen> {
       child: Container(
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
         decoration: BoxDecoration(
-          color: isDark ? MacroSnapTheme.surfaceDark : MacroSnapTheme.surfaceLight,
+          color: isDark
+              ? MacroSnapTheme.surfaceDark
+              : MacroSnapTheme.surfaceLight,
           border: Border(
             top: BorderSide(
               color: isDark ? Colors.white10 : const Color(0xFFE5E5E5),
@@ -276,11 +285,13 @@ class _ChatScreenState extends State<ChatScreen> {
                 textInputAction: TextInputAction.send,
                 onSubmitted: _send,
                 maxLength: 2000,
-                buildCounter: (_,
-                        {required currentLength,
-                        required isFocused,
-                        maxLength}) =>
-                    null,
+                buildCounter:
+                    (
+                      _, {
+                      required currentLength,
+                      required isFocused,
+                      maxLength,
+                    }) => null,
                 decoration: InputDecoration(
                   counterText: '',
                   hintText: 'Ask about food, calories or protein...',
@@ -315,7 +326,11 @@ class _ChatScreenState extends State<ChatScreen> {
               ),
               child: IconButton(
                 onPressed: _busy ? null : () => _send(_input.text),
-                icon: const Icon(Icons.send_rounded, color: Colors.white, size: 20),
+                icon: const Icon(
+                  Icons.send_rounded,
+                  color: Colors.white,
+                  size: 20,
+                ),
               ),
             ),
           ],
@@ -336,8 +351,9 @@ class _ChatBubble extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
       child: Row(
-        mainAxisAlignment:
-            isUser ? MainAxisAlignment.end : MainAxisAlignment.start,
+        mainAxisAlignment: isUser
+            ? MainAxisAlignment.end
+            : MainAxisAlignment.start,
         children: [
           if (!isUser)
             Container(
@@ -349,8 +365,11 @@ class _ChatBubble extends StatelessWidget {
                 ),
                 borderRadius: BorderRadius.circular(10),
               ),
-              child: const Icon(Icons.smart_toy_rounded,
-                  color: Colors.white, size: 15),
+              child: const Icon(
+                Icons.smart_toy_rounded,
+                color: Colors.white,
+                size: 15,
+              ),
             ),
           Flexible(
             child: Container(
@@ -408,8 +427,11 @@ class _TypingBubble extends StatelessWidget {
               ),
               borderRadius: BorderRadius.circular(10),
             ),
-            child: const Icon(Icons.smart_toy_rounded,
-                color: Colors.white, size: 15),
+            child: const Icon(
+              Icons.smart_toy_rounded,
+              color: Colors.white,
+              size: 15,
+            ),
           ),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),

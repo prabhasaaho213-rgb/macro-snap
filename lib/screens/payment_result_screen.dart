@@ -67,8 +67,9 @@ class _PaymentSuccessScreenState extends State<PaymentSuccessScreen>
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final background =
-        isDark ? MacroSnapTheme.surfaceDark : MacroSnapTheme.surfaceLight;
+    final background = isDark
+        ? MacroSnapTheme.surfaceDark
+        : MacroSnapTheme.surfaceLight;
 
     return Scaffold(
       backgroundColor: background,
@@ -164,8 +165,7 @@ class _PaymentSuccessScreenState extends State<PaymentSuccessScreen>
               GradientButton(
                 label: 'Start using MacroSnap',
                 icon: Icons.arrow_forward_rounded,
-                onPressed: () =>
-                    Navigator.of(context).pop(PaymentAction.done),
+                onPressed: () => Navigator.of(context).pop(PaymentAction.done),
               ),
             ],
           ),
@@ -286,8 +286,9 @@ class _PaymentFailureScreenState extends State<PaymentFailureScreen>
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final background =
-        isDark ? MacroSnapTheme.surfaceDark : MacroSnapTheme.surfaceLight;
+    final background = isDark
+        ? MacroSnapTheme.surfaceDark
+        : MacroSnapTheme.surfaceLight;
 
     return Scaffold(
       backgroundColor: background,
@@ -340,8 +341,10 @@ class _PaymentFailureScreenState extends State<PaymentFailureScreen>
               // Set expectations instead of a vague "something went wrong":
               // a bank can confirm after the app has given up.
               Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 12,
+                ),
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(16),
                   color: isDark
@@ -449,9 +452,7 @@ class _PaymentPendingScreenState extends State<PaymentPendingScreen>
     if (ok) {
       // Replace rather than stack: the wait is over.
       Navigator.of(context).pushReplacement(
-        MaterialPageRoute(
-          builder: (_) => const PaymentSuccessScreen(),
-        ),
+        MaterialPageRoute(builder: (_) => const PaymentSuccessScreen()),
       );
       return;
     }
@@ -467,8 +468,9 @@ class _PaymentPendingScreenState extends State<PaymentPendingScreen>
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final background =
-        isDark ? MacroSnapTheme.surfaceDark : MacroSnapTheme.surfaceLight;
+    final background = isDark
+        ? MacroSnapTheme.surfaceDark
+        : MacroSnapTheme.surfaceLight;
 
     return Scaffold(
       backgroundColor: background,

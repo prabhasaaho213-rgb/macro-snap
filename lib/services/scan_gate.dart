@@ -4,6 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'auth_http.dart';
 import 'gemini_service.dart';
+import '../core/app_limits.dart';
 import 'subscription_service.dart';
 
 /// The free AI-scan allowance.
@@ -24,7 +25,9 @@ class ScanGate {
 
   /// Free AI scans per day. The ONE place the plan is defined — the server
   /// mirrors it in SCAN_LIMIT_FREE (macro-snap-backend/server.js).
-  static const int freeLimitPerDay = 3;
+  /// Single client-side copy of the allowance (see [AppLimits]); the server
+  /// still sends the authoritative per-account limit.
+  static const int freeLimitPerDay = AppLimits.freeScansPerDay;
 
   /// Local estimate of today's usage (display only).
   static const String _usedKey = 'scan_count';
@@ -37,8 +40,9 @@ class ScanGate {
   static const String _serverResetKey = 'server_scan_reset';
 
   /// Now, in IST (UTC+5:30, no DST).
-  static DateTime istNow([DateTime? now]) =>
-      (now ?? DateTime.now()).toUtc().add(const Duration(hours: 5, minutes: 30));
+  static DateTime istNow([DateTime? now]) => (now ?? DateTime.now())
+      .toUtc()
+      .add(const Duration(hours: 5, minutes: 30));
 
   /// The IST calendar day as `yyyy-MM-dd` — the key the counter resets on.
   static String istDayKey([DateTime? now]) {
@@ -54,7 +58,7 @@ class ScanGate {
   /// is deliberately NO local limit check: a stale local counter may never
   /// block a request, because the server decides and it may well disagree.
   static Future<bool> canScan() async {
-    if (await _isSubscribed()) return true;
+    if (_isSubscribed()) return true;
     final server = await _serverState();
     if (!server.isFresh) return true;
     if (server.limit == null) return true; // unlimited (Pro/admin)
@@ -63,7 +67,7 @@ class ScanGate {
 
   /// Scans left to show in the UI (999 = unlimited).
   static Future<int> getScansRemaining() async {
-    if (await _isSubscribed()) return 999;
+    if (_isSubscribed()) return 999;
     final server = await _serverState();
     if (server.isFresh && server.limit != null) {
       return (server.limit! - server.used).clamp(0, server.limit!);
@@ -76,7 +80,7 @@ class ScanGate {
 
   /// Today's usage as far as the UI knows.
   static Future<int> getScansUsed() async {
-    if (await _isSubscribed()) return 0;
+    if (_isSubscribed()) return 0;
     final server = await _serverState();
     if (server.isFresh) return server.used;
     final prefs = await SharedPreferences.getInstance();
@@ -118,7 +122,11 @@ class ScanGate {
   /// The server answered 403 `scan_limit_reached`: today's allowance is gone.
   /// Records the limit as used so the UI immediately shows 0 scans left.
   static Future<void> markLimitReached({DateTime? resetAt}) =>
-      recordServerCounts(used: freeLimitPerDay, limit: freeLimitPerDay, resetAt: resetAt);
+      recordServerCounts(
+        used: freeLimitPerDay,
+        limit: freeLimitPerDay,
+        resetAt: resetAt,
+      );
 
   /// Bumps the LOCAL estimate by one. Display only — the server counts the
   /// scans that actually happened.
@@ -158,10 +166,13 @@ class ScanGate {
     }
   }
 
-  static Future<bool> _isSubscribed() async {
-    await SubscriptionService.instance.load();
-    return SubscriptionService.instance.isSubscribed;
-  }
+  /// Reads the already-loaded subscription state.
+  ///
+  /// This used to call `SubscriptionService.load()` on every check, which
+  /// re-read prefs and could fire notifications — i.e. checking the scan
+  /// allowance had the side effect of flipping Pro state mid-scan. Startup and
+  /// the purchase flow own loading; this is a plain read.
+  static bool _isSubscribed() => SubscriptionService.instance.isSubscribed;
 
   /// Today's local estimate, resetting when the IST day changes.
   static Future<int> _localUsed(SharedPreferences prefs) async {

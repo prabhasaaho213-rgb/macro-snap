@@ -48,41 +48,59 @@ void main() {
     await prefs.remove('email');
 
     // ── login #2 (same email, same install) ──────────────────
-    expect(NicknameStore.shouldAskNickname(prefs), isFalse,
-        reason: 'a returning user on the same device must never be re-asked');
+    expect(
+      NicknameStore.shouldAskNickname(prefs),
+      isFalse,
+      reason: 'a returning user on the same device must never be re-asked',
+    );
   });
 
-  test('a second login never overwrites the nickname with the Google name',
-      () async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('nickname', 'Prabhas');
-    await prefs.setString('name', 'Prabhas');
+  test(
+    'a second login never overwrites the nickname with the Google name',
+    () async {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('nickname', 'Prabhas');
+      await prefs.setString('name', 'Prabhas');
 
-    // The Google account's display name differs from the chosen nickname.
-    await NicknameStore.persistLoginName(prefs, 'Prabhas Aaho');
+      // The Google account's display name differs from the chosen nickname.
+      await NicknameStore.persistLoginName(prefs, 'Prabhas Aaho');
 
-    expect(prefs.getString('name'), 'Prabhas',
-        reason: 'the greeting must keep the chosen nickname, not the Google '
-            'display name');
-  });
+      expect(
+        prefs.getString('name'),
+        'Prabhas',
+        reason:
+            'the greeting must keep the chosen nickname, not the Google '
+            'display name',
+      );
+    },
+  );
 
-  test('reinstall (prefs wiped) prompts again — server restore fills it in',
-      () async {
-    final prefs = await SharedPreferences.getInstance();
-    // A wiped install: nothing local.
-    expect(NicknameStore.shouldAskNickname(prefs), isTrue);
+  test(
+    'reinstall (prefs wiped) prompts again — server restore fills it in',
+    () async {
+      final prefs = await SharedPreferences.getInstance();
+      // A wiped install: nothing local.
+      expect(NicknameStore.shouldAskNickname(prefs), isTrue);
 
-    // The login first restores the nickname saved on the server…
-    await prefs.setString('nickname', 'Prabhas');
-    // …and only then decides whether to prompt.
-    expect(NicknameStore.shouldAskNickname(prefs), isFalse,
-        reason: 'after a server restore the existing user must not be asked');
-  });
+      // The login first restores the nickname saved on the server…
+      await prefs.setString('nickname', 'Prabhas');
+      // …and only then decides whether to prompt.
+      expect(
+        NicknameStore.shouldAskNickname(prefs),
+        isFalse,
+        reason: 'after a server restore the existing user must not be asked',
+      );
+    },
+  );
 
-  test('restoreFromServer returns null on any failure (never throws)',
-      () async {
-    // No server in the test environment → the http call fails → null.
-    final restored = await NicknameStore.restoreFromServer('nobody@nowhere.invalid');
-    expect(restored, isNull);
-  });
+  test(
+    'restoreFromServer returns null on any failure (never throws)',
+    () async {
+      // No server in the test environment → the http call fails → null.
+      final restored = await NicknameStore.restoreFromServer(
+        'nobody@nowhere.invalid',
+      );
+      expect(restored, isNull);
+    },
+  );
 }

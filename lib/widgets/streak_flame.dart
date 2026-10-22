@@ -39,8 +39,9 @@ class _Flame extends StatelessWidget {
               shape: BoxShape.circle,
               boxShadow: [
                 BoxShadow(
-                  color: MacroSnapTheme.neonOrange
-                      .withValues(alpha: 0.35 + 0.30 * flicker),
+                  color: MacroSnapTheme.neonOrange.withValues(
+                    alpha: 0.35 + 0.30 * flicker,
+                  ),
                   blurRadius: size * 0.55,
                   spreadRadius: size * 0.10,
                 ),
@@ -90,7 +91,9 @@ class _StreakFlameState extends State<StreakFlame>
   late final AnimationController _flicker;
 
   /// Number of flames: 0 none, 1 for 1–2, 2 for 3–6, 3 for 7+.
-  int get _flameCount => widget.streak >= 7 ? 3 : (widget.streak >= 3 ? 2 : (widget.streak >= 1 ? 1 : 0));
+  int get _flameCount => widget.streak >= 7
+      ? 3
+      : (widget.streak >= 3 ? 2 : (widget.streak >= 1 ? 1 : 0));
 
   /// Level badge: shown from 7 days, then +1 every full 7 days
   /// (7 → Lv 1, 14 → Lv 2, 21 → Lv 3 …). Floor so level-up lands exactly
@@ -192,15 +195,21 @@ class _StreakFlameState extends State<StreakFlame>
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Icon(Icons.military_tech_rounded,
-                      color: Colors.black, size: 12),
+                  const Icon(
+                    Icons.military_tech_rounded,
+                    color: Colors.black,
+                    size: 12,
+                  ),
                   const SizedBox(width: 3),
-                  Text('Lv $level',
-                      style: const TextStyle(
-                          color: Colors.black,
-                          fontSize: 11,
-                          fontWeight: FontWeight.w900,
-                          letterSpacing: 0.3)),
+                  Text(
+                    'Lv $level',
+                    style: const TextStyle(
+                      color: Colors.black,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: 0.3,
+                    ),
+                  ),
                 ],
               ),
             ),

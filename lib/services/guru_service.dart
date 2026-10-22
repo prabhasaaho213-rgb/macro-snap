@@ -16,8 +16,9 @@ class GuruProRequiredException implements Exception {
   /// The server's own wording when it sent one; a sensible default otherwise.
   final String message;
 
-  const GuruProRequiredException(
-      [this.message = 'Guru is a Pro feature. Upgrade to keep chatting.']);
+  const GuruProRequiredException([
+    this.message = 'Guru is a Pro feature. Upgrade to keep chatting.',
+  ]);
 
   @override
   String toString() => message;
@@ -40,7 +41,7 @@ class GuruService {
   /// [GeminiService.mockResult], which does the same for scanning).
   @visibleForTesting
   static Future<Map<String, dynamic>> Function(Map<String, dynamic> payload)?
-      mockSender;
+  mockSender;
 
   /// Posts one turn to `POST /chat` and returns the decoded response body.
   /// Throws on transport failure — the screen shows its offline message then.

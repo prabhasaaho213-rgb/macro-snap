@@ -8,9 +8,11 @@ import '../widgets/glass_card.dart';
 import 'phone_login_screen.dart';
 import '../services/gemini_service.dart';
 import '../services/razorpay_service.dart';
+import '../services/scan_gate.dart';
 import '../services/subscription_service.dart';
 import 'referral_screen.dart';
 import 'payment_result_screen.dart';
+import '../services/crash_reporting.dart';
 
 class SubscriptionScreen extends StatefulWidget {
   const SubscriptionScreen({super.key});
@@ -71,7 +73,9 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
           await _activateFromServer(announce: false);
         }
       }
-    } catch (e) { debugPrint("Error: $e"); }
+    } catch (e, st) {
+      logError('SubscriptionScreen._checkPaymentStatus', e, st);
+    }
   }
 
   /// Switches the screen to Pro and (unless [announce] is false) plays the
@@ -273,7 +277,8 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
               if (!_subscribed) ...[
                 const SizedBox(height: 12),
                 Text(
-                  'Choose a plan below to unlock everything \u2014 cancel anytime.',
+                  'Two plans: Free keeps the basics, Pro unlocks everything. '
+                  'Cancel anytime.',
                   textAlign: TextAlign.center,
                   style: TextStyle(
                     fontSize: 13,
@@ -326,6 +331,12 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
                 isDark,
               ),
               const SizedBox(height: 32),
+              // The whole app has exactly two plans. Free is listed first so the
+              // price card below reads as "the other plan", not the only plan.
+              _buildFreePlanCard(context, isDark),
+              const SizedBox(height: 14),
+              _buildProPlanHeader(context, isDark),
+              const SizedBox(height: 10),
               GlassCard(
                 child: Padding(
                   padding: const EdgeInsets.symmetric(vertical: 24),
@@ -615,6 +626,119 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
           ),
         ),
       ),
+    );
+  }
+
+  /// A small rounded label, e.g. "CURRENT PLAN" or "₹29 / MONTH".
+  Widget _planChip(String text, Color colour) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+      decoration: BoxDecoration(
+        color: colour.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Text(
+        text,
+        style: TextStyle(
+          fontSize: 10,
+          fontWeight: FontWeight.w900,
+          letterSpacing: 0.4,
+          color: colour,
+        ),
+      ),
+    );
+  }
+
+  Widget _planPoint(BuildContext context, String text) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 6),
+      child: Row(
+        children: [
+          Icon(
+            Icons.check_rounded,
+            size: 15,
+            color: MacroSnapTheme.successGreen,
+          ),
+          const SizedBox(width: 7),
+          Expanded(
+            child: Text(
+              text,
+              style: TextStyle(
+                fontSize: 12.5,
+                height: 1.3,
+                color: MacroSnapTheme.textSecondary(context),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Plan 1 of 2: what every account has without paying.
+  Widget _buildFreePlanCard(BuildContext context, bool isDark) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(18, 16, 18, 16),
+      decoration: BoxDecoration(
+        color: isDark ? MacroSnapTheme.cardDark : Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: MacroSnapTheme.borderSubtle(context)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Wrap, not Row: at 2x system text these labels are wide enough to
+          // run off a 430dp card, and a plan name is not worth an overflow.
+          Wrap(
+            spacing: 8,
+            runSpacing: 6,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              Text(
+                'Free',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w900,
+                  color: isDark ? Colors.white : const Color(0xFF1A1A1A),
+                ),
+              ),
+              _planChip('\u20B90', MacroSnapTheme.textSecondary(context)),
+              if (!_subscribed)
+                _planChip('CURRENT PLAN', MacroSnapTheme.neonCyan),
+            ],
+          ),
+          _planPoint(context, 'Manual meal logging and macros'),
+          _planPoint(context, 'Streaks, meal history and charts'),
+          _planPoint(context, '${ScanGate.freeLimitPerDay} AI scans a day'),
+        ],
+      ),
+    );
+  }
+
+  /// Plan 2 of 2: the one you can buy. The price card right below carries the
+  /// actual amount and the pay button.
+  Widget _buildProPlanHeader(BuildContext context, bool isDark) {
+    return Wrap(
+      spacing: 8,
+      runSpacing: 6,
+      crossAxisAlignment: WrapCrossAlignment.center,
+      children: [
+        Text(
+          'Pro',
+          style: TextStyle(
+            fontSize: 18,
+            fontWeight: FontWeight.w900,
+            color: isDark ? Colors.white : const Color(0xFF1A1A1A),
+          ),
+        ),
+        _planChip('\u20B929 / MONTH', MacroSnapTheme.neonOrange),
+        if (_subscribed)
+          _planChip(
+            _isAdmin ? 'ADMIN \u2014 LIFETIME' : 'ACTIVE',
+            MacroSnapTheme.successGreen,
+          ),
+      ],
     );
   }
 

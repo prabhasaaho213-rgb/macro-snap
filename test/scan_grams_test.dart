@@ -5,22 +5,22 @@ import 'package:macro_snap/services/gemini_service.dart';
 /// (two boiled eggs ≈ 100 g). The app opens the serving at that weight, while
 /// the +/- adjuster keeps rescaling macros from the per-100 g values.
 Map<String, dynamic> _eggJson({Object? grams}) => {
-      'description': 'two boiled eggs',
-      'confidence': 0.94,
-      'grams': ?grams,
-      'dishes': [
-        {
-          'name': 'Chicken egg',
-          'portion_description': '2 boiled eggs',
-          'calories_per_100g': 143,
-          'protein_g_per_100g': 12.6,
-          'carbs_g_per_100g': 0.6,
-          'fats_g_per_100g': 9.6,
-          'fiber_g_per_100g': 0,
-          'sugar_g_per_100g': 0.2,
-        }
-      ],
-    };
+  'description': 'two boiled eggs',
+  'confidence': 0.94,
+  'grams': ?grams,
+  'dishes': [
+    {
+      'name': 'Chicken egg',
+      'portion_description': '2 boiled eggs',
+      'calories_per_100g': 143,
+      'protein_g_per_100g': 12.6,
+      'carbs_g_per_100g': 0.6,
+      'fats_g_per_100g': 9.6,
+      'fiber_g_per_100g': 0,
+      'sugar_g_per_100g': 0.2,
+    },
+  ],
+};
 
 void main() {
   test('the server total weight becomes the starting serving', () {

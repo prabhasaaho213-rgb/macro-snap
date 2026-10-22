@@ -51,10 +51,7 @@ class BmiGauge extends StatelessWidget {
               ),
             )
           else
-            CustomPaint(
-              size: Size(size, size),
-              painter: painter,
-            ),
+            CustomPaint(size: Size(size, size), painter: painter),
           ?child,
         ],
       ),
@@ -141,9 +138,7 @@ class _GaugePainter extends CustomPainter {
 
   @override
   bool shouldRepaint(_GaugePainter old) =>
-      old.bmi != bmi ||
-      old.strokeWidth != strokeWidth ||
-      old.reveal != reveal;
+      old.bmi != bmi || old.strokeWidth != strokeWidth || old.reveal != reveal;
 }
 
 /// A thin horizontal version of the same scale, for the compact Home card.
@@ -174,7 +169,10 @@ class BmiBandBar extends StatelessWidget {
                 ),
               ),
               Positioned(
-                left: (width * pos - height * 0.9).clamp(0.0, width - height * 1.8),
+                left: (width * pos - height * 0.9).clamp(
+                  0.0,
+                  width - height * 1.8,
+                ),
                 top: -height * 0.4,
                 child: Container(
                   width: height * 1.8,

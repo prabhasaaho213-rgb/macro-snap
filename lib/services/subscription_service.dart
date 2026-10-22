@@ -1,8 +1,12 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/foundation.dart';
 import 'auth_http.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'crash_reporting.dart';
 import 'firebase_identity.dart';
 import 'meal_store.dart';
 import 'gemini_service.dart';
@@ -26,8 +30,11 @@ class SubscriptionService extends ChangeNotifier {
   /// Display-only: the server decides, this only mirrors the date it reported.
   static const String _proUntilKey = 'pro_until';
 
-  /// The owner account — always gets Pro for free, forever.
-  static const String adminEmail = 'prabhasaaho213@gmail.com';
+  /// Test seam: replaces the Firebase token lookup so the admin path can be
+  /// exercised without a signed-in Firebase session (the test harness has no
+  /// Firebase app). Never set in production code.
+  @visibleForTesting
+  static Future<bool> Function()? adminCheckOverride;
 
   bool _subscribed = false;
   bool _paid = false;
@@ -48,28 +55,122 @@ class SubscriptionService extends ChangeNotifier {
     return left < 1 ? 0 : left;
   }
 
-  bool get isSubscribed => _subscribed;
+  /// True while this account is Pro *right now*.
+  ///
+  /// This is read on every screen build, so it evaluates the stored dates
+  /// itself instead of trusting the flag computed in [load]. A trial or a
+  /// referral window that ends while the app is open used to keep showing Pro
+  /// until the next restart.
+  bool get isSubscribed => isSubscribedAt(DateTime.now());
+
+  /// [now] is injectable so the expiry rules can be tested without waiting for
+  /// a month to pass.
+  bool isSubscribedAt(DateTime now) {
+    if (!_subscribed) return false;
+    // The admin's lifetime grant has no end date.
+    if (_subscribedAt == _lifetimeDate) return true;
+    if (_paid) return true;
+    final trialEnd = _trialEndsAt;
+    if (trialEnd != null && !now.isBefore(trialEnd)) return false;
+    final until = _proUntil == null ? null : DateTime.tryParse(_proUntil!);
+    if (until != null && !now.isBefore(until)) return false;
+    return true;
+  }
+
   String? get subscribedAt => _subscribedAt;
 
   /// ISO end date of the current Pro window (referral reward), as last
   /// reported by the server. Null for plain paid Pro (no end date).
   String? get proUntil => _proUntil;
 
-  /// True when the currently signed-in email is the owner/admin account.
-  /// The admin gets a permanent, free Pro subscription.
+  StreamSubscription<User?>? _authSub;
+
+  /// True when the signed-in account carries the `admin` custom claim. The
+  /// admin gets a permanent, free Pro subscription.
+  ///
+  /// This used to compare a locally stored email against a hardcoded constant.
+  /// That put the trust in the client: the address lives in SharedPreferences,
+  /// so a rooted device (or a one-line edit) granted free Pro, and the owner's
+  /// personal address shipped inside the app. The privilege is now a Firebase
+  /// custom claim set by the backend with the Admin SDK — the same claim
+  /// `firestore.rules` checks, so the client cannot mint it.
   Future<bool> isAdmin() async {
+    final override = adminCheckOverride;
+    if (override != null) return override();
+    try {
+      // No Firebase app at all (unit tests, or a build without Firebase): there
+      // is no claim to read, and this is not an error worth reporting.
+      if (Firebase.apps.isEmpty) return false;
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) return false;
+      final token = await user.getIdTokenResult();
+      return token.claims?['admin'] == true;
+    } catch (e, st) {
+      logError('SubscriptionService.isAdmin', e, st);
+      return false; // fail closed: no claim, no privilege
+    }
+  }
+
+  /// Whether we already know who is signed in.
+  ///
+  /// Firebase restores the session asynchronously, so [load] can run before
+  /// `currentUser` exists. Stripping the lifetime marker at that moment would
+  /// punish the admin for being first, so the strip waits for an identity.
+  Future<bool> _identityKnown() async {
+    try {
+      if (FirebaseAuth.instance.currentUser != null) return true;
+    } catch (e, st) {
+      logError('SubscriptionService._identityKnown', e, st);
+    }
     final p = await SharedPreferences.getInstance();
-    final email = (p.getString('email') ?? '').trim().toLowerCase();
-    return email == adminEmail.toLowerCase();
+    return (p.getString('email') ?? '').isNotEmpty ||
+        (p.getString('phone') ?? '').isNotEmpty;
+  }
+
+  /// Re-checks the admin claim whenever the signed-in account changes.
+  ///
+  /// Without this, [load] (which runs before Firebase restores the session)
+  /// would never see the claim, and the admin would sit on the free tier until
+  /// the next cold start. It also re-evaluates on sign-out and on a different
+  /// account signing in, which is when a leaked lifetime marker must go away.
+  void bindAuth() {
+    if (_authSub != null) return;
+    try {
+      _authSub = FirebaseAuth.instance.authStateChanges().listen(
+        (_) => unawaited(refreshAdminState()),
+        onError: (Object e, StackTrace st) =>
+            logError('SubscriptionService.bindAuth', e, st),
+      );
+    } catch (e, st) {
+      // No Firebase app (tests) — nothing to bind to.
+      logError('SubscriptionService.bindAuth', e, st);
+    }
+  }
+
+  /// Applies the current claim: grant lifetime Pro to the admin, otherwise let
+  /// [load] strip a marker that no longer belongs to this account.
+  Future<void> refreshAdminState() async {
+    if (await isAdmin()) {
+      await _ensureAdminGrant();
+    } else {
+      await load();
+    }
+  }
+
+  /// Idempotent: grants the lifetime marker only when it isn't already set.
+  Future<void> _ensureAdminGrant() async {
+    final p = await SharedPreferences.getInstance();
+    if (_subscribed && p.getString(_subscribedAtKey) == _lifetimeDate) return;
+    await _grantLifetimeAdmin();
   }
 
   /// Loads the persisted flag. Called once at app startup, but safe to call
   /// again — re-reads prefs and only notifies when the value changed.
   ///
-  /// Admin override: the owner's email always yields Pro for free, forever.
-  /// Non-admin guard: a persisted lifetime grant (the `1900` marker) must
-  /// never transfer to another user who signs in on the same device, so it is
-  /// cleared when the current user isn't the admin.
+  /// Admin override: the owner's `admin` claim always yields Pro, for free,
+  /// forever. Non-admin guard: a persisted lifetime grant (the `1900` marker)
+  /// must never transfer to another user who signs in on the same device, so
+  /// it is cleared once we know the current user is not the admin.
   Future<void> load() async {
     final p = await SharedPreferences.getInstance();
     var subscribed = p.getBool(_subscribedKey) ?? false;
@@ -83,7 +184,7 @@ class SubscriptionService extends ChangeNotifier {
       }
       subscribed = true;
       at = _lifetimeDate;
-    } else if (at == _lifetimeDate) {
+    } else if (at == _lifetimeDate && await _identityKnown()) {
       // A non-owner signed in on a device where the owner granted lifetime
       // Pro — strip the grant so it doesn't leak to them.
       await p.remove(_subscribedAtKey);
@@ -136,7 +237,9 @@ class SubscriptionService extends ChangeNotifier {
     notifyListeners();
     try {
       MealStore.instance.changeNotifier.value++;
-    } catch (e) { debugPrint("Error: $e"); }
+    } catch (e, st) {
+      logError('SubscriptionService._grantLifetimeAdmin', e, st);
+    }
   }
 
   /// Asks the backend for this account's one-time 30-day free plan. The
@@ -201,8 +304,11 @@ class SubscriptionService extends ChangeNotifier {
   /// clears the saved Pro flag, so a cancelled subscription or an expired
   /// referral window stops showing the Pro look right away.
   Future<void> verifyServerSubscription() async {
-    // The admin's lifetime Pro is local-only; don't override it.
-    if (await isAdmin()) return;
+    // The admin's lifetime Pro is claim-based; don't let the server override it.
+    if (await isAdmin()) {
+      await _ensureAdminGrant();
+      return;
+    }
 
     // One-time 30-day free plan: checked at startup AND after every login,
     // which is how existing users receive theirs right after updating.
@@ -225,20 +331,22 @@ class SubscriptionService extends ChangeNotifier {
             return;
           }
           // `subscribed == false` is NOT authoritative during the migration
-          // window (a Firestore doc can be stale while Postgres says paid) —
-          // fall through to the backend check below to confirm.
+          // window (a Firestore doc can be stale while the backend says
+          // paid) — fall through to the backend check below to confirm.
         }
       }
     } catch (_) {
       // Firestore unavailable — fall through to the backend check.
     }
 
-    // ── Backend fallback: Postgres /subscription/status ─────────────────
+    // ── Backend fallback: /subscription/status ──────────────────────────
+    // Kept for accounts whose Firestore user doc was never backfilled. The
+    // server reads its own database (Firestore + Razorpay), so this is a
+    // confirmation call, not a second source of truth.
     final p = await SharedPreferences.getInstance();
     final email = p.getString('email');
     final phone = p.getString('phone');
-    if ((email == null || email.isEmpty) &&
-        (phone == null || phone.isEmpty)) {
+    if ((email == null || email.isEmpty) && (phone == null || phone.isEmpty)) {
       return; // Guest — nothing to verify.
     }
     try {
@@ -301,7 +409,9 @@ class SubscriptionService extends ChangeNotifier {
     // every state change.
     try {
       MealStore.instance.changeNotifier.value++;
-    } catch (e) { debugPrint("Error: $e"); }
+    } catch (e, st) {
+      logError('SubscriptionService.activate', e, st);
+    }
   }
 
   /// Clears the locally saved Pro flag after the server has AUTHORITATIVELY
@@ -324,7 +434,8 @@ class SubscriptionService extends ChangeNotifier {
     // notification plan must refresh down to the free tier.
     try {
       MealStore.instance.changeNotifier.value++;
-    } catch (e) { debugPrint("Error: $e"); }
+    } catch (e, st) {
+      logError('SubscriptionService._deactivate', e, st);
+    }
   }
-
 }

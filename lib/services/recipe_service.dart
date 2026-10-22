@@ -17,8 +17,9 @@ class RecipeService extends ChangeNotifier {
   Future<void> load() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      final suffix =
-          AccountPartition.suffix(AccountPartition.activeFromPrefs(prefs));
+      final suffix = AccountPartition.suffix(
+        AccountPartition.activeFromPrefs(prefs),
+      );
       await _migrateLegacy(prefs, suffix);
       final data = prefs.getString(AccountPartition.key('recipes', suffix));
       if (data != null && data.trim().isNotEmpty) {
@@ -66,9 +67,7 @@ class RecipeService extends ChangeNotifier {
   /// Fire-and-forget cloud sync of the full recipe list.
   void _syncToCloud() {
     try {
-      MealSyncService.syncRecipes(
-        _recipes.map((r) => r.toJson()).toList(),
-      );
+      MealSyncService.syncRecipes(_recipes.map((r) => r.toJson()).toList());
     } catch (e) {
       debugPrint('RecipeService._syncToCloud failed: $e');
     }
@@ -92,8 +91,9 @@ class RecipeService extends ChangeNotifier {
 
   Future<void> _save() async {
     final prefs = await SharedPreferences.getInstance();
-    final suffix =
-        AccountPartition.suffix(AccountPartition.activeFromPrefs(prefs));
+    final suffix = AccountPartition.suffix(
+      AccountPartition.activeFromPrefs(prefs),
+    );
     await prefs.setString(
       AccountPartition.key('recipes', suffix),
       jsonEncode(_recipes.map((r) => r.toJson()).toList()),
@@ -101,15 +101,26 @@ class RecipeService extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<String> add(String name, int servings, List<RecipeIngredient> ingredients) async {
+  Future<String> add(
+    String name,
+    int servings,
+    List<RecipeIngredient> ingredients,
+  ) async {
     final id = const Uuid().v4();
-    _recipes.add(Recipe(id: id, name: name, servings: servings, ingredients: ingredients));
+    _recipes.add(
+      Recipe(id: id, name: name, servings: servings, ingredients: ingredients),
+    );
     await _save();
     _syncToCloud();
     return id;
   }
 
-  Future<void> update(String id, String name, int servings, List<RecipeIngredient> ingredients) async {
+  Future<void> update(
+    String id,
+    String name,
+    int servings,
+    List<RecipeIngredient> ingredients,
+  ) async {
     final idx = _recipes.indexWhere((r) => r.id == id);
     if (idx >= 0) {
       _recipes[idx].name = name;
