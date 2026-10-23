@@ -484,6 +484,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
       borderRadius: BorderRadius.circular(18),
       onTap: () async {
         Haptics.tap();
+        // BMI is Pro: free users land on the paywall instead of the
+        // calculator — same rule as the AI meal plan.
+        if (!SubscriptionService.instance.isSubscribed) {
+          await Navigator.push(
+            context,
+            habitFlowRoute(const SubscriptionScreen()),
+          );
+          return;
+        }
         await Navigator.push(context, habitFlowRoute(const BmiScreen()));
         await DietPlanService.instance.load();
         if (mounted) setState(() {});
@@ -507,13 +516,42 @@ class _ProfileScreenState extends State<ProfileScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    'BMI',
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w900,
-                      color: isDark ? Colors.white : const Color(0xFF1A1A1A),
-                    ),
+                  Row(
+                    children: [
+                      Text(
+                        'BMI',
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w900,
+                          color: isDark
+                              ? Colors.white
+                              : const Color(0xFF1A1A1A),
+                        ),
+                      ),
+                      if (!_subscribed)
+                        Container(
+                          margin: const EdgeInsets.only(left: 6),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 5,
+                            vertical: 1.5,
+                          ),
+                          decoration: BoxDecoration(
+                            color: MacroSnapTheme.neonOrange.withValues(
+                              alpha: 0.15,
+                            ),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Text(
+                            'PRO',
+                            style: TextStyle(
+                              fontSize: 8.5,
+                              fontWeight: FontWeight.w900,
+                              letterSpacing: 0.5,
+                              color: MacroSnapTheme.neonOrange,
+                            ),
+                          ),
+                        ),
+                    ],
                   ),
                   Text(
                     category?.label ?? 'Add height & weight',

@@ -43,6 +43,16 @@ class SubscriptionService extends ChangeNotifier {
   bool _paid = false;
   String? _subscribedAt;
   String? _proUntil;
+  bool _introEligible = true;
+
+  /// Whether the ₹1 first month is still on offer for THIS account.
+  ///
+  /// The intro price is once per account (like every subscription app's
+  /// new-customer offer): the server records `intro_used` when the first
+  /// charge verifies and answers `intro_eligible` on the status endpoints.
+  /// Defaults to true until the server has spoken — the paywall then only
+  /// promises ₹1 when the checkout would actually charge it.
+  bool get introEligible => _introEligible;
 
   /// True while the account paid through Razorpay (or the referral/admin
   /// grants it). The old 30-day free trial no longer exists — the first
@@ -295,6 +305,11 @@ class SubscriptionService extends ChangeNotifier {
             .timeout(const Duration(seconds: 8));
         if (doc.exists) {
           final subscribed = doc.data()?['subscribed'] == true;
+          final introUsed = doc.data()?['intro_used'] == true;
+          if (introUsed == _introEligible) {
+            _introEligible = !introUsed;
+            notifyListeners();
+          }
           if (subscribed && !_subscribed) {
             // Activation from Firestore is authoritative.
             await activate();
@@ -324,6 +339,13 @@ class SubscriptionService extends ChangeNotifier {
       final res = await AuthHttp.get(uri).timeout(const Duration(seconds: 8));
       if (res.statusCode != 200) return;
       final data = jsonDecode(res.body) as Map<String, dynamic>;
+      if (data.containsKey('intro_eligible')) {
+        final eligible = data['intro_eligible'] == true;
+        if (eligible != _introEligible) {
+          _introEligible = eligible;
+          notifyListeners();
+        }
+      }
       if (data['subscribed'] == true) {
         // Remember the end date of a server-granted window (referral
         // reward) so Settings can show when Pro ends; null clears a

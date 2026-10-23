@@ -137,15 +137,6 @@ class _HabitsTabState extends State<HabitsTab> {
                   ),
                   Row(
                     children: [
-                      if (hasHabits) ...[
-                        _coinPill(isDark),
-                        const SizedBox(width: 8),
-                      ],
-                      IconButton(
-                        onPressed: () => setState(() {}),
-                        icon: const Icon(Icons.refresh_rounded),
-                      ),
-                      const SizedBox(width: 4),
                       GestureDetector(
                         onTap: () => Navigator.push(
                           context,
@@ -171,7 +162,8 @@ class _HabitsTabState extends State<HabitsTab> {
                   ),
                 ],
               ),
-              const SizedBox(height: 14),
+              // Tighter so the date sits just under the title.
+              const SizedBox(height: 6),
               Text(
                 '${weekdayLabel(DateTime.now().weekday)}, ${_monthDay(today)}',
                 style: TextStyle(

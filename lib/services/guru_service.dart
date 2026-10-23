@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/diet_profile.dart';
+import 'account_partition.dart';
 import 'auth_http.dart';
 import 'gemini_service.dart';
 import 'habit_store.dart';
@@ -162,6 +163,63 @@ class GuruService {
     }
 
     return ctx;
+  }
+
+  /// Persisted Guru transcript, per account. The user asked for chat memory:
+  /// reopening Ask Guru restores the last conversation instead of starting
+  /// blank every time. Capped to the newest [maxHistoryMessages] turns.
+  static const int maxHistoryMessages = 24;
+  static const String _chatPrefsKey = 'guru_chat';
+
+  static Future<String> _chatSuffix() async {
+    final prefs = await SharedPreferences.getInstance();
+    return AccountPartition.suffix(AccountPartition.activeFromPrefs(prefs));
+  }
+
+  /// Loads the saved transcript ({'role': 'user'|'model', 'text': ...}).
+  /// Best-effort: any failure means "nothing saved" and Guru just starts
+  /// fresh — a corrupt transcript must never stop the chat from opening.
+  static Future<List<Map<String, String>>> loadChatHistory() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs
+          .getString(AccountPartition.key(_chatPrefsKey, await _chatSuffix()));
+      if (raw == null || raw.isEmpty) return const [];
+      final decoded = jsonDecode(raw);
+      if (decoded is! List) return const [];
+      return [
+        for (final e in decoded)
+          if (e is Map &&
+              (e['role'] == 'user' || e['role'] == 'model') &&
+              e['text'] is String &&
+              (e['text'] as String).trim().isNotEmpty)
+            {
+              'role': e['role'] as String,
+              'text': e['text'] as String,
+            },
+      ];
+    } catch (_) {
+      return const [];
+    }
+  }
+
+  /// Overwrites the saved transcript with [messages]. Drops everything
+  /// beyond the newest [maxHistoryMessages], so the file (and the context
+  /// the backend gets) stays small.
+  static Future<void> saveChatHistory(
+    List<Map<String, String>> messages,
+  ) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final key = AccountPartition.key(_chatPrefsKey, await _chatSuffix());
+      final keep = messages.length > maxHistoryMessages
+          ? messages.sublist(messages.length - maxHistoryMessages)
+          : messages;
+      await prefs.setString(key, jsonEncode(keep));
+    } catch (_) {
+      // Saving is best-effort — a failed write only means an older
+      // transcript shows up next time.
+    }
   }
 
   static String _clip(String s, int max) =>

@@ -16,7 +16,8 @@ extension _HomeHeader on _HomeScreenState {
         ? 'Good Afternoon'
         : 'Good Evening';
     return Padding(
-      padding: const EdgeInsets.fromLTRB(24, 24, 24, 4),
+      // Tighter top so the greeting doesn't wander far from the content below.
+      padding: const EdgeInsets.fromLTRB(24, 12, 24, 0),
       child: Row(
         children: [
           Expanded(

@@ -2,6 +2,9 @@ import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 
+// Keep the explicit relative import for the login screen; onboarding is
+// imported further down (see below the widget imports).
+
 import '../services/auth_http.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -21,6 +24,7 @@ import '../services/subscription_service.dart';
 import '../services/gemini_service.dart';
 import 'subscription_screen.dart';
 import 'phone_login_screen.dart';
+import 'onboarding_screen.dart';
 import 'profile_screen.dart';
 import 'updates_screen.dart';
 import '../services/crash_reporting.dart';
@@ -151,6 +155,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
     await prefs.remove('photo_url');
     await prefs.remove('last_sync');
     await prefs.remove('subscription_offered');
+    // Logging out restarts the whole onboarding process (welcome → name →
+    // details → goal → …) on the next launch/logout-nav, per spec.
+    await prefs.remove('onboarding_v2_done');
     unawaited(MealStore.instance.reload());
     unawaited(HabitStore.instance.reload());
     unawaited(BadgeService.instance.reload());
@@ -158,7 +165,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
     if (context.mounted) {
       Navigator.pushAndRemoveUntil(
         context,
-        MaterialPageRoute(builder: (_) => const PhoneLoginScreen()),
+        // Onboarding first (nextScreen: login), so a returning user goes
+        // through the full setup again before signing back in.
+        MaterialPageRoute(builder: (_) => OnboardingScreen(nextScreen: const PhoneLoginScreen())),
         (route) => false,
       );
     }

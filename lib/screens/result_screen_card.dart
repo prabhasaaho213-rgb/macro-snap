@@ -239,7 +239,6 @@ extension _ResultCard on _ResultScreenState {
                 ),
               ),
             ),
-            const SizedBox(width: 10),
             Expanded(
               child: NutritionTile(
                 label: 'Carbs',
@@ -250,6 +249,25 @@ extension _ResultCard on _ResultScreenState {
                 onEdit: _cardReadOnly
                     ? null
                     : () => _editMacroTotal(r, _MacroField.carbs),
+                // Each highlighted macro gets the same slot-machine reveal as
+                // calories: its own key keeps its landed state across the
+                // "Show per Dish" rebuilds. No confetti/haptics here — the
+                // calories tile owns the celebration.
+                valueWidget: CalorieReveal(
+                  key: _carbsKey,
+                  calories: r.carbs.round(),
+                  protein: r.protein,
+                  animate: widget.existingMeal == null,
+                  startDelay: const Duration(milliseconds: 750),
+                  celebrate: false,
+                  haptics: false,
+                  style: TextStyle(
+                    fontSize: 19,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: -0.3,
+                    color: valueColor,
+                  ),
+                ),
               ),
             ),
           ],
@@ -267,6 +285,21 @@ extension _ResultCard on _ResultScreenState {
                 onEdit: _cardReadOnly
                     ? null
                     : () => _editMacroTotal(r, _MacroField.protein),
+                valueWidget: CalorieReveal(
+                  key: _proteinKey,
+                  calories: r.protein.round(),
+                  protein: r.protein,
+                  animate: widget.existingMeal == null,
+                  startDelay: const Duration(milliseconds: 900),
+                  celebrate: false,
+                  haptics: false,
+                  style: TextStyle(
+                    fontSize: 19,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: -0.3,
+                    color: valueColor,
+                  ),
+                ),
               ),
             ),
             const SizedBox(width: 10),
@@ -280,6 +313,21 @@ extension _ResultCard on _ResultScreenState {
                 onEdit: _cardReadOnly
                     ? null
                     : () => _editMacroTotal(r, _MacroField.fats),
+                valueWidget: CalorieReveal(
+                  key: _fatsKey,
+                  calories: r.fats.round(),
+                  protein: r.protein,
+                  animate: widget.existingMeal == null,
+                  startDelay: const Duration(milliseconds: 1050),
+                  celebrate: false,
+                  haptics: false,
+                  style: TextStyle(
+                    fontSize: 19,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: -0.3,
+                    color: valueColor,
+                  ),
+                ),
               ),
             ),
           ],
@@ -311,8 +359,10 @@ extension _ResultCard on _ResultScreenState {
               children: [
                 Expanded(
                   child: Text(
+                    // Wrap instead of cutting: a long ingredient name takes a
+                    // second line rather than vanishing past '…'.
                     line.name,
-                    maxLines: 1,
+                    maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
                       fontSize: 13.5,

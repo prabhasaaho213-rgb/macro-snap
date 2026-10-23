@@ -193,7 +193,7 @@ class _MainShellState extends State<MainShell> {
                     ),
                   );
                 },
-                child: const Row(
+                child: Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     Icon(Icons.lock_rounded, size: 18),
@@ -201,8 +201,12 @@ class _MainShellState extends State<MainShell> {
                     Flexible(
                       child: Text(
                         // Short label so it fits fully on narrow screens — no
-                        // wrapping or truncation of the CTA.
-                        'SUBSCRIBE · ₹49/mo · ₹1 first month',
+                        // wrapping or truncation of the CTA. The ₹1 intro is
+                        // once per account, so only promise it when this
+                        // account still has it.
+                        SubscriptionService.instance.introEligible
+                            ? 'SUBSCRIBE · ₹49/mo · ₹1 first month'
+                            : 'SUBSCRIBE · ₹49/mo',
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         textAlign: TextAlign.center,

@@ -9,6 +9,7 @@ import '../core/app_nav.dart';
 import '../core/theme.dart';
 import '../services/scan_gate.dart';
 import '../services/meal_store.dart';
+import '../services/subscription_service.dart';
 import '../widgets/animations.dart';
 import '../widgets/gradient_button.dart';
 import 'recent_foods_screen.dart';
@@ -315,7 +316,9 @@ class _ScanScreenState extends State<ScanScreen> with WidgetsBindingObserver {
               ),
               const SizedBox(height: 24),
               GradientButton(
-                label: 'Go Pro · \u20B91 first month, then \u20B949/mo',
+                label: SubscriptionService.instance.introEligible
+                    ? 'Go Pro · \u20B91 first month, then \u20B949/mo'
+                    : 'Go Pro · \u20B949/mo',
                 onPressed: () {
                   Navigator.of(ctx).pop();
                   Navigator.push(

@@ -29,6 +29,11 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
   bool _checking = true;
   String? _subscribedDate;
 
+  /// Whether this account still has the ₹1 intro month on offer. Set from
+  /// the server (`intro_eligible`) — the paywall never promises ₹1 to an
+  /// account whose checkout would charge ₹49 from day one.
+  bool _introEligible = true;
+
   @override
   void initState() {
     super.initState();
@@ -68,9 +73,15 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
       );
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body);
-        if (data is Map && data['subscribed'] == true && !_subscribed) {
-          // A restore, not a purchase: no celebration.
-          await _activateFromServer(announce: false);
+        if (data is Map) {
+          final eligible = data['intro_eligible'] != false;
+          if (eligible != _introEligible && mounted) {
+            setState(() => _introEligible = eligible);
+          }
+          if (data['subscribed'] == true && !_subscribed) {
+            // A restore, not a purchase: no celebration.
+            await _activateFromServer(announce: false);
+          }
         }
       }
     } catch (e, st) {
@@ -103,7 +114,9 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
     await Navigator.of(context).push(
       MaterialPageRoute(
         fullscreenDialog: true,
-        builder: (_) => const PaymentSuccessScreen(),
+        // The server's verdict from this screen's own status check: the
+        // confirmation quotes the price the checkout actually charged.
+        builder: (_) => PaymentSuccessScreen(introOffer: _introEligible),
       ),
     );
     if (mounted) {
@@ -277,9 +290,13 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
               if (!_subscribed) ...[
                 const SizedBox(height: 12),
                 Text(
-                  'Pro costs ₹1 for the first month — you approve the '
-                  '₹49/month autopay at checkout, and the first ₹49 charge '
-                  'happens 30 days in. Cancel anytime.',
+                  _introEligible
+                      ? 'Pro costs ₹1 for the first month — you approve the '
+                          '₹49/month autopay at checkout, and the first ₹49 '
+                          'charge happens 30 days in. Cancel anytime.'
+                      : 'Pro is ₹49/month — cancel anytime. Your ₹1 first '
+                          'month was already used on this account, so billing '
+                          'starts today.',
                   textAlign: TextAlign.center,
                   style: TextStyle(
                     fontSize: 13,
@@ -396,7 +413,9 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
                             ? (_isAdmin
                                   ? 'Lifetime \u2022 Free forever'
                                   : 'Auto-renews monthly')
-                            : 'First month ₹1, then ₹49/month',
+                            : (_introEligible
+                                  ? 'First month ₹1, then ₹49/month'
+                                  : '₹49/month \u2022 renews automatically'),
                         textAlign: TextAlign.center,
                         style: TextStyle(
                           fontSize: 13,
@@ -511,7 +530,9 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
                         ),
                         const SizedBox(height: 20),
                         GradientButton(
-                          label: 'Approve & Start Free Month',
+                          label: _introEligible
+                              ? 'Approve & Start — ₹1 Today'
+                              : 'Start Pro — ₹49 Today',
                           icon: Icons.lock_rounded,
                           loading: _submitting,
                           onPressed: _payWithRazorpay,
@@ -519,7 +540,9 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
                         ),
                         const SizedBox(height: 8),
                         Text(
-                          '₹1 today • approves ₹49/month autopay • ₹49 from day 31',
+                          _introEligible
+                              ? '₹1 today • approves ₹49/month autopay • ₹49 from day 31'
+                              : '₹49 today • renews monthly • cancel anytime',
                           textAlign: TextAlign.center,
                           style: TextStyle(
                             fontSize: 12,
@@ -733,7 +756,12 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
             color: isDark ? Colors.white : const Color(0xFF1A1A1A),
           ),
         ),
-        _planChip('\u20B949 / MONTH · \u20B91 FIRST MONTH', MacroSnapTheme.neonOrange),
+        _planChip(
+          _introEligible
+              ? '\u20B949 / MONTH · \u20B91 FIRST MONTH'
+              : '\u20B949 / MONTH',
+          MacroSnapTheme.neonOrange,
+        ),
         if (_subscribed)
           _planChip(
             _isAdmin ? 'ADMIN \u2014 LIFETIME' : 'ACTIVE',

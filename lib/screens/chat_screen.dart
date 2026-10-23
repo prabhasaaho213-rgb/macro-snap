@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../core/theme.dart';
@@ -9,7 +10,12 @@ enum _Role { user, assistant }
 class _ChatMessage {
   final _Role role;
   final String text;
-  const _ChatMessage({required this.role, required this.text});
+
+  /// A canned system bubble (the offline notice, the Pro-gate notice) is
+  /// displayed but never remembered: it is not part of the real
+  /// conversation and must not be replayed to the backend as history.
+  final bool persist;
+  const _ChatMessage({required this.role, required this.text, this.persist = true});
 }
 
 /// In-app nutrition assistant "Guru", opened from the Home screen's floating
@@ -35,6 +41,11 @@ class _ChatScreenState extends State<ChatScreen> {
   final List<_ChatMessage> _messages = [];
   bool _busy = false;
 
+  /// Restored from [GuruService.loadChatHistory] on open, so a later re-open
+  /// continues the last conversation instead of starting blank. Async, and
+  /// set before any reply is handled (see initState/_restore).
+  bool _restored = false;
+
   /// Set when the backend answered 403 `pro_required`. The composer is then
   /// replaced by the upgrade card — no further turn can be sent.
   bool _proRequired = false;
@@ -43,7 +54,40 @@ class _ChatScreenState extends State<ChatScreen> {
   void initState() {
     super.initState();
     _messages.add(const _ChatMessage(role: _Role.assistant, text: _greeting));
+    unawaited(_restore());
   }
+
+  /// Restores the last saved conversation (this account only) after the
+  /// greeting. Older transcript first, so the chat scrolls like it played.
+  Future<void> _restore() async {
+    try {
+      final saved = await GuruService.loadChatHistory();
+      _restored = true; // Also true for "nothing saved": openers may show.
+      if (!mounted || saved.isEmpty) return;
+      setState(() {
+        for (final m in saved) {
+          _messages.add(
+            _ChatMessage(
+              role: m['role'] == 'user' ? _Role.user : _Role.assistant,
+              text: m['text'] ?? '',
+            ),
+          );
+        }
+      });
+      _restored = true;
+      _scrollToEnd();
+    } catch (_) {
+      // Never block the chat over a corrupt transcript.
+    }
+  }
+
+  /// The stored part of the conversation: every real turn, without the
+  /// greeting and without canned system bubbles.
+  List<Map<String, String>> get _transcript => [
+    for (final m in _messages.skip(1))
+      if (m.persist)
+        {'role': m.role == _Role.user ? 'user' : 'model', 'text': m.text},
+  ];
 
   @override
   void dispose() {
@@ -64,11 +108,13 @@ class _ChatScreenState extends State<ChatScreen> {
     _scrollToEnd();
     try {
       // Everything before the current message is context; the opening
-      // greeting is not part of the conversation.
-      final history = [
-        for (final m in _messages.take(_messages.length - 1))
-          {'role': m.role == _Role.user ? 'user' : 'model', 'text': m.text},
-      ];
+      // greeting is not part of the conversation. The newest turn (the
+      // message the user just sent) is also dropped — it travels as
+      // `message` itself.
+      final transcript = _transcript;
+      final history = transcript.length <= 1
+          ? <Map<String, String>>[]
+          : transcript.sublist(0, transcript.length - 1);
       // GuruService attaches the personalized snapshot of this user's day
       // (meals, macro totals, targets, habits, water) to the request.
       final data = await GuruService.send(message: text, history: history);
@@ -85,13 +131,17 @@ class _ChatScreenState extends State<ChatScreen> {
           _messages.add(_ChatMessage(role: _Role.assistant, text: reply));
           _busy = false;
         });
+        // Remember this conversation so reopening Guru continues it.
+        await GuruService.saveChatHistory(_transcript);
       }
     } on GuruProRequiredException catch (e) {
       // The Pro gate closed on us mid-conversation (e.g. the free plan just
       // expired). Explain it in the thread and lock the composer.
       if (mounted) {
         setState(() {
-          _messages.add(_ChatMessage(role: _Role.assistant, text: e.message));
+          _messages.add(
+            _ChatMessage(role: _Role.assistant, text: e.message, persist: false),
+          );
           _proRequired = true;
           _busy = false;
         });
@@ -102,11 +152,12 @@ class _ChatScreenState extends State<ChatScreen> {
       if (mounted) {
         setState(() {
           _messages.add(
-            const _ChatMessage(
+            _ChatMessage(
               role: _Role.assistant,
               text:
                   'I couldn\u2019t reach the server. Check your connection '
                   'and try again.',
+              persist: false,
             ),
           );
           _busy = false;
@@ -158,7 +209,7 @@ class _ChatScreenState extends State<ChatScreen> {
               },
             ),
           ),
-          if (_messages.length == 1 && !_proRequired && !_busy)
+          if (_messages.length == 1 && _restored && !_proRequired && !_busy)
             _buildSuggestions(isDark),
           _proRequired ? _buildUpsellBar(isDark) : _buildInputBar(isDark),
         ],

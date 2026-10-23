@@ -62,6 +62,13 @@ class _ResultScreenState extends State<ResultScreen>
   /// "Show per Dish" rebuilds instead of replaying it.
   final GlobalKey _calorieKey = GlobalKey();
 
+  /// Same for the other three macro tiles: the reveal now rolls every
+  /// highlighted nutrient, and each must keep its own landed state across
+  /// dish-view rebuilds (a shared key would merge their states).
+  final GlobalKey _carbsKey = GlobalKey();
+  final GlobalKey _proteinKey = GlobalKey();
+  final GlobalKey _fatsKey = GlobalKey();
+
   /// Session-only overrides applied on top of the analysis: a renamed dish, a
   /// hand-picked health score, and the user's tastiness verdict. They describe
   /// this one result, so they reset with the screen instead of being stored on

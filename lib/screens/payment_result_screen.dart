@@ -18,11 +18,16 @@ enum PaymentAction { done, retry }
 /// that draws itself, confetti, and the Pro badge landing with an elastic
 /// pop — finished before the user has read the headline.
 class PaymentSuccessScreen extends StatefulWidget {
-  const PaymentSuccessScreen({super.key, this.celebrate = true});
+  const PaymentSuccessScreen({super.key, this.celebrate = true, this.introOffer = true});
 
   /// Confetti is skipped in widget tests (its repeating controller would
   /// outlive the pump), and anywhere motion should stay cheap.
   final bool celebrate;
+
+  /// True when this checkout carried the ₹1 intro month. False for an
+  /// account that already used it (re-subscribers pay ₹49 from day one),
+  /// so the confirmation never claims a price the customer was not charged.
+  final bool introOffer;
 
   @override
   State<PaymentSuccessScreen> createState() => _PaymentSuccessScreenState();
@@ -136,7 +141,9 @@ class _PaymentSuccessScreenState extends State<PaymentSuccessScreen>
               ),
               const SizedBox(height: 8),
               Text(
-                '₹1 first month · then ₹49/month · cancel anytime',
+                widget.introOffer
+                    ? '₹1 first month · then ₹49/month · cancel anytime'
+                    : '₹49/month · renews automatically · cancel anytime',
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   fontSize: 14,

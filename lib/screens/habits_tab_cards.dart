@@ -33,38 +33,6 @@ extension _HabitsCards on _HabitsTabState {
     );
   }
 
-  // ─── COIN PILL ─────────────────────────────────────────────
-  Widget _coinPill(bool isDark) {
-    final coins = store.totalStreakPower;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      decoration: BoxDecoration(
-        color: isDark ? MacroSnapTheme.cardDark : Colors.white,
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(
-          color: isDark ? const Color(0xFF303030) : const Color(0xFFE8DEFF),
-        ),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const Icon(
-            Icons.local_fire_department_rounded,
-            color: MacroSnapTheme.neonPink,
-            size: 18,
-          ),
-          const SizedBox(width: 4),
-          Text(
-            '$coins',
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(fontWeight: FontWeight.w800),
-          ),
-        ],
-      ),
-    );
-  }
-
   // ─── HERO CARD ─────────────────────────────────────────────
   Widget _heroCard(double progress, int completed, int total, bool isDark) {
     return Container(
@@ -121,11 +89,13 @@ extension _HabitsCards on _HabitsTabState {
             children: [
               Expanded(
                 child: Text(
+                  // The compact "n/m" form keeps the whole caption on one line;
+                  // "x of y missions complete" wrapped, dropping 'complete'
+                  // below the number next to the streak pill.
                   total == 0
                       ? 'Create your first habit'
-                      : '$completed of $total missions complete',
-                  // Allow wrapping — single-line ellipsis hid the tail of the
-                  // count on narrow screens ("4 of 4 mission…").
+                      : '$completed/$total missions complete',
+                  maxLines: 1,
                   style: TextStyle(
                     color: isDark
                         ? Colors.white70

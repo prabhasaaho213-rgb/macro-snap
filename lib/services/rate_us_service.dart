@@ -130,6 +130,10 @@ class RateUsService {
   static Future<void> showNewUserRatingButton(BuildContext context) async {
     try {
       final prefs = await SharedPreferences.getInstance();
+      // Someone who already rated (or opted out) is never asked again — even
+      // on a fresh install, where this async first-login dialog would show.
+      if (prefs.getBool(_ratedKey) ?? false) return;
+      if (prefs.getBool(_dismissedKey) ?? false) return;
       if (prefs.getBool(_newUserShownKey) ?? false) return;
       await prefs.setBool(_newUserShownKey, true);
       if (!context.mounted) return;

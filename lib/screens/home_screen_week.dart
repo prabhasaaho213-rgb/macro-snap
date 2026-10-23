@@ -180,6 +180,16 @@ extension _HomeWeek on _HomeScreenState {
       child: InkWell(
         borderRadius: BorderRadius.circular(22),
         onTap: () async {
+          // BMI is a Pro feature: free users land on the paywall instead of
+          // the calculator — same rule as the AI meal plan. The card still
+          // shows their current number as the teaser.
+          if (!SubscriptionService.instance.isSubscribed) {
+            await Navigator.push(
+              context,
+              habitFlowRoute(const SubscriptionScreen()),
+            );
+            return;
+          }
           await Navigator.push(context, habitFlowRoute(const BmiScreen()));
           // The calculator can save a new weight — repaint with it.
           if (mounted) _rebuild(() {});
@@ -206,15 +216,41 @@ extension _HomeWeek on _HomeScreenState {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
-                          'BMI',
-                          style: TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w900,
-                            color: isDark
-                                ? Colors.white
-                                : const Color(0xFF1A1A1A),
-                          ),
+                        Row(
+                          children: [
+                            Text(
+                              'BMI',
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w900,
+                                color: isDark
+                                    ? Colors.white
+                                    : const Color(0xFF1A1A1A),
+                              ),
+                            ),
+                            if (!SubscriptionService.instance.isSubscribed)
+                              Container(
+                                margin: const EdgeInsets.only(left: 6),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 5,
+                                  vertical: 1.5,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: MacroSnapTheme.neonOrange
+                                      .withValues(alpha: 0.15),
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
+                                child: Text(
+                                  'PRO',
+                                  style: TextStyle(
+                                    fontSize: 8.5,
+                                    fontWeight: FontWeight.w900,
+                                    letterSpacing: 0.5,
+                                    color: MacroSnapTheme.neonOrange,
+                                  ),
+                                ),
+                              ),
+                          ],
                         ),
                         Text(
                           profile == null

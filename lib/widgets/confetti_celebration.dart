@@ -13,28 +13,38 @@ import 'package:flutter/services.dart';
 class ConfettiCelebration extends StatefulWidget {
   final Duration duration;
   final int particleCount;
+  final VoidCallback? onFinished;
 
   const ConfettiCelebration({
     super.key,
     this.duration = const Duration(milliseconds: 2500),
     this.particleCount = 60,
+    this.onFinished,
   });
 
-  /// Convenience method to show the celebration overlay.
+  /// Confetti as a tap-through overlay: an [OverlayEntry] wrapped in
+  /// [IgnorePointer], so the celebration is purely visual and every tap,
+  /// swipe and nav go through to the UI underneath while it plays. (It used
+  /// to be a modal dialog route, which froze the whole screen behind its
+  /// barrier for the full 2.5 s.)
   static Future<void> show(
     BuildContext context, {
     int particleCount = 60,
   }) async {
     HapticFeedback.heavyImpact();
-    await showGeneralDialog(
-      context: context,
-      barrierDismissible: false,
-      barrierColor: Colors.transparent,
-      barrierLabel: 'celebration',
-      transitionDuration: const Duration(milliseconds: 300),
-      pageBuilder: (_, _, _) =>
-          ConfettiCelebration(particleCount: particleCount),
+    final overlay = Overlay.of(context, rootOverlay: true);
+    late final OverlayEntry entry;
+    entry = OverlayEntry(
+      builder: (_) => IgnorePointer(
+        child: ConfettiCelebration(
+          particleCount: particleCount,
+          onFinished: () {
+            if (entry.mounted) entry.remove();
+          },
+        ),
+      ),
     );
+    overlay.insert(entry);
   }
 
   @override
@@ -67,7 +77,7 @@ class _ConfettiCelebrationState extends State<ConfettiCelebration>
     _controller = AnimationController(vsync: this, duration: widget.duration);
 
     _controller.forward().then((_) {
-      if (mounted) Navigator.of(context).pop();
+      widget.onFinished?.call();
     });
   }
 

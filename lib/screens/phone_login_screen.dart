@@ -115,6 +115,19 @@ class _PhoneLoginScreenState extends State<PhoneLoginScreen>
           await prefs.setString('nickname', nickname);
         }
       }
+      // The name was ALREADY asked during onboarding — never ask twice. If
+      // the user typed a name on the onboarding Name step, it becomes their
+      // nickname and the login prompt is skipped. (Only a completed
+      // onboarding counts, so a name picked by login itself can't suppress
+      // the prompt.)
+      final onboardingDone = prefs.getBool('onboarding_v2_done') ?? false;
+      final onboardingName = prefs.getString('name')?.trim() ?? '';
+      if ((nickname == null || nickname.trim().isEmpty) &&
+          onboardingDone &&
+          onboardingName.isNotEmpty) {
+        nickname = onboardingName;
+        await prefs.setString('nickname', nickname);
+      }
 
       await prefs.setString('phone', email);
       await prefs.setString('email', email);

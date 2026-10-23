@@ -140,7 +140,12 @@ class RazorpayService {
           // SDK's recurrence-pattern rejection.
           'subscription_id': subscriptionId,
           'name': 'MacroSnap',
-          'description': 'MacroSnap Pro · ₹1 first month, then ₹49/month',
+          // The server says which price THIS checkout carries: the ₹1 intro
+          // is once per account, so a re-subscriber must not be shown a
+          // '₹1 first month' description over a ₹49 charge.
+          'description': created['intro_offer'] == false
+              ? 'MacroSnap Pro · ₹49/month · cancel anytime'
+              : 'MacroSnap Pro · ₹1 first month, then ₹49/month',
           'theme': {'color': '#FF6B2B'},
           'send_sms_hash': true,
           'retry': {'enabled': true, 'max_count': 2},

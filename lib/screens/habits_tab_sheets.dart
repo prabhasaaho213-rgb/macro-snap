@@ -344,7 +344,10 @@ extension _HabitsSheets on _HabitsTabState {
               const SizedBox(height: 24),
               GradientButton(
                 // Short label so the CTA reads fully on narrow screens.
-                label: 'GO PRO · ₹1 first month, then ₹49/mo',
+                // The ₹1 intro is once per account — only promised when real.
+                label: SubscriptionService.instance.introEligible
+                    ? 'GO PRO · ₹1 first month, then ₹49/mo'
+                    : 'GO PRO · ₹49/mo',
                 onPressed: () {
                   Navigator.of(ctx).pop();
                   Navigator.push(

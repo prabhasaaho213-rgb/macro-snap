@@ -59,6 +59,17 @@ class CalorieReveal extends StatefulWidget {
   /// Colour the number flashes to on landing when the meal fits the goal.
   final Color? celebrateColor;
 
+  /// Goal-check + confetti on landing. True only on the calories tile — the
+  /// "does this meal fit my goal" question is about calories and protein, and
+  /// one confetti burst per card is plenty. Other macro tiles pass false and
+  /// still get the spin, the pop and the colour flash.
+  final bool celebrate;
+
+  /// Haptic ticks while spinning and a medium buzz on landing. Only the
+  /// calories tile keeps them: four tiles ticking together would buzz the
+  /// phone on every scan for several seconds.
+  final bool haptics;
+
   const CalorieReveal({
     super.key,
     required this.calories,
@@ -72,6 +83,8 @@ class CalorieReveal extends StatefulWidget {
       height: 1,
     ),
     this.celebrateColor,
+    this.celebrate = true,
+    this.haptics = true,
   });
 
   @override
@@ -142,7 +155,7 @@ class _CalorieRevealState extends State<CalorieReveal>
   }
 
   void _tick() {
-    if (_landed || !widget.animate) return;
+    if (_landed || !widget.animate || !widget.haptics) return;
     // One tick per ~4% of the target value -> about 25 ticks that
     // spread out as the curve slows down.
     final step = math.max(1.0, _to / 25);
@@ -156,10 +169,10 @@ class _CalorieRevealState extends State<CalorieReveal>
   Future<void> _onLanded() async {
     if (_landed) return;
     _landed = true;
-    HapticFeedback.mediumImpact();
+    if (widget.haptics) HapticFeedback.mediumImpact();
     _pop.forward(from: 0);
 
-    if (_celebrated) return;
+    if (_celebrated || !widget.celebrate) return;
     final fits = GoalFit.check(
       calories: widget.calories,
       protein: widget.protein,

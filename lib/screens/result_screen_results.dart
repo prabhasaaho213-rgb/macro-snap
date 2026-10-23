@@ -403,9 +403,10 @@ extension _ResultResults on _ResultScreenState {
             const SizedBox(width: 8),
             Flexible(
               child: Text(
+                // The label wraps to a second line when the controls crowd it
+                // instead of shrinking into "Total Serv…".
                 'Total Serving',
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
+                maxLines: 2,
                 style: TextStyle(
                   fontSize: 13,
                   fontWeight: FontWeight.w600,

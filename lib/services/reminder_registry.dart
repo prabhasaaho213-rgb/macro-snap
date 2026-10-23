@@ -170,7 +170,11 @@ class ReminderRegistry {
       next: (sub) => ReminderCopy.daysAfter(sub, 30),
       copy: (_) async => (
         title: 'Your Pro subscription has expired',
-        body: 'Renew now for ₹49/month (₹1 first month) to get full access again.',
+        // No ₹1 promise here: every expiring subscriber has already used
+        // the intro month (it is once per account), and a notification
+        // cannot check this account's eligibility — the paywall states the
+        // real price on open.
+        body: 'Renew now for ₹49/month to get full access again.',
       ),
     ),
   ];
