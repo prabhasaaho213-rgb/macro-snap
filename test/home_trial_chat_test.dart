@@ -33,7 +33,7 @@ void main() {
 
   // ── Free trials are REMOVED ───────────────────────────────────────────────
   // Pro now starts with a Razorpay autopay subscription whose first month is
-  // ₹0 (approve ₹49/mo at checkout, first charge in 30 days). No countdown
+  // ₹1 (approve ₹49/mo at checkout, first ₹49 charge in 30 days). No countdown
   // banner exists anywhere on the home screen, and a stale marker left by an
   // old installed version must be wiped so it can never resurrect.
 

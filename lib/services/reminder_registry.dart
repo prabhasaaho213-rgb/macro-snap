@@ -170,7 +170,7 @@ class ReminderRegistry {
       next: (sub) => ReminderCopy.daysAfter(sub, 30),
       copy: (_) async => (
         title: 'Your Pro subscription has expired',
-        body: 'Renew now for ₹49/month (1st month free) to get full access again.',
+        body: 'Renew now for ₹49/month (₹1 first month) to get full access again.',
       ),
     ),
   ];

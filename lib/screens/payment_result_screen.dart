@@ -136,7 +136,7 @@ class _PaymentSuccessScreenState extends State<PaymentSuccessScreen>
               ),
               const SizedBox(height: 8),
               Text(
-                '₹0 first month · then ₹49/month · cancel anytime',
+                '₹1 first month · then ₹49/month · cancel anytime',
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   fontSize: 14,

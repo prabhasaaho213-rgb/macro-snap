@@ -344,7 +344,7 @@ extension _HabitsSheets on _HabitsTabState {
               const SizedBox(height: 24),
               GradientButton(
                 // Short label so the CTA reads fully on narrow screens.
-                label: 'GO PRO · 1st month free ₹49/mo',
+                label: 'GO PRO · ₹1 first month, then ₹49/mo',
                 onPressed: () {
                   Navigator.of(ctx).pop();
                   Navigator.push(

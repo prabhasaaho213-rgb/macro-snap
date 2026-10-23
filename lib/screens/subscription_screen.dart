@@ -277,8 +277,8 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
               if (!_subscribed) ...[
                 const SizedBox(height: 12),
                 Text(
-                  'Pro costs ₹0 for the first month — you approve the '
-                  '₹49/month autopay at checkout, and the first charge '
+                  'Pro costs ₹1 for the first month — you approve the '
+                  '₹49/month autopay at checkout, and the first ₹49 charge '
                   'happens 30 days in. Cancel anytime.',
                   textAlign: TextAlign.center,
                   style: TextStyle(
@@ -396,7 +396,7 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
                             ? (_isAdmin
                                   ? 'Lifetime \u2022 Free forever'
                                   : 'Auto-renews monthly')
-                            : 'First month free, then ₹49/month',
+                            : 'First month ₹1, then ₹49/month',
                         textAlign: TextAlign.center,
                         style: TextStyle(
                           fontSize: 13,
@@ -519,7 +519,7 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
                         ),
                         const SizedBox(height: 8),
                         Text(
-                          '₹0 today • approves ₹49/month autopay • first charge in 30 days',
+                          '₹1 today • approves ₹49/month autopay • ₹49 from day 31',
                           textAlign: TextAlign.center,
                           style: TextStyle(
                             fontSize: 12,
@@ -733,7 +733,7 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
             color: isDark ? Colors.white : const Color(0xFF1A1A1A),
           ),
         ),
-        _planChip('\u20B949 / MONTH · 1ST MONTH FREE', MacroSnapTheme.neonOrange),
+        _planChip('\u20B949 / MONTH · \u20B91 FIRST MONTH', MacroSnapTheme.neonOrange),
         if (_subscribed)
           _planChip(
             _isAdmin ? 'ADMIN \u2014 LIFETIME' : 'ACTIVE',

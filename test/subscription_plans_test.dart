@@ -5,7 +5,7 @@ import 'package:macro_snap/services/subscription_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// MacroSnap sells exactly two plans: Free and Pro (₹49/month, first month
-/// ₹0). "Lifetime Pro" is an admin marker, never a plan a normal user can see
+/// ₹1). "Lifetime Pro" is an admin marker, never a plan a normal user can see
 /// or pick.
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();

@@ -45,9 +45,10 @@ class SubscriptionService extends ChangeNotifier {
   String? _proUntil;
 
   /// True while the account paid through Razorpay (or the referral/admin
-  /// grants it). The old 30-day free trial no longer exists — the money part
-  /// starts at ₹0 for the first month by Razorpay's `start_at`, which the
-  /// server treats as an ordinary subscription.
+  /// grants it). The old 30-day free trial no longer exists — the first
+  /// month costs ₹1 (collected as an upfront addon) and the ₹49 autopay
+  /// starts 30 days later via Razorpay's `start_at`, which the server treats
+  /// as an ordinary subscription.
   bool get isPaid => _paid;
 
   /// True while this account is Pro *right now*.

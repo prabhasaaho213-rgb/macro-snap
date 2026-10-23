@@ -315,7 +315,7 @@ class _ScanScreenState extends State<ScanScreen> with WidgetsBindingObserver {
               ),
               const SizedBox(height: 24),
               GradientButton(
-                label: 'Go Pro · 1st month free \u20B949/mo',
+                label: 'Go Pro · \u20B91 first month, then \u20B949/mo',
                 onPressed: () {
                   Navigator.of(ctx).pop();
                   Navigator.push(

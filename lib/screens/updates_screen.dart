@@ -34,7 +34,7 @@ class UpdatesScreen extends StatefulWidget {
   /// the user has already seen and puts a dot on the "What's New" row when the
   /// two differ — so a new release announces itself instead of waiting to be
   /// found.
-  static const String latestVersion = '1.5.3';
+  static const String latestVersion = '1.5.4';
 
   /// SharedPreferences key holding the latest version the user has seen.
   static const String seenVersionKey = 'updates_seen_version';
@@ -49,6 +49,13 @@ class _UpdatesScreenState extends State<UpdatesScreen> {
       version: UpdatesScreen.latestVersion,
       date: 'Latest',
       isLatest: true,
+      notes: [
+        'Pro now starts at ₹1 for the first month — you pay ₹1 today at checkout and the ₹49/month autopay begins 30 days later',
+      ],
+    ),
+    _UpdateEntry(
+      version: '1.5.3',
+      date: 'Earlier',
       notes: [
         'Pricing is simpler: Pro is ₹49/month, and the first month is ₹0 — approve the small monthly autopay at checkout and your first charge is 30 days away',
         'The old 30-day free trial is gone for everyone — existing markers are cleared automatically and an old countdown no longer shows Pro',
