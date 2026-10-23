@@ -34,7 +34,7 @@ class UpdatesScreen extends StatefulWidget {
   /// the user has already seen and puts a dot on the "What's New" row when the
   /// two differ — so a new release announces itself instead of waiting to be
   /// found.
-  static const String latestVersion = '1.5.2';
+  static const String latestVersion = '1.5.3';
 
   /// SharedPreferences key holding the latest version the user has seen.
   static const String seenVersionKey = 'updates_seen_version';
@@ -49,6 +49,15 @@ class _UpdatesScreenState extends State<UpdatesScreen> {
       version: UpdatesScreen.latestVersion,
       date: 'Latest',
       isLatest: true,
+      notes: [
+        'Pricing is simpler: Pro is ₹49/month, and the first month is ₹0 — approve the small monthly autopay at checkout and your first charge is 30 days away',
+        'The old 30-day free trial is gone for everyone — existing markers are cleared automatically and an old countdown no longer shows Pro',
+        'Subscribed accounts cannot start a second subscription by mistake — the paywall says "already subscribed" instead of double-billing',
+      ],
+    ),
+    _UpdateEntry(
+      version: '1.5.2',
+      date: 'Earlier',
       notes: [
         'MacroSnap is dark-only now — light mode is gone, along with the theme toggle in Settings',
         'Switching Vegetarian / Non-Veg now switches what your plan follows, without saving half-typed numbers',

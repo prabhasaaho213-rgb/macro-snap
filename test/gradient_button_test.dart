@@ -16,7 +16,7 @@ void main() {
               width: 140,
               child: GradientButton(
                 label:
-                    'SUBSCRIBE - ₹29/mo · AUTO-RENEWS · Cancel anytime anywhere',
+                    'SUBSCRIBE - ₹49/mo · AUTO-RENEWS · Cancel anytime anywhere',
                 icon: Icons.lock_rounded,
                 onPressed: () {},
               ),
@@ -48,7 +48,7 @@ void main() {
             child: SizedBox(
               width: 300,
               child: GradientButton(
-                label: 'Pay ₹29 & Subscribe',
+                label: 'Pay ₹49 & Subscribe',
                 onPressed: () {},
               ),
             ),
@@ -58,6 +58,6 @@ void main() {
     );
 
     expect(tester.takeException(), isNull);
-    expect(find.text('Pay ₹29 & Subscribe'), findsOneWidget);
+    expect(find.text('Pay ₹49 & Subscribe'), findsOneWidget);
   });
 }

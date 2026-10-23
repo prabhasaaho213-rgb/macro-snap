@@ -168,9 +168,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
   ///
   /// 1. Shows a confirmation dialog explaining this is permanent.
   /// 2. Calls the backend `POST /account/delete`, which wipes all cloud data
-  ///    (Firestore docs and the legacy tables) but keeps a tombstone of the identifier + its
-  ///    original trial start — so re-registering can never re-claim the free
-  ///    trial (no delete -> re-login trial-abuse loop).
+  ///    (Firestore docs and the legacy tables) but keeps a tombstone of the identifier
+  ///    (phone / email) — so the same identity cannot be farmed again with a
+  ///    future pricing experiment by deleting and re-registering.
   /// 3. Wipes this device's local data and signs out, returning to login.
   Future<void> _deleteAccount(BuildContext context, bool isDark) async {
     if (_isGuest) {
@@ -196,8 +196,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
           'This permanently deletes your account and ALL associated data: '
           'meals, habits, diet plans, subscription and personal info. '
           'This cannot be undone.\n\n'
-          'Note: your phone / email will be remembered so it cannot be used '
-          'to claim the free trial again.',
+          'Note: your phone / email will be remembered so this identity is '
+          'never reused for an active account.',
     );
     if (confirmed != true || !context.mounted) return;
 

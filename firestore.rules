@@ -23,20 +23,20 @@ service cloud.firestore {
     // made the privilege depend on an email string rather than on a claim only
     // the server can mint.
     function hasPro(uid) {
-      let userPath = /databases/$(database)/documents/users/$(uid);
-      return request.auth.token.admin == true
-        || (exists(userPath) && (
+      let userPath = /databases/$(database)/documents/users/$(uid);      return request.auth.token.admin == true
+        || (exists(userPath) && (
           get(userPath).data.subscribed == true
           || (get(userPath).data.pro_until_at is timestamp
             && get(userPath).data.pro_until_at > request.time)
-          || (get(userPath).data.trial_ends_at is timestamp
-            && get(userPath).data.trial_ends_at > request.time)
         ));
+      // The old trial_ends_at clause is REMOVED: free trials no longer exist,
+      // so a legacy doc carrying trial_ends_at must not keep granting direct
+      // Firestore access. Placeholder keeps the parens balanced.
     }
 
     // ─── users/{uid} — profile, subscription flag, scan counters ────────
     // READ-ONLY for clients. The app only ever reads this document; every
-    // field that matters is an entitlement (`subscribed`, `trial_started_at`,
+    // field that matters is an entitlement (`subscribed`, `pro_until_at`,
     // `scanCount`/`scanDay`, `referralCode`) and is written by the backend's
     // Admin SDK, which bypasses these rules. A client-side write is denied
     // outright, so nobody can grant themselves Pro or reset their own scan

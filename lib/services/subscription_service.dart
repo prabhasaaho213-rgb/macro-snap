@@ -24,6 +24,9 @@ class SubscriptionService extends ChangeNotifier {
 
   static const String _subscribedKey = 'subscribed';
   static const String _subscribedAtKey = 'subscribed_at';
+
+  // Was the free-trial end marker; the trial no longer exists, so the key
+  // is only ever REMOVED below — never read or written again.
   static const String _trialEndsAtKey = 'trial_ends_at';
 
   /// ISO end date of a server-granted Pro window (referral reward).
@@ -40,27 +43,19 @@ class SubscriptionService extends ChangeNotifier {
   bool _paid = false;
   String? _subscribedAt;
   String? _proUntil;
-  DateTime? _trialEndsAt;
 
-  /// True while the account is inside its one-time 30-day free plan and has
-  /// not paid. [trialDaysLeft] counts down from the server-issued end date,
-  /// which is persisted so the countdown survives restarts and works offline.
+  /// True while the account paid through Razorpay (or the referral/admin
+  /// grants it). The old 30-day free trial no longer exists — the money part
+  /// starts at ₹0 for the first month by Razorpay's `start_at`, which the
+  /// server treats as an ordinary subscription.
   bool get isPaid => _paid;
-  bool get trialActive =>
-      !_paid && _trialEndsAt != null && DateTime.now().isBefore(_trialEndsAt!);
-  int get trialDaysLeft {
-    final end = _trialEndsAt;
-    if (end == null || _paid) return 0;
-    final left = end.difference(DateTime.now()).inDays + 1;
-    return left < 1 ? 0 : left;
-  }
 
   /// True while this account is Pro *right now*.
   ///
   /// This is read on every screen build, so it evaluates the stored dates
-  /// itself instead of trusting the flag computed in [load]. A trial or a
-  /// referral window that ends while the app is open used to keep showing Pro
-  /// until the next restart.
+  /// itself instead of trusting the flag computed in [load]. A referral
+  /// window that ends while the app is open used to keep showing Pro until
+  /// the next restart.
   bool get isSubscribed => isSubscribedAt(DateTime.now());
 
   /// [now] is injectable so the expiry rules can be tested without waiting for
@@ -70,8 +65,6 @@ class SubscriptionService extends ChangeNotifier {
     // The admin's lifetime grant has no end date.
     if (_subscribedAt == _lifetimeDate) return true;
     if (_paid) return true;
-    final trialEnd = _trialEndsAt;
-    if (trialEnd != null && !now.isBefore(trialEnd)) return false;
     final until = _proUntil == null ? null : DateTime.tryParse(_proUntil!);
     if (until != null && !now.isBefore(until)) return false;
     return true;
@@ -223,34 +216,29 @@ class SubscriptionService extends ChangeNotifier {
       at = null;
     }
 
-    // ── One-time 30-day free plan ──────────────────────────
-    // An unexpired trial counts as Pro everywhere. The server-issued end
-    // date is persisted so the countdown survives restarts and works
-    // offline; an expired marker is cleared here and never re-granted (the
-    // backend owns the one-time grant).
-    DateTime? trialEnd;
-    final trialRaw = p.getString(_trialEndsAtKey);
-    if (!subscribedNow && trialRaw != null) {
-      trialEnd = DateTime.tryParse(trialRaw);
-      if (trialEnd == null || !DateTime.now().isBefore(trialEnd)) {
-        await p.remove(_trialEndsAtKey);
-        trialEnd = null;
-      }
+    // ── Free trial REMOVED ──────────────────────────
+    // A stale trial marker on this device (an old install, or a previous
+    // account) must never show Pro. It is dropped on the first load
+    // after updating, whether or not the user is subscribed — the server
+    // stopped honouring trials too, so nothing ever re-arms it.
+    if (p.getString(_trialEndsAtKey) != null) {
+      await p.remove(_trialEndsAtKey);
     }
-    final paid = subscribedNow;
-    if (!subscribedNow && trialEnd != null) subscribed = true;
+    // A plain Razorpay-paid subscription never expires on its own. A
+    // windowed grant (the referral reward's `pro_until`) is NOT "paid": its
+    // expiry must apply, otherwise the window's end date would be dead code
+    // (isSubscribedAt short-circuits on _paid before checking pro_until).
     final until = p.getString(_proUntilKey);
+    final paid = subscribedNow && until == null;
 
     if (subscribed != _subscribed ||
         at != _subscribedAt ||
         paid != _paid ||
-        until != _proUntil ||
-        trialEnd != _trialEndsAt) {
+        until != _proUntil) {
       _subscribed = subscribed;
       _subscribedAt = at;
       _paid = paid;
       _proUntil = until;
-      _trialEndsAt = trialEnd;
       notifyListeners();
     }
   }
@@ -272,53 +260,6 @@ class SubscriptionService extends ChangeNotifier {
     }
   }
 
-  /// Asks the backend for this account's one-time 30-day free plan. The
-  /// backend grants it on the first ever check and computes expiry — the
-  /// app only mirrors the server-issued end date. Offline, the persisted
-  /// date keeps the countdown honest and never re-grants anything.
-  Future<void> _verifyTrial() async {
-    // Paying users don't need it. Trial-derived Pro does NOT skip this
-    // check: the server must get the last word, or a stale local marker
-    // (another account on this device, or an account deleted elsewhere)
-    // would keep showing Pro after the backend refused to re-grant it.
-    if (_paid) return;
-    final p = await SharedPreferences.getInstance();
-    final phone = p.getString('phone') ?? '';
-    final email = p.getString('email') ?? '';
-    if (phone.isEmpty && email.isEmpty) return; // guest — no identity
-    try {
-      // Identity comes from the token — no identifier goes in the URL.
-      final uri = Uri.parse('${GeminiService.serverUrl}/trial/status');
-      final res = await AuthHttp.get(uri).timeout(const Duration(seconds: 8));
-      if (res.statusCode != 200) return;
-      final data = jsonDecode(res.body) as Map<String, dynamic>;
-      if (data['active'] == true && data['endsAt'] is String) {
-        final end = DateTime.tryParse(data['endsAt'] as String);
-        if (end != null) {
-          await p.setString(_trialEndsAtKey, end.toIso8601String());
-          if (_trialEndsAt != end || !_subscribed) {
-            _trialEndsAt = end;
-            _subscribed = true;
-            notifyListeners();
-          }
-        }
-      } else if (data['expired'] == true || data['active'] == false) {
-        // expired      -> the countdown finished.
-        // active:false -> the server has NO trial for this identity — it
-        //   never claimed one, or its account was deleted and the backend
-        //   refused to re-grant it (deletion tombstone). Either way, drop
-        //   the stale local marker so it can never show Pro again.
-        await p.remove(_trialEndsAtKey);
-        if (_trialEndsAt != null) {
-          _trialEndsAt = null;
-          notifyListeners();
-        }
-      }
-    } catch (_) {
-      // Offline or server unreachable — the persisted trial state stands.
-    }
-  }
-
   /// Verifies the paid subscription from **Firestore** — the source of truth
   /// for payments and subscription state after the Phase-3 migration.
   ///
@@ -330,9 +271,10 @@ class SubscriptionService extends ChangeNotifier {
   /// Called at app startup and after sign-in so a paying user who reinstalls
   /// or switches devices gets Pro restored without opening the subscription
   /// screen. A network failure never deactivates — but a SUCCESSFUL
-  /// `subscribed: false` answer with no active trial is authoritative and
-  /// clears the saved Pro flag, so a cancelled subscription or an expired
-  /// referral window stops showing the Pro look right away.
+  /// `subscribed: false` answer is authoritative and clears the saved Pro
+  /// flag (trials no longer count as Pro — they are gone), so a cancelled
+  /// subscription or an expired referral window stops showing the Pro look
+  /// right away.
   Future<void> verifyServerSubscription() async {
     // The admin's lifetime Pro is claim-based; don't let the server override it.
     if (await isAdmin()) {
@@ -340,9 +282,6 @@ class SubscriptionService extends ChangeNotifier {
       return;
     }
 
-    // One-time 30-day free plan: checked at startup AND after every login,
-    // which is how existing users receive theirs right after updating.
-    await _verifyTrial();
 
     // ── Firestore first: users/{uid}.subscribed ────────────────────────
     try {
@@ -403,9 +342,9 @@ class SubscriptionService extends ChangeNotifier {
         } else if (proUntilChanged) {
           notifyListeners();
         }
-      } else if (!trialActive) {
+      } else {
         // The server answered SUCCESSFULLY: this account is free and has
-        // no active trial (cancelled subscription, expired referral
+        // no active Pro at all (cancelled subscription, expired referral
         // window). Non-200 answers return earlier and network errors land
         // in the catch below, so a bad connection never downgrades anyone.
         await _deactivate();

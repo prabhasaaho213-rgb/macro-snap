@@ -3,61 +3,9 @@ part of 'home_screen.dart';
 // Split out of home_screen.dart. Same library, so these builders keep access to
 // the screen's private state without threading parameters through.
 extension _HomeHeader on _HomeScreenState {
-  // ─── FREE TRIAL COUNTDOWN ─────────────────────────────
-  // Shown only while the one-time 30-day free plan runs. Tapping it opens
-  // the plans screen; it disappears on its own at expiry.
-  Widget _buildTrialBanner(BuildContext context, bool isDark) {
-    if (!_trialActive) return const SizedBox.shrink();
-    final days = _trialDaysLeft;
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
-      child: GestureDetector(
-        onTap: () => Navigator.push(
-          context,
-          MaterialPageRoute(builder: (_) => const SubscriptionScreen()),
-        ),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-          decoration: BoxDecoration(
-            gradient: const LinearGradient(
-              colors: [Color(0xFF7C3AED), Color(0xFFDB2777)],
-            ),
-            borderRadius: BorderRadius.circular(14),
-          ),
-          child: Row(
-            children: [
-              const Icon(
-                Icons.workspace_premium_rounded,
-                color: Colors.white,
-                size: 18,
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  days == 1
-                      ? 'Free plan \u00b7 last day!'
-                      : 'Free plan \u00b7 $days days left',
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w700,
-                    fontSize: 13,
-                  ),
-                ),
-              ),
-              const Text(
-                'View plans',
-                style: TextStyle(
-                  color: Colors.white70,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
+  // The free-trial countdown banner was removed with the trials themselves:
+  // Pro now starts at ₹0 for a month through an approved Razorpay autopay,
+  // so nothing here keeps a live countdown slot on the home screen.
 
   // ─── HEADER ────────────────────────────────────────────────
   Widget _buildHeader(BuildContext context, bool isDark) {

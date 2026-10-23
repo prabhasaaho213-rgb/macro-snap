@@ -51,8 +51,6 @@ class _HomeScreenState extends State<HomeScreen>
   int _streak = 0;
   int _bestStreak = 0;
   int _scansLeft = 3;
-  bool _trialActive = false;
-  int _trialDaysLeft = 0;
   bool _previousGoalMet = false; // Track to detect transition to goal-met
 
   /// How many meals were logged today the last time Home painted. Used to
@@ -114,8 +112,6 @@ class _HomeScreenState extends State<HomeScreen>
   void _onSubscriptionChanged() {
     if (!mounted) return;
     setState(() {
-      _trialActive = SubscriptionService.instance.trialActive;
-      _trialDaysLeft = SubscriptionService.instance.trialDaysLeft;
       _guruUnlocked = SubscriptionService.instance.isSubscribed;
     });
   }
@@ -193,8 +189,6 @@ class _HomeScreenState extends State<HomeScreen>
       _streak = streak;
       _bestStreak = best;
       _scansLeft = scans;
-      _trialActive = SubscriptionService.instance.trialActive;
-      _trialDaysLeft = SubscriptionService.instance.trialDaysLeft;
       _guruUnlocked = SubscriptionService.instance.isSubscribed;
     });
     userNameNotifier.value = name;
@@ -289,12 +283,6 @@ class _HomeScreenState extends State<HomeScreen>
               physics: const BouncingScrollPhysics(),
               slivers: [
                 SliverToBoxAdapter(child: _buildHeader(context, isDark)),
-                SliverToBoxAdapter(
-                  child: AnimatedEntrance(
-                    delayMs: 25,
-                    child: _buildTrialBanner(context, isDark),
-                  ),
-                ),
                 SliverToBoxAdapter(
                   child: AnimatedEntrance(
                     delayMs: 50,

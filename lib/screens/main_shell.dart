@@ -202,7 +202,7 @@ class _MainShellState extends State<MainShell> {
                       child: Text(
                         // Short label so it fits fully on narrow screens — no
                         // wrapping or truncation of the CTA.
-                        'SUBSCRIBE · ₹29/mo',
+                        'SUBSCRIBE · ₹49/mo · 1st month free',
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         textAlign: TextAlign.center,

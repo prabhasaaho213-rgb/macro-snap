@@ -136,11 +136,18 @@ void main() {
 
   group('subscription expiry', () {
     test(
-      'a trial that ends while the app is open stops reporting Pro',
+      'a referral pro_until window that ends while the app is open stops '
+      'reporting Pro',
       () async {
+        // Trials are gone; the only remaining timed Pro window is a referral
+        // reward (pro_until). It is evaluated live so an expired window cannot
+        // keep showing Pro until the next restart.
         final end = DateTime.now().add(const Duration(days: 2));
         SharedPreferences.setMockInitialValues({
-          'trial_ends_at': end.toIso8601String(),
+          'email': 'user@example.com',
+          'subscribed': true,
+          'subscribed_at': DateTime.now().toIso8601String(),
+          'pro_until': end.toIso8601String(),
         });
         await SubscriptionService.instance.load();
 
@@ -149,7 +156,7 @@ void main() {
             DateTime.now().add(const Duration(hours: 1)),
           ),
           isTrue,
-          reason: 'trial still running',
+          reason: 'referral window still running',
         );
         expect(
           SubscriptionService.instance.isSubscribedAt(

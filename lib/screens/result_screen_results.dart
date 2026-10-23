@@ -114,39 +114,15 @@ extension _ResultResults on _ResultScreenState {
                           ),
                         ),
                         const SizedBox(height: 16),
-                        NutrientRow(
-                          'Calories',
-                          r.calories,
-                          'kcal',
-                          MacroSnapTheme.macroCalories,
-                          isDark,
-                        ),
-                        NutrientRow(
-                          'Protein',
-                          r.protein,
-                          'g',
-                          MacroSnapTheme.macroProtein,
-                          isDark,
-                        ),
-                        NutrientRow(
-                          'Carbs',
-                          r.carbs,
-                          'g',
-                          MacroSnapTheme.macroCalories,
-                          isDark,
-                        ),
+                        // Calories, protein, carbs and fats are already the
+                        // four highlighted cards at the top of this screen —
+                        // repeating them here read like two different meals.
+                        // This list keeps only what the cards do not show.
                         NutrientRow(
                           'Sugar',
                           r.sugar,
                           'g',
                           const Color(0xFFDB2777),
-                          isDark,
-                        ),
-                        NutrientRow(
-                          'Fats',
-                          r.fats,
-                          'g',
-                          MacroSnapTheme.macroFats,
                           isDark,
                         ),
                         NutrientRow(
@@ -492,5 +468,4 @@ extension _ResultResults on _ResultScreenState {
       ),
     );
   }
-
 }

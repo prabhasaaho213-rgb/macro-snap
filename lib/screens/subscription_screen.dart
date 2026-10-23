@@ -265,7 +265,7 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
                 _subscribed
                     ? (_isAdmin
                           ? 'All Pro features, free forever'
-                          : 'Enjoy all features. Billed ₹29 every month.')
+                          : 'Enjoy all features. The ₹49 autopay runs from month 2.')
                     : 'Snap, log, track your week automatically',
                 textAlign: TextAlign.center,
                 style: TextStyle(
@@ -277,8 +277,9 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
               if (!_subscribed) ...[
                 const SizedBox(height: 12),
                 Text(
-                  'Two plans: Free keeps the basics, Pro unlocks everything. '
-                  'Cancel anytime.',
+                  'Pro costs ₹0 for the first month — you approve the '
+                  '₹49/month autopay at checkout, and the first charge '
+                  'happens 30 days in. Cancel anytime.',
                   textAlign: TextAlign.center,
                   style: TextStyle(
                     fontSize: 13,
@@ -361,7 +362,7 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
                             ),
                             const SizedBox(width: 2),
                             Text(
-                              '29',
+                              '49',
                               style: TextStyle(
                                 fontSize: 56,
                                 fontWeight: FontWeight.w800,
@@ -395,7 +396,7 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
                             ? (_isAdmin
                                   ? 'Lifetime \u2022 Free forever'
                                   : 'Auto-renews monthly')
-                            : 'Auto-renews ₹29/month',
+                            : 'First month free, then ₹49/month',
                         textAlign: TextAlign.center,
                         style: TextStyle(
                           fontSize: 13,
@@ -510,7 +511,7 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
                         ),
                         const SizedBox(height: 20),
                         GradientButton(
-                          label: 'Pay ₹29 & Subscribe',
+                          label: 'Approve & Start Free Month',
                           icon: Icons.lock_rounded,
                           loading: _submitting,
                           onPressed: _payWithRazorpay,
@@ -518,7 +519,7 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
                         ),
                         const SizedBox(height: 8),
                         Text(
-                          'Secure in-app payment • Auto-renews ₹29/month',
+                          '₹0 today • approves ₹49/month autopay • first charge in 30 days',
                           textAlign: TextAlign.center,
                           style: TextStyle(
                             fontSize: 12,
@@ -629,7 +630,7 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
     );
   }
 
-  /// A small rounded label, e.g. "CURRENT PLAN" or "₹29 / MONTH".
+  /// A small rounded label, e.g. "CURRENT PLAN" or "₹49 / MONTH".
   Widget _planChip(String text, Color colour) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
@@ -732,7 +733,7 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
             color: isDark ? Colors.white : const Color(0xFF1A1A1A),
           ),
         ),
-        _planChip('\u20B929 / MONTH', MacroSnapTheme.neonOrange),
+        _planChip('\u20B949 / MONTH · 1ST MONTH FREE', MacroSnapTheme.neonOrange),
         if (_subscribed)
           _planChip(
             _isAdmin ? 'ADMIN \u2014 LIFETIME' : 'ACTIVE',

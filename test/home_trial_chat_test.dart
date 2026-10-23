@@ -31,7 +31,13 @@ void main() {
     await MealStore.instance.reload();
   });
 
-  testWidgets('trial banner shows the days left while the free plan runs', (
+  // ── Free trials are REMOVED ───────────────────────────────────────────────
+  // Pro now starts with a Razorpay autopay subscription whose first month is
+  // ₹0 (approve ₹49/mo at checkout, first charge in 30 days). No countdown
+  // banner exists anywhere on the home screen, and a stale marker left by an
+  // old installed version must be wiped so it can never resurrect.
+
+  testWidgets('the trial banner is gone — a stale trial marker is wiped too', (
     tester,
   ) async {
     SharedPreferences.setMockInitialValues({
@@ -42,42 +48,30 @@ void main() {
     await pumpHome(tester);
 
     expect(tester.takeException(), isNull, reason: 'Home must render cleanly');
-    expect(
-      SubscriptionService.instance.trialActive,
-      isTrue,
-      reason: 'service must observe the seeded trial',
-    );
-    expect(find.textContaining('Free plan'), findsOneWidget);
-    expect(find.textContaining('days left'), findsOneWidget);
-    expect(find.text('View plans'), findsOneWidget);
-  });
-
-  testWidgets('no banner once the free plan has expired', (tester) async {
-    SharedPreferences.setMockInitialValues({
-      'trial_ends_at': DateTime.now()
-          .subtract(const Duration(hours: 1))
-          .toIso8601String(),
-    });
-    await pumpHome(tester);
-
-    expect(find.textContaining('Free plan'), findsNothing);
-    // The expired marker must be cleared so it can never resurrect.
+    expect(find.textContaining('Free plan'), findsNothing,
+        reason: 'no trial banner exists any more');
+    expect(find.textContaining('days left'), findsNothing);
     final prefs = await SharedPreferences.getInstance();
-    expect(prefs.getString('trial_ends_at'), isNull);
+    expect(prefs.getString('trial_ends_at'), isNull,
+        reason: 'load() must clear the stale trial marker so it never resurrects');
   });
 
-  testWidgets('no banner for a regular user without a trial', (tester) async {
+  testWidgets('a regular user without any plan marker has no banner either', (
+    tester,
+  ) async {
     SharedPreferences.setMockInitialValues({});
     await pumpHome(tester);
 
     expect(find.textContaining('Free plan'), findsNothing);
+    expect(find.textContaining('days left'), findsNothing);
   });
 
   testWidgets('fixed chat button opens the nutrition assistant for Pro', (
     tester,
   ) async {
     // Guru is a Pro feature (the backend 403s a free user), so the button only
-    // opens the assistant for a subscribed / in-trial account.
+    // opens the assistant for a subscribed account. Trials no longer count:
+    // the subscribed flag is exactly what Razorpay verify/webhook writes.
     SharedPreferences.setMockInitialValues({'subscribed': true});
     await pumpHome(tester);
 
@@ -117,13 +111,14 @@ void main() {
     );
   });
 
-  testWidgets('a user inside the free plan still gets Guru', (tester) async {
-    // The one-time 30-day free plan counts as Pro on both sides: the backend
-    // reports subscribed=true for an active trial, so the app must match.
+  testWidgets('a stale trial marker is NOT Pro — plans screen instead of chat', (
+    tester,
+  ) async {
+    // An old install once relied on trial_ends_at; after the removal the app
+    // must treat it as a plain free user (the server's no-trial verdict is
+    // authoritative, and load() clears the marker).
     SharedPreferences.setMockInitialValues({
-      'trial_ends_at': DateTime.now()
-          .add(const Duration(days: 5))
-          .toIso8601String(),
+      'trial_ends_at': DateTime.now().add(const Duration(days: 5)).toIso8601String(),
     });
     await pumpHome(tester);
 
@@ -133,8 +128,13 @@ void main() {
 
     expect(
       find.byType(ChatScreen),
+      findsNothing,
+      reason: 'an active trial no longer counts as Pro',
+    );
+    expect(
+      find.byType(SubscriptionScreen),
       findsOneWidget,
-      reason: 'an active free plan counts as Pro, exactly like the server',
+      reason: 'the upgrade path is the way to Guru, not an old trial marker',
     );
   });
 }

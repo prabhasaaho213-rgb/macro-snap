@@ -23,7 +23,9 @@ void main() {
 
   Future<void> pump(WidgetTester tester, MealRecord meal) async {
     await tester.pumpWidget(
-      MaterialApp(home: ResultScreen(imagePath: '', existingMeal: meal)),
+      MaterialApp(
+        home: ResultScreen(imagePath: '', existingMeal: meal),
+      ),
     );
     await tester.pumpAndSettle();
   }
@@ -41,8 +43,9 @@ void main() {
     expect(find.text('5/5'), findsOneWidget);
     expect(find.textContaining('Excellent'), findsOneWidget);
 
-    // The 2×2 grid, one tile per macro. Scoped to the tiles because the
-    // "Nutrition Details" list below intentionally repeats the same labels.
+    // The 2×2 grid, one tile per macro. Scoped to the tiles: these four
+    // macros appear ONLY here — the "Nutrition Details" list below carries
+    // just the extras (Sugar, Fiber) rather than repeating them.
     expect(find.byType(NutritionTile), findsNWidgets(4));
     Finder inTile(String text) => find.descendant(
       of: find.byType(NutritionTile),
@@ -128,14 +131,16 @@ void main() {
     expect(find.byType(EditPencil), findsNothing);
   });
 
-  test('tastiness survives a save/load round-trip, and old meals stay valid', () {
-    final rated = salad().toJson()
-      ..['tastiness'] = 'delicious';
-    expect(MealRecord.fromJson(rated).tastiness, 'delicious');
+  test(
+    'tastiness survives a save/load round-trip, and old meals stay valid',
+    () {
+      final rated = salad().toJson()..['tastiness'] = 'delicious';
+      expect(MealRecord.fromJson(rated).tastiness, 'delicious');
 
-    // A meal logged before tastiness existed has neither the key nor a value.
-    final old = salad().toJson()..remove('tastiness');
-    expect(MealRecord.fromJson(old).tastiness, isNull);
-    expect(MealRecord.fromJson(old).name, 'Grilled Chicken Salad');
-  });
+      // A meal logged before tastiness existed has neither the key nor a value.
+      final old = salad().toJson()..remove('tastiness');
+      expect(MealRecord.fromJson(old).tastiness, isNull);
+      expect(MealRecord.fromJson(old).name, 'Grilled Chicken Salad');
+    },
+  );
 }

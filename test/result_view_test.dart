@@ -32,12 +32,13 @@ void main() {
     // The entrance animation must settle before asserting on visible text.
     await tester.pumpAndSettle();
 
-    // Same nutrition layout as right after a scan.
+    // Same nutrition layout as right after a scan. The four highlighted
+    // macros live in the 2×2 tiles above; "Nutrition Details" keeps only
+    // what they do not show (fiber, sugar).
     expect(find.text('Nutrition Details'), findsOneWidget);
-    expect(find.text('371'), findsOneWidget); // big calorie number
-    expect(find.text('5.2 g'), findsOneWidget); // protein nutrient row
-    expect(find.text('48.0 g'), findsOneWidget); // carbs nutrient row
-    expect(find.text('18.5 g'), findsOneWidget); // fats nutrient row
+    expect(find.text('5.2 g'), findsNothing); // protein nutrient row, gone
+    expect(find.text('48.0 g'), findsNothing); // carbs nutrient row, gone
+    expect(find.text('18.5 g'), findsNothing); // fats nutrient row, gone
     expect(find.text('2.1 g'), findsOneWidget); // fiber nutrient row
 
     // View mode = read-only: no gram slider, no edit/log buttons.

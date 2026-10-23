@@ -34,7 +34,7 @@ void main() {
     await tester.pump(const Duration(milliseconds: 1200));
 
     expect(find.text("You're Pro"), findsOneWidget);
-    expect(find.text('₹29/month · cancel anytime'), findsOneWidget);
+    expect(find.text('₹0 first month · then ₹49/month · cancel anytime'), findsOneWidget);
     expect(find.text('Unlimited AI food scans'), findsOneWidget);
 
     await tester.tap(find.text('Start using MacroSnap'));

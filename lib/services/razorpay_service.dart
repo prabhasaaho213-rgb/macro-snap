@@ -83,7 +83,7 @@ class RazorpayService {
     _initialized = false;
   }
 
-  /// Collects the ₹29/month subscription **inside the app**.
+  /// Collects the ₹49/month subscription **inside the app**.
   ///
   /// The backend creates the Razorpay subscription and hands back its id plus
   /// the public key; [Razorpay.open] then slides Razorpay's native checkout
@@ -104,7 +104,7 @@ class RazorpayService {
     // One purchase at a time. Retrying while a checkout is opening, or while
     // the hosted page is still being polled, must never mint a second
     // subscription — that is exactly how a "try again" tap becomes a second
-    // charge for the same ₹29.
+    // charge for the same ₹49.
     if (_starting || _pending != null) {
       return const PaymentResult.pending(
         'A payment is already in progress. Finish it in the window that is '
@@ -140,7 +140,7 @@ class RazorpayService {
           // SDK's recurrence-pattern rejection.
           'subscription_id': subscriptionId,
           'name': 'MacroSnap',
-          'description': 'MacroSnap Pro · ₹29/month',
+          'description': 'MacroSnap Pro · ₹49/month (1st month free)',
           'theme': {'color': '#FF6B2B'},
           'send_sms_hash': true,
           'retry': {'enabled': true, 'max_count': 2},

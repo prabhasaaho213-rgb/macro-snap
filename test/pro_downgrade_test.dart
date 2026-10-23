@@ -7,9 +7,9 @@ import 'package:macro_snap/services/subscription_service.dart';
 
 /// Regression tests for the "Pro never turns off" audit finding.
 ///
-/// * A SUCCESSFUL /subscription/status answer of `subscribed: false` with no
-///   active trial must clear the saved Pro flag (cancelled subscription,
-///   expired referral window).
+/// * A SUCCESSFUL /subscription/status answer of `subscribed: false` must
+///   clear the saved Pro flag (cancelled subscription, expired referral
+///   window, or a stale trial marker — trials are gone).
 /// * A network failure must never downgrade anyone.
 /// * `pro_until` from the server is stored so Settings can show the end date.
 void main() {
@@ -80,30 +80,28 @@ void main() {
     expect(SubscriptionService.instance.isSubscribed, isTrue);
   });
 
-  test('an active trial survives a subscribed:false answer', () async {
-    final endsAt = DateTime.now().add(const Duration(days: 5));
+  test('a stale trial marker does not keep Pro — subscribed:false downgrades', () async {
+    // Trials are removed for everyone. A trial_ends_at marker left by an old
+    // install (load() wipes it) must never keep Pro alive once the server
+    // authoritatively answers subscribed:false.
     SharedPreferences.setMockInitialValues({
       'email': 'user@example.com',
-      'trial_ends_at': endsAt.toIso8601String(),
+      'subscribed': true,
+      'trial_ends_at': DateTime.now().add(const Duration(days: 5)).toIso8601String(),
     });
     await SubscriptionService.instance.load();
-    expect(SubscriptionService.instance.trialActive, isTrue);
 
-    routeTo(
-      trial: http.Response(
-        '{"active": true, "endsAt": "${endsAt.toIso8601String()}"}',
-        200,
-      ),
-      status: http.Response('{"subscribed": false}', 200),
-    );
+    final prefs = await SharedPreferences.getInstance();
+    expect(prefs.getString('trial_ends_at'), isNull, reason: 'the marker is dropped on load');
+
+    routeTo(status: http.Response('{"subscribed": false}', 200));
     await SubscriptionService.instance.verifyServerSubscription();
 
     expect(
       SubscriptionService.instance.isSubscribed,
-      isTrue,
-      reason: 'a live trial must not be cleared by subscribed:false',
+      isFalse,
+      reason: 'a stale trial marker must not survive subscribed:false',
     );
-    expect(SubscriptionService.instance.trialActive, isTrue);
   });
 
   test(
