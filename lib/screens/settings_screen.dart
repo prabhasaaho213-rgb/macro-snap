@@ -27,6 +27,7 @@ import 'phone_login_screen.dart';
 import 'onboarding_screen.dart';
 import 'profile_screen.dart';
 import 'updates_screen.dart';
+import 'referral_screen.dart';
 import '../services/crash_reporting.dart';
 
 class SettingsScreen extends StatefulWidget {
@@ -658,6 +659,24 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       'Rate Us',
                       'Love MacroSnap? Leave a 5-star review',
                       () => RateUsService.rateNowFromSettings(),
+                      isDark,
+                    ),
+                  ),
+                  const Divider(height: 24),
+                  AnimatedEntrance(
+                    delayMs: 265,
+                    child: _settingTile(
+                      Icons.card_giftcard_rounded,
+                      'Refer a Friend',
+                      'Both of you get 30 days of Pro free',
+                      () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => const ReferralScreen(),
+                          ),
+                        );
+                      },
                       isDark,
                     ),
                   ),

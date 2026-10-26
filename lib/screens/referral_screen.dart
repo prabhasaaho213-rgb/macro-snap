@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:share_plus/share_plus.dart' show Share;
 import '../core/theme.dart';
 import '../services/referral_service.dart';
+import '../services/subscription_service.dart';
 import '../widgets/glass_card.dart';
 import '../widgets/gradient_button.dart';
 
@@ -18,6 +19,28 @@ class _ReferralScreenState extends State<ReferralScreen> {
   final _codeCtrl = TextEditingController();
   bool _applying = false;
   String? _applyResult;
+
+  /// End date the server reported once a code was applied, so the reward is a
+  /// concrete date ("Pro until 25 Nov 2026") rather than a vague "activated".
+  DateTime? _successUntil;
+
+  static const _months = [
+    'Jan',
+    'Feb',
+    'Mar',
+    'Apr',
+    'May',
+    'Jun',
+    'Jul',
+    'Aug',
+    'Sep',
+    'Oct',
+    'Nov',
+    'Dec',
+  ];
+
+  String _formatDate(DateTime d) =>
+      '${d.day} ${_months[d.month - 1]} ${d.year}';
 
   @override
   void initState() {
@@ -53,7 +76,10 @@ class _ReferralScreenState extends State<ReferralScreen> {
   Future<void> _share() async {
     if (_myCode == null) return;
     await Share.share(
-      'Join MacroSnap and get a FREE month! Use my referral code: $_myCode\n\nTrack every meal, know your macros. Download now!\nhttps://play.google.com/store/apps/details?id=com.macrosnap.macro_snap',
+      'Get 30 days of MacroSnap Pro — free.\n\n'
+      'Download MacroSnap and enter my code: $_myCode\n'
+      'https://play.google.com/store/apps/details?id=com.macrosnap.macro_snap\n\n'
+      'Snap a photo of your food, get calories and protein in seconds.',
     );
   }
 
@@ -66,12 +92,24 @@ class _ReferralScreenState extends State<ReferralScreen> {
     });
     try {
       await ReferralService.applyCode(code);
+      // The server granted a timed Pro window, but the app only knows about it
+      // after a status refresh — so ask now, or the screen would say "you have
+      // Pro" while every gated screen still behaves as free.
+      try {
+        await SubscriptionService.instance.verifyServerSubscription();
+      } catch (_) {
+        // Offline: the grant stands server-side, the date is just unknown.
+      }
+      final until = DateTime.tryParse(
+        SubscriptionService.instance.proUntil ?? '',
+      );
       // The user can leave this screen while the code is being applied; a
       // bare setState after the await would then throw (red screen in debug,
       // swallowed error in release).
       if (!mounted) return;
       setState(() {
         _applyResult = 'success';
+        _successUntil = until;
         _applying = false;
       });
     } catch (e) {
@@ -117,7 +155,7 @@ class _ReferralScreenState extends State<ReferralScreen> {
                 ),
                 const SizedBox(height: 16),
                 Text(
-                  'Give a Free Month',
+                  'Give 30 Days of Pro',
                   style: TextStyle(
                     fontSize: 22,
                     fontWeight: FontWeight.w800,
@@ -126,7 +164,8 @@ class _ReferralScreenState extends State<ReferralScreen> {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  'Share your code and both get Pro free for a month',
+                  'Your friend gets 30 days of Pro free — and so do you, '
+                  'as soon as they redeem your code.',
                   textAlign: TextAlign.center,
                   style: TextStyle(
                     fontSize: 14,
@@ -260,11 +299,18 @@ class _ReferralScreenState extends State<ReferralScreen> {
                       size: 20,
                     ),
                     const SizedBox(width: 10),
-                    Text(
-                      'Free month activated!',
-                      style: TextStyle(
-                        fontWeight: FontWeight.w600,
-                        color: isDark ? Colors.white : const Color(0xFF1A1A1A),
+                    Expanded(
+                      child: Text(
+                        _successUntil == null
+                            ? '30 days of Pro activated!'
+                            : 'Pro is active until '
+                                  '${_formatDate(_successUntil!)}',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w600,
+                          color: isDark
+                              ? Colors.white
+                              : const Color(0xFF1A1A1A),
+                        ),
                       ),
                     ),
                   ],

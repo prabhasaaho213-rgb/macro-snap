@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:macro_snap/core/theme.dart';
 import 'package:macro_snap/services/share_service.dart';
+import 'package:qr_flutter/qr_flutter.dart';
 
 /// The share card is captured off-screen and leaves the app, so nothing else
 /// in the suite ever sees it. These tests render it at the narrowest phone
@@ -66,6 +67,22 @@ void main() {
     expect(find.text('7/7'), findsOneWidget);
     final cardWidth = tester.getSize(find.byType(WeeklyShareCard)).width;
     expect(cardWidth, lessThanOrEqualTo(320));
+  });
+
+  // The card is an advert that leaves the app: without a scannable code the
+  // only install path on it is text nobody can tap inside a chat thread.
+  testWidgets('the card carries a scannable Play Store link', (tester) async {
+    await tester.pumpWidget(
+      host(WeeklyShareCard(summary: summary(), isDark: true)),
+    );
+    await tester.pumpAndSettle();
+
+    expect(tester.takeException(), isNull);
+    final qr = tester.widget<QrImageView>(find.byType(QrImageView));
+    expect(qr.semanticsLabel, 'MacroSnap on Google Play');
+    expect(kPlayStoreUrl, contains('com.macrosnap.macro_snap'));
+    expect(find.text('Free on Google Play'), findsOneWidget);
+    expect(find.text('Scan to install MacroSnap'), findsOneWidget);
   });
 
   testWidgets('a one-day streak reads "day", not "days"', (tester) async {

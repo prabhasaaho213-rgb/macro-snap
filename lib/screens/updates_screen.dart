@@ -34,7 +34,7 @@ class UpdatesScreen extends StatefulWidget {
   /// the user has already seen and puts a dot on the "What's New" row when the
   /// two differ — so a new release announces itself instead of waiting to be
   /// found.
-  static const String latestVersion = '1.5.5';
+  static const String latestVersion = '1.5.6';
 
   /// SharedPreferences key holding the latest version the user has seen.
   static const String seenVersionKey = 'updates_seen_version';
@@ -49,6 +49,15 @@ class _UpdatesScreenState extends State<UpdatesScreen> {
       version: UpdatesScreen.latestVersion,
       date: 'Latest',
       isLatest: true,
+      notes: [
+        'Every shared card now carries a scannable QR code — scan it straight to the Play Store',
+        'Refer a Friend is back in Settings: share your code and you both get 30 days of Pro free',
+        'After redeeming a code, the exact date Pro runs until is shown instead of a vague "activated"',
+      ],
+    ),
+    _UpdateEntry(
+      version: '1.5.5',
+      date: 'Earlier',
       notes: [
         'BMI calculator is now part of Pro',
         'Badges got a fresh look — animated progress bar, glowing trophies and a bouncier unlock toast',

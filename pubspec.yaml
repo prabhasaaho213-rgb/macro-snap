@@ -1,7 +1,7 @@
 name: macro_snap
 description: "Snap a photo, get your macros instantly."
 publish_to: 'none'
-version: 1.5.5+106
+version: 1.5.6+107
 
 environment:
   sdk: ^3.12.2
@@ -21,6 +21,10 @@ dependencies:
   flutter_local_notifications: ^18.0.1
   timezone: ^0.10.1
   share_plus: ^10.1.4
+  # Renders the Play Store link as a scannable QR on the weekly share card.
+  # Every shared image therefore carries a working install path — a text URL
+  # under a screenshot is decoration, a QR is a tap-and-go.
+  qr_flutter: ^4.1.0
   mobile_scanner: ^6.0.7
   camera: ^0.11.1
   permission_handler: ^11.3.1

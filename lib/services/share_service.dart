@@ -4,6 +4,7 @@ import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:qr_flutter/qr_flutter.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../core/theme.dart';
@@ -69,6 +70,14 @@ class WeeklySummary {
         '${now.day} ${months[now.month - 1]}';
   }
 }
+
+/// The one install link every share points at.
+///
+/// Kept here rather than inline in each screen: the QR on the share card and
+/// the caption text must resolve to the same listing, or a scanned code lands
+/// on a dead page while the text link works.
+const String kPlayStoreUrl =
+    'https://play.google.com/store/apps/details?id=com.macrosnap.macro_snap';
 
 class ShareService {
   /// Computes the last-[days] summary from [meals].
@@ -140,7 +149,7 @@ ${s.daysLogged >= 6
 💪 Protein goal hit: ${s.proteinHitDays}/7 days
 ━━━━━━━━━━━━━━━━━━
 Track every meal with MacroSnap 🍽️
-https://play.google.com/store/apps/details?id=com.macrosnap.macro_snap''';
+$kPlayStoreUrl''';
   }
 
   /// Renders the branded weekly card off-screen, captures it to a PNG in the
@@ -361,13 +370,62 @@ class WeeklyShareCard extends StatelessWidget {
             }),
           ),
           const SizedBox(height: 20),
-          Text(
-            'Know your macros in a snap · play.google.com',
-            style: TextStyle(
-              fontSize: 10.5,
-              fontWeight: FontWeight.w600,
-              color: Colors.white.withValues(alpha: 0.4),
-            ),
+          // The install path, as a QR. A URL printed on a shared image is
+          // unreadable where the image usually ends up (a chat thread), so the
+          // code is the part that actually converts.
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      'Free on Google Play',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w800,
+                        color: Colors.white.withValues(alpha: 0.85),
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      'Scan to install MacroSnap',
+                      style: TextStyle(
+                        fontSize: 10.5,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.white.withValues(alpha: 0.45),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 12),
+              Container(
+                padding: const EdgeInsets.all(5),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(9),
+                ),
+                child: QrImageView(
+                  data: kPlayStoreUrl,
+                  version: QrVersions.auto,
+                  size: 52,
+                  semanticsLabel: 'MacroSnap on Google Play',
+                  padding: EdgeInsets.zero,
+                  backgroundColor: Colors.white,
+                  eyeStyle: const QrEyeStyle(
+                    eyeShape: QrEyeShape.square,
+                    color: Color(0xFF12161C),
+                  ),
+                  dataModuleStyle: const QrDataModuleStyle(
+                    dataModuleShape: QrDataModuleShape.square,
+                    color: Color(0xFF12161C),
+                  ),
+                ),
+              ),
+            ],
           ),
         ],
       ),
