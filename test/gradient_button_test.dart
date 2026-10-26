@@ -3,10 +3,14 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:macro_snap/widgets/gradient_button.dart';
 
 /// Pins GradientButton's overflow hardening: a label longer than the button
-/// must shrink + ellipsize (never paint outside / throw RenderFlex overflow),
-/// and the full label stays reachable via the tooltip.
+/// must shrink to fit (FittedBox scaleDown) instead of being cut with an
+/// ellipsis, never paint outside / throw RenderFlex overflow, and the full
+/// label stays reachable via the tooltip.
 void main() {
-  testWidgets('long label never overflows the button', (tester) async {
+  testWidgets('long label never overflows the button',
+      (tester) async {
+    const longLabel =
+        'SUBSCRIBE - ₹49/mo · AUTO-RENEWS · Cancel anytime anywhere';
     await tester.pumpWidget(
       MaterialApp(
         home: Scaffold(
@@ -15,8 +19,7 @@ void main() {
             child: SizedBox(
               width: 140,
               child: GradientButton(
-                label:
-                    'SUBSCRIBE - ₹49/mo · AUTO-RENEWS · Cancel anytime anywhere',
+                label: longLabel,
                 icon: Icons.lock_rounded,
                 onPressed: () {},
               ),
@@ -28,9 +31,14 @@ void main() {
 
     expect(tester.takeException(), isNull, reason: 'must not overflow');
 
+    // Shrink-to-fit, not truncation: the text is complete and an ellipsis
+    // is never painted in place of it.
+    expect(find.text(longLabel), findsOneWidget);
     final text = tester.widget<Text>(find.byType(Text));
     expect(text.maxLines, 1);
-    expect(text.overflow, TextOverflow.ellipsis);
+    expect(text.overflow, isNull);
+    final fittedBox = tester.widget<FittedBox>(find.byType(FittedBox));
+    expect(fittedBox.fit, BoxFit.scaleDown);
 
     // The full label is still accessible via the button's tooltip.
     expect(find.byType(Tooltip), findsOneWidget);

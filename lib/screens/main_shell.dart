@@ -199,18 +199,21 @@ class _MainShellState extends State<MainShell> {
                     Icon(Icons.lock_rounded, size: 18),
                     SizedBox(width: 8),
                     Flexible(
-                      child: Text(
-                        // Short label so it fits fully on narrow screens — no
-                        // wrapping or truncation of the CTA. The ₹1 intro is
-                        // once per account, so only promise it when this
-                        // account still has it.
-                        SubscriptionService.instance.introEligible
-                            ? 'SUBSCRIBE · ₹49/mo · ₹1 first month'
-                            : 'SUBSCRIBE · ₹49/mo',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        textAlign: TextAlign.center,
-                        style: TextStyle(fontWeight: FontWeight.w900),
+                      child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: Text(
+                          // Full label — FittedBox shrinks it to fit narrow
+                          // screens instead of cutting it with an ellipsis.
+                          // The ₹1 intro is once per account, so only promise
+                          // it when this account still has it.
+                          SubscriptionService.instance.introEligible
+                              ? 'SUBSCRIBE · ₹49/mo · ₹1 first month'
+                              : 'SUBSCRIBE · ₹49/mo',
+                          maxLines: 1,
+                          softWrap: false,
+                          textAlign: TextAlign.center,
+                          style: TextStyle(fontWeight: FontWeight.w900),
+                        ),
                       ),
                     ),
                   ],

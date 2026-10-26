@@ -78,23 +78,25 @@ class GradientButton extends StatelessWidget {
                           ),
                           const SizedBox(width: 8),
                         ],
-                        // Flexible + ellipsis: a label longer than the button
-                        // can never overflow — it shrinks and truncates with
-                        // an ellipsis instead of painting outside the button.
+                        // Flexible + FittedBox(scaleDown): a label longer
+                        // than the button shrinks to fit instead of being
+                        // cut with an ellipsis — the CTA always reads fully.
                         Flexible(
                           child: Tooltip(
                             message: label,
-                            child: Text(
-                              label,
-                              maxLines: 1,
-                              softWrap: false,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                color: isDisabled
-                                    ? const Color(0xFF64748B)
-                                    : Colors.black,
-                                fontSize: 16,
-                                fontWeight: FontWeight.w700,
+                            child: FittedBox(
+                              fit: BoxFit.scaleDown,
+                              child: Text(
+                                label,
+                                maxLines: 1,
+                                softWrap: false,
+                                style: TextStyle(
+                                  color: isDisabled
+                                      ? const Color(0xFF64748B)
+                                      : Colors.black,
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w700,
+                                ),
                               ),
                             ),
                           ),
