@@ -7,6 +7,7 @@ import 'dart:io';
 import '../models/meal_record.dart';
 import 'account_partition.dart';
 import 'badge_service.dart';
+import 'meal_image_store.dart';
 import 'meal_sync_service.dart';
 import 'crash_reporting.dart';
 
@@ -89,6 +90,10 @@ class MealStore {
       _meals = [];
     }
     _loaded = true;
+    // Meal photos only live a day. Sweeping them here — once per launch —
+    // frees the disk and clears the stale path from any record whose file has
+    // just aged out, so nothing ever points at a picture that is gone.
+    await _pruneMealImages();
     // Announce completion: anything that started listening before the load
     // finished (Home builds as soon as the startup gate opens) must repaint
     // with the real history. Without this a load that finished late — e.g.
@@ -168,12 +173,36 @@ class MealStore {
   }
 
   Future<void> remove(String id) async {
+    final index = _meals.indexWhere((m) => m.id == id);
+    final imagePath = index >= 0 ? _meals[index].imagePath : null;
     _meals.removeWhere((m) => m.id == id);
     // Same rule as add(): the row leaves the screen now, the write follows.
     changeNotifier.value++;
     await _save();
+    // The photo goes with the meal: with no record left, a kept picture is
+    // just a photo of someone's food sitting on their phone for a day.
+    unawaited(MealImageStore.instance.remove(imagePath));
     // Async remove from cloud (fire-and-forget)
     MealSyncService.removeMeal(id);
+  }
+
+  /// Deletes every meal photo past its 24-hour life and strips the dead path
+  /// from the records that pointed at it. Best-effort: a failure here must
+  /// never stop the meal history from loading.
+  Future<void> _pruneMealImages() async {
+    try {
+      final live = await MealImageStore.instance.prune();
+      var changed = false;
+      for (var i = 0; i < _meals.length; i++) {
+        final path = _meals[i].imagePath;
+        if (path == null || live.contains(path)) continue;
+        _meals[i] = _meals[i].withImagePath(null);
+        changed = true;
+      }
+      if (changed) await _save();
+    } catch (e, st) {
+      logError('MealStore._pruneMealImages', e, st);
+    }
   }
 
   Future<void> _save() async {

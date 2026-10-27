@@ -7,11 +7,14 @@ import 'package:image_picker/image_picker.dart';
 import 'package:permission_handler/permission_handler.dart';
 import '../core/app_nav.dart';
 import '../core/theme.dart';
+import '../services/currency_service.dart';
 import '../services/scan_gate.dart';
 import '../services/meal_store.dart';
 import '../services/subscription_service.dart';
 import '../widgets/animations.dart';
 import '../widgets/gradient_button.dart';
+import '../widgets/pro_badge.dart';
+import 'barcode_scan_screen.dart';
 import 'recent_foods_screen.dart';
 import 'settings_screen.dart';
 import 'result_screen.dart';
@@ -29,6 +32,11 @@ class _ScanScreenState extends State<ScanScreen> with WidgetsBindingObserver {
   List<CameraDescription> _cameras = [];
   bool _initialized = false;
   bool _cameraError = false;
+
+  /// Torch state for the round button at the bottom left of the viewfinder.
+  /// Tracked here, not read back from the controller, because some devices
+  /// accept `setFlashMode` and then report `off` anyway.
+  bool _torchOn = false;
 
   /// True when camera access is permanently blocked ("Don't ask again") — in
   /// that state request() never re-shows the dialog, so the user must be
@@ -61,6 +69,9 @@ class _ScanScreenState extends State<ScanScreen> with WidgetsBindingObserver {
     final hasCamera = controller != null && controller.value.isInitialized;
     if (!scanTabVisible.value) {
       if (hasCamera) controller.pausePreview();
+      // Leaving the tab drops the torch: coming back to a camera that is
+      // silently lighting the room reads as a bug, not as a saved setting.
+      if (_torchOn) _setTorch(false);
       return;
     }
     // The tab now stays mounted, so re-read the allowance on return — it used
@@ -71,6 +82,148 @@ class _ScanScreenState extends State<ScanScreen> with WidgetsBindingObserver {
 
   void _onDataChanged() {
     _loadScans();
+  }
+
+  /// Round secondary camera button (flash, recent foods) beside the shutter.
+  Widget _roundCameraButton({
+    required IconData icon,
+    required VoidCallback onTap,
+    bool active = false,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: 52,
+        height: 52,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color: active
+              ? MacroSnapTheme.neonGreen.withValues(alpha: 0.9)
+              : Colors.white.withValues(alpha: 0.15),
+          border: Border.all(
+            color: active
+                ? MacroSnapTheme.neonGreen
+                : Colors.white.withValues(alpha: 0.22),
+          ),
+        ),
+        child: Icon(
+          icon,
+          color: active ? Colors.black : Colors.white.withValues(alpha: 0.85),
+          size: 22,
+        ),
+      ),
+    );
+  }
+
+  /// One pill inside the capture-mode switcher. The selected mode carries the
+  /// label; the others are icon-only so the row stays short enough for a
+  /// 320 dp phone.
+  Widget _switcherSegment({
+    required IconData icon,
+    required String label,
+    required bool selected,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: Container(
+        padding: EdgeInsets.symmetric(
+          horizontal: selected ? 14 : 10,
+          vertical: 8,
+        ),
+        decoration: BoxDecoration(
+          color: selected ? Colors.black.withValues(alpha: 0.55) : null,
+          borderRadius: BorderRadius.circular(24),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              icon,
+              size: 18,
+              color: selected ? Colors.white : Colors.white60,
+            ),
+            if (selected) ...[
+              const SizedBox(width: 7),
+              Text(
+                label,
+                style: const TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w800,
+                  color: Colors.white,
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// AI Camera · barcode · gallery — every way into a scan, in one pill.
+  /// Barcode and gallery used to live in unrelated corners of the app (the
+  /// barcode only on a Home quick action, the gallery button at the bottom of
+  /// the viewfinder).
+  Widget _captureModeSwitcher() {
+    return Container(
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.10),
+        borderRadius: BorderRadius.circular(30),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _switcherSegment(
+            icon: Icons.photo_camera_rounded,
+            label: 'AI Camera',
+            selected: true,
+            onTap: _capture,
+          ),
+          _switcherSegment(
+            icon: Icons.qr_code_scanner_rounded,
+            label: 'Barcode',
+            selected: false,
+            onTap: _openBarcode,
+          ),
+          _switcherSegment(
+            icon: Icons.photo_library_rounded,
+            label: 'Gallery',
+            selected: false,
+            onTap: _pickFromGallery,
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Flips the torch on or off. Best-effort: a device that refuses
+  /// `setFlashMode` keeps the button in its previous state rather than
+  /// claiming a light that is not on.
+  Future<void> _setTorch(bool on) async {
+    final controller = _controller;
+    if (controller == null || !controller.value.isInitialized) return;
+    try {
+      await controller.setFlashMode(on ? FlashMode.torch : FlashMode.off);
+      if (mounted) setState(() => _torchOn = on);
+    } catch (e) {
+      debugPrint('Torch unavailable: $e');
+    }
+  }
+
+  void _toggleTorch() {
+    HapticFeedback.selectionClick();
+    _setTorch(!_torchOn);
+  }
+
+  /// Hands the user to the barcode scanner and re-reads the allowance on the
+  /// way back, since a barcode log can also change what is left today.
+  Future<void> _openBarcode() async {
+    HapticFeedback.lightImpact();
+    await Navigator.push(context, habitFlowRoute(const BarcodeScanScreen()));
+    if (mounted) _loadScans();
   }
 
   @override
@@ -209,6 +362,7 @@ class _ScanScreenState extends State<ScanScreen> with WidgetsBindingObserver {
   }
 
   Future<void> _capture() async {
+    HapticFeedback.lightImpact();
     if (!await ScanGate.canScan()) {
       if (mounted) _showLimitDialog();
       return;
@@ -296,13 +450,20 @@ class _ScanScreenState extends State<ScanScreen> with WidgetsBindingObserver {
                 ),
               ),
               const SizedBox(height: 16),
-              Text(
-                'Free scans used up today',
-                style: TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.w800,
-                  color: isDark ? Colors.white : const Color(0xFF1A1A1A),
-                ),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    'Free scans used up today',
+                    style: TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.w800,
+                      color: isDark ? Colors.white : const Color(0xFF1A1A1A),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  const ProBadge(),
+                ],
               ),
               const SizedBox(height: 8),
               Text(
@@ -317,8 +478,8 @@ class _ScanScreenState extends State<ScanScreen> with WidgetsBindingObserver {
               const SizedBox(height: 24),
               GradientButton(
                 label: SubscriptionService.instance.introEligible
-                    ? 'Go Pro · \u20B91 first month, then \u20B949/mo'
-                    : 'Go Pro · \u20B949/mo',
+                    ? 'Go Pro · ${CurrencyService.instance.introLabel} first month, then ${CurrencyService.instance.monthlyLabel}/mo'
+                    : 'Go Pro · ${CurrencyService.instance.monthlyLabel}/mo',
                 onPressed: () {
                   Navigator.of(ctx).pop();
                   Navigator.push(
@@ -599,7 +760,8 @@ class _ScanScreenState extends State<ScanScreen> with WidgetsBindingObserver {
               ),
             ),
 
-            // Top bar
+            // Top bar: close / allowance / settings, with the capture-mode
+            // switcher directly beneath it.
             Positioned(
               top: 0,
               left: 0,
@@ -607,84 +769,91 @@ class _ScanScreenState extends State<ScanScreen> with WidgetsBindingObserver {
               child: SafeArea(
                 child: Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 8),
-                  child: Row(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
                     children: [
-                      IconButton(
-                        icon: const Icon(
-                          Icons.close_rounded,
-                          color: Colors.white,
-                          size: 26,
-                        ),
-                        onPressed: () => Navigator.pop(context),
-                      ),
-                      const Spacer(),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 6,
-                        ),
-                        decoration: BoxDecoration(
-                          color:
-                              (canUse
-                                      ? MacroSnapTheme.neonGreen
-                                      : MacroSnapTheme.neonPink)
-                                  .withValues(alpha: 0.25),
-                          borderRadius: BorderRadius.circular(20),
-                          border: Border.all(
-                            color:
-                                (canUse
-                                        ? MacroSnapTheme.neonGreen
-                                        : MacroSnapTheme.neonPink)
-                                    .withValues(alpha: 0.3),
-                          ),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(
-                              Icons.flash_on_rounded,
-                              size: 14,
-                              color: canUse
-                                  ? MacroSnapTheme.neonGreen
-                                  : MacroSnapTheme.neonPink,
+                      Row(
+                        children: [
+                          IconButton(
+                            icon: const Icon(
+                              Icons.close_rounded,
+                              color: Colors.white,
+                              size: 26,
                             ),
-                            const SizedBox(width: 4),
-                            Text(
-                              _scansLeft >= 99
-                                  ? 'Unlimited'
-                                  : '$_scansLeft left',
-                              style: TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w700,
-                                color: canUse
-                                    ? MacroSnapTheme.greenText(context)
-                                    : MacroSnapTheme.neonPink,
+                            onPressed: () => Navigator.pop(context),
+                          ),
+                          const Spacer(),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 6,
+                            ),
+                            decoration: BoxDecoration(
+                              color:
+                                  (canUse
+                                          ? MacroSnapTheme.neonGreen
+                                          : MacroSnapTheme.neonPink)
+                                      .withValues(alpha: 0.25),
+                              borderRadius: BorderRadius.circular(20),
+                              border: Border.all(
+                                color:
+                                    (canUse
+                                            ? MacroSnapTheme.neonGreen
+                                            : MacroSnapTheme.neonPink)
+                                        .withValues(alpha: 0.3),
                               ),
                             ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(width: 4),
-                      // Settings button
-                      GestureDetector(
-                        onTap: () => Navigator.push(
-                          context,
-                          habitFlowRoute(const SettingsScreen()),
-                        ),
-                        child: Container(
-                          width: 38,
-                          height: 38,
-                          decoration: BoxDecoration(
-                            color: Colors.white.withValues(alpha: 0.12),
-                            borderRadius: BorderRadius.circular(12),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  Icons.flash_on_rounded,
+                                  size: 14,
+                                  color: canUse
+                                      ? MacroSnapTheme.neonGreen
+                                      : MacroSnapTheme.neonPink,
+                                ),
+                                const SizedBox(width: 4),
+                                Text(
+                                  _scansLeft >= 99
+                                      ? 'Unlimited'
+                                      : '$_scansLeft left',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w700,
+                                    color: canUse
+                                        ? MacroSnapTheme.greenText(context)
+                                        : MacroSnapTheme.neonPink,
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
-                          child: const Icon(
-                            Icons.settings_rounded,
-                            color: Colors.white60,
-                            size: 20,
+                          const SizedBox(width: 4),
+                          // Settings button
+                          GestureDetector(
+                            onTap: () => Navigator.push(
+                              context,
+                              habitFlowRoute(const SettingsScreen()),
+                            ),
+                            child: Container(
+                              width: 38,
+                              height: 38,
+                              decoration: BoxDecoration(
+                                color: Colors.white.withValues(alpha: 0.12),
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: const Icon(
+                                Icons.settings_rounded,
+                                color: Colors.white60,
+                                size: 20,
+                              ),
+                            ),
                           ),
-                        ),
+                        ],
                       ),
+                      const SizedBox(height: 6),
+                      _captureModeSwitcher(),
                     ],
                   ),
                 ),
@@ -733,75 +902,56 @@ class _ScanScreenState extends State<ScanScreen> with WidgetsBindingObserver {
                 child: Padding(
                   padding: const EdgeInsets.fromLTRB(32, 0, 32, 28),
                   child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      // Gallery button
-                      GestureDetector(
-                        onTap: _pickFromGallery,
-                        child: Container(
-                          width: 52,
-                          height: 52,
-                          decoration: BoxDecoration(
-                            color: Colors.white.withValues(alpha: 0.15),
-                            borderRadius: BorderRadius.circular(16),
-                            border: Border.all(
-                              color: Colors.white.withValues(alpha: 0.2),
-                            ),
-                          ),
-                          child: Icon(
-                            Icons.photo_library_rounded,
-                            color: Colors.white.withValues(alpha: 0.8),
-                            size: 24,
-                          ),
-                        ),
+                      // Flash / torch toggle
+                      _roundCameraButton(
+                        icon: _torchOn
+                            ? Icons.flash_on_rounded
+                            : Icons.flash_off_rounded,
+                        active: _torchOn,
+                        onTap: _toggleTorch,
                       ),
-                      const Spacer(),
                       // Capture button
                       GestureDetector(
                         onTap: _capture,
                         child: Container(
-                          width: 76,
-                          height: 76,
+                          width: 78,
+                          height: 78,
                           decoration: BoxDecoration(
                             shape: BoxShape.circle,
-                            border: Border.all(color: Colors.white, width: 4),
-                          ),
-                          child: Container(
-                            margin: const EdgeInsets.all(4),
-                            decoration: const BoxDecoration(
-                              shape: BoxShape.circle,
-                              gradient: MacroSnapTheme.accentGradient,
+                            color: Colors.white.withValues(alpha: 0.18),
+                            border: Border.all(
+                              color: Colors.white.withValues(alpha: 0.85),
+                              width: 3,
                             ),
-                            child: const Icon(
-                              Icons.camera_alt_rounded,
-                              color: Colors.black,
-                              size: 28,
+                          ),
+                          child: Center(
+                            child: Container(
+                              width: 56,
+                              height: 56,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: Colors.white.withValues(alpha: 0.92),
+                              ),
+                              child: const Icon(
+                                Icons.photo_camera_rounded,
+                                color: Colors.black87,
+                                size: 26,
+                              ),
                             ),
                           ),
                         ),
                       ),
-                      const Spacer(),
-                      // Recent foods button
-                      GestureDetector(
+                      // Recent foods — the gallery button moved into the top
+                      // switcher, so this slot carries the other half of the
+                      // scan flow: what was logged before.
+                      _roundCameraButton(
+                        icon: Icons.history_rounded,
                         onTap: () => Navigator.push(
                           context,
                           MaterialPageRoute(
                             builder: (_) => const RecentFoodsScreen(),
-                          ),
-                        ),
-                        child: Container(
-                          width: 52,
-                          height: 52,
-                          decoration: BoxDecoration(
-                            color: Colors.white.withValues(alpha: 0.15),
-                            borderRadius: BorderRadius.circular(16),
-                            border: Border.all(
-                              color: Colors.white.withValues(alpha: 0.2),
-                            ),
-                          ),
-                          child: Icon(
-                            Icons.history_rounded,
-                            color: Colors.white.withValues(alpha: 0.8),
-                            size: 24,
                           ),
                         ),
                       ),

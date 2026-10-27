@@ -12,6 +12,7 @@ import '../widgets/glass_card.dart';
 import '../widgets/app_text_field.dart';
 import '../widgets/gradient_button.dart';
 import '../widgets/animations.dart';
+import '../widgets/pro_badge.dart';
 import 'subscription_screen.dart';
 
 class DietPlanScreen extends StatefulWidget {
@@ -783,6 +784,13 @@ class _DietPlanScreenState extends State<DietPlanScreen> {
                   ),
                 ),
               ),
+            // The generated plan is refused server-side for a free account
+            // (403 pro_required), so the button it comes from is marked Pro.
+            const Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [ProBadge()],
+            ),
+            const SizedBox(height: 6),
             GradientButton(
               label: _generating
                   ? 'Generating...'

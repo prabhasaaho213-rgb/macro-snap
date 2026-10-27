@@ -272,15 +272,10 @@ extension _HomeMeals on _HomeScreenState {
           decoration: MacroSnapTheme.habitlyCard(context),
           child: Row(
             children: [
-              // Emoji container (Habitly mission style)
-              Container(
-                width: 52,
-                height: 52,
-                decoration: MacroSnapTheme.emojiContainer(color),
-                child: Center(
-                  child: Icon(_mealIconData(m), color: color, size: 25),
-                ),
-              ),
+              // The photo this meal was scanned from, for the day it is kept;
+              // the meal-type icon for everything else (manual entries, older
+              // meals, and any photo past its 24 hours).
+              MealPhoto(meal: m, size: 52, fallback: _mealIconTile(m, color)),
               const SizedBox(width: 13),
               Expanded(
                 child: Column(
@@ -407,6 +402,16 @@ extension _HomeMeals on _HomeScreenState {
           ),
         ),
       ),
+    );
+  }
+
+  /// The 52 dp meal-type tile, drawn when there is no live photo.
+  Widget _mealIconTile(MealRecord m, Color color) {
+    return Container(
+      width: 52,
+      height: 52,
+      decoration: MacroSnapTheme.emojiContainer(color),
+      child: Center(child: Icon(_mealIconData(m), color: color, size: 25)),
     );
   }
 

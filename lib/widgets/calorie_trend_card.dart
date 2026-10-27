@@ -2,6 +2,7 @@ import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import '../core/theme.dart';
 import '../services/meal_store.dart';
+import 'pro_badge.dart';
 
 /// Calorie trend card for Home — a 7- or 30-day bar chart of daily calorie
 /// intake with a dashed goal line, fed live from [MealStore].
@@ -63,15 +64,18 @@ class _CalorieTrendCardState extends State<CalorieTrendCard> {
               children: [
                 Row(
                   children: [
-                    const Expanded(
-                      child: Text(
-                        'Calorie trend',
-                        style: TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w800,
-                        ),
+                    const Text(
+                      'Calorie trend',
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w800,
                       ),
                     ),
+                    const SizedBox(width: 8),
+                    // Weekly auto-insights are sold as part of Pro, so the
+                    // card says so wherever it appears.
+                    const ProBadge(),
+                    const Spacer(),
                     _rangeToggle(isDark),
                   ],
                 ),

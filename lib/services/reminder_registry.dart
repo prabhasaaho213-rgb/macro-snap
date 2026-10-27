@@ -4,6 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:timezone/timezone.dart' as tz;
 import '../models/diet_profile.dart';
 import '../models/habit.dart';
+import 'currency_service.dart';
 import 'habit_reminder_service.dart';
 import 'meal_store.dart';
 import 'notification_branding.dart';
@@ -173,8 +174,11 @@ class ReminderRegistry {
         // No ₹1 promise here: every expiring subscriber has already used
         // the intro month (it is once per account), and a notification
         // cannot check this account's eligibility — the paywall states the
-        // real price on open.
-        body: 'Renew now for ₹49/month to get full access again.',
+        // real price on open. The amount itself is the buyer's own currency,
+        // resolved when this reminder is scheduled.
+        body:
+            'Renew now for ${CurrencyService.instance.monthlyLabel}/month to '
+            'get full access again.',
       ),
     ),
   ];

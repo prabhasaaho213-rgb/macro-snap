@@ -259,11 +259,12 @@ extension _ResultStates on _ResultScreenState {
     );
   }
 
-  /// View-mode header tile: a branded placeholder filling the same slot the
-  /// scanned screen uses for the food photo (logged meals don't keep the
-  /// original image).
+  /// View-mode header tile: the photo this meal was scanned from while it is
+  /// still within its 24 hours, otherwise a branded placeholder in the same
+  /// slot (manual entries never had a photo, and a scanned one is deleted the
+  /// next day).
   Widget _buildMealPlaceholder() {
-    return Container(
+    final fallback = Container(
       height: 180,
       width: double.infinity,
       decoration: BoxDecoration(
@@ -291,6 +292,23 @@ extension _ResultStates on _ResultScreenState {
             size: 44,
           ),
         ),
+      ),
+    );
+
+    final meal = widget.existingMeal;
+    if (meal == null || meal.imagePath == null) return fallback;
+
+    // MealPhoto already resolves the 24-hour rule and a file the OS removed;
+    // a live photo fills the slot at the same 180 dp the scan view uses.
+    return SizedBox(
+      height: 180,
+      width: double.infinity,
+      child: MealPhoto(
+        meal: meal,
+        size: 180,
+        width: double.infinity,
+        radius: 24,
+        fallback: fallback,
       ),
     );
   }

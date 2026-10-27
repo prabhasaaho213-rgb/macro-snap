@@ -1,12 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:macro_snap/screens/subscription_screen.dart';
+import 'package:macro_snap/services/currency_service.dart';
 import 'package:macro_snap/services/subscription_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// MacroSnap sells exactly two plans: Free and Pro (₹49/month, first month
 /// ₹1). "Lifetime Pro" is an admin marker, never a plan a normal user can see
 /// or pick.
+///
+/// The amounts are quoted in the buyer's own currency, so the assertions build
+/// their expected strings from [CurrencyService] instead of spelling "₹0" —
+/// the test host's locale decides whether that is rupees or dollars, and the
+/// point under test is that the Free plan states a price at all.
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
@@ -32,7 +38,7 @@ void main() {
     expect(find.text('Pro'), findsOneWidget);
     expect(find.text('CURRENT PLAN'), findsOneWidget);
     expect(
-      find.text('\u20B90'),
+      find.text('${CurrencyService.instance.currency.symbol}0'),
       findsOneWidget,
       reason: 'the Free plan states its price',
     );

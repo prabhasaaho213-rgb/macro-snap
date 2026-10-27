@@ -7,6 +7,7 @@ import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'app.dart';
+import 'services/currency_service.dart';
 import 'services/meal_store.dart';
 import 'models/diet_profile.dart';
 import 'services/notification_service.dart';
@@ -44,11 +45,7 @@ Future<void> main() async {
     );
   };
   PlatformDispatcher.instance.onError = (error, stack) {
-    CrashReporting.record(
-      error,
-      stack,
-      reason: 'Uncaught platform error',
-    );
+    CrashReporting.record(error, stack, reason: 'Uncaught platform error');
     // Swallow in release (the app must never die for users) but rethrow in
     // debug so developers still see uncaught errors loudly during dev.
     return kReleaseMode;
@@ -82,11 +79,7 @@ Future<void> main() async {
       );
     },
     (error, stack) {
-      CrashReporting.record(
-        error,
-        stack,
-        reason: 'Uncaught zone error',
-      );
+      CrashReporting.record(error, stack, reason: 'Uncaught zone error');
     },
   );
 }
@@ -111,6 +104,13 @@ Future<void> _bootstrap() async {
     _guardStartup(
       () => NotificationService().init(),
       'NotificationService.init',
+    ),
+    // Which currency the Pro price is shown in. Read once here so every
+    // submit price label on the paywall (and in the reminder copy) is already
+    // resolved when the first screen builds.
+    _guardStartup(
+      () => CurrencyService.instance.refresh(),
+      'CurrencyService.refresh',
     ),
   ]);
 
@@ -179,9 +179,7 @@ Future<void> _bootstrap() async {
     _guard(() async {
       final prefs = await SharedPreferences.getInstance();
       final leftovers = prefs.getKeys().where((k) {
-        return k == 'recipes' ||
-            k.startsWith('recipes_') ||
-            k == 'theme_mode';
+        return k == 'recipes' || k.startsWith('recipes_') || k == 'theme_mode';
       }).toList();
       for (final key in leftovers) {
         await prefs.remove(key);

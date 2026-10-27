@@ -155,14 +155,20 @@ class _ProfileScreenState extends State<ProfileScreen> {
               padding: const EdgeInsets.fromLTRB(8, 4, 16, 0),
               child: Row(
                 children: [
-                  IconButton(
-                    icon: Icon(
-                      Icons.arrow_back_ios_new_rounded,
-                      color: isDark ? Colors.white : const Color(0xFF1A1A1A),
-                      size: 20,
-                    ),
-                    onPressed: () => Navigator.of(context).pop(),
-                  ),
+                  // Profile is its own tab now, so this screen usually has
+                  // nothing to pop; the arrow only appears when it was pushed
+                  // from somewhere (and keeps the header aligned either way).
+                  if (Navigator.of(context).canPop())
+                    IconButton(
+                      icon: Icon(
+                        Icons.arrow_back_ios_new_rounded,
+                        color: isDark ? Colors.white : const Color(0xFF1A1A1A),
+                        size: 20,
+                      ),
+                      onPressed: () => Navigator.of(context).pop(),
+                    )
+                  else
+                    const SizedBox(width: 16),
                   Text(
                     'Profile',
                     style: TextStyle(

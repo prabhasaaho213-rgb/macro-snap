@@ -323,13 +323,20 @@ extension _HabitsSheets on _HabitsTabState {
                 ),
               ),
               const SizedBox(height: 16),
-              Text(
-                'Habit limit reached',
-                style: TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.w800,
-                  color: isDark ? Colors.white : const Color(0xFF1A1A1A),
-                ),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    'Habit limit reached',
+                    style: TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.w800,
+                      color: isDark ? Colors.white : const Color(0xFF1A1A1A),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  const ProBadge(),
+                ],
               ),
               const SizedBox(height: 8),
               Text(
@@ -346,8 +353,8 @@ extension _HabitsSheets on _HabitsTabState {
                 // Short label so the CTA reads fully on narrow screens.
                 // The ₹1 intro is once per account — only promised when real.
                 label: SubscriptionService.instance.introEligible
-                    ? 'GO PRO · ₹1 first month, then ₹49/mo'
-                    : 'GO PRO · ₹49/mo',
+                    ? 'GO PRO · ${CurrencyService.instance.introLabel} first month, then ${CurrencyService.instance.monthlyLabel}/mo'
+                    : 'GO PRO · ${CurrencyService.instance.monthlyLabel}/mo',
                 onPressed: () {
                   Navigator.of(ctx).pop();
                   Navigator.push(

@@ -116,22 +116,36 @@ extension _HomeCalories on _HomeScreenState {
                   ),
                 ),
                 const SizedBox(width: 8),
+                // "255 left" — the number carries the colour, the word stays
+                // quiet beside it. One Text with two styles would need a
+                // TextSpan; two Texts read the same and keep the size jump
+                // between the number and the word explicit.
                 Row(
                   mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.baseline,
+                  textBaseline: TextBaseline.alphabetic,
                   children: [
-                    Icon(
-                      Icons.arrow_downward_rounded,
-                      size: 14,
-                      color: MacroSnapTheme.neonGreen,
-                    ),
-                    const SizedBox(width: 4),
                     Text(
-                      '$remaining remaining',
+                      '$remaining',
                       maxLines: 1,
                       style: TextStyle(
                         color: MacroSnapTheme.greenText(context),
-                        fontSize: 12,
-                        fontWeight: FontWeight.w700,
+                        fontSize: 20,
+                        height: 1,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    const SizedBox(width: 5),
+                    Text(
+                      'left',
+                      maxLines: 1,
+                      style: TextStyle(
+                        color: isDark
+                            ? Colors.white70
+                            : MacroSnapTheme.textSecondary(context),
+                        fontSize: 14,
+                        height: 1,
+                        fontWeight: FontWeight.w600,
                       ),
                     ),
                   ],

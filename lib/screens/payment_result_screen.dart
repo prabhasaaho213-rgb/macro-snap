@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../core/haptics.dart';
 import '../core/theme.dart';
+import '../services/currency_service.dart';
 import '../widgets/animations.dart';
 import '../widgets/confetti_celebration.dart';
 import '../widgets/gradient_button.dart';
@@ -18,7 +19,11 @@ enum PaymentAction { done, retry }
 /// that draws itself, confetti, and the Pro badge landing with an elastic
 /// pop — finished before the user has read the headline.
 class PaymentSuccessScreen extends StatefulWidget {
-  const PaymentSuccessScreen({super.key, this.celebrate = true, this.introOffer = true});
+  const PaymentSuccessScreen({
+    super.key,
+    this.celebrate = true,
+    this.introOffer = true,
+  });
 
   /// Confetti is skipped in widget tests (its repeating controller would
   /// outlive the pump), and anywhere motion should stay cheap.
@@ -142,8 +147,8 @@ class _PaymentSuccessScreenState extends State<PaymentSuccessScreen>
               const SizedBox(height: 8),
               Text(
                 widget.introOffer
-                    ? '₹1 first month · then ₹49/month · cancel anytime'
-                    : '₹49/month · renews automatically · cancel anytime',
+                    ? '${CurrencyService.instance.introLabel} first month · then ${CurrencyService.instance.monthlyLabel}/month · cancel anytime'
+                    : '${CurrencyService.instance.monthlyLabel}/month · renews automatically · cancel anytime',
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   fontSize: 14,

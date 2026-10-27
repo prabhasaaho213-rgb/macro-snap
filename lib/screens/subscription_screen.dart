@@ -8,6 +8,7 @@ import '../widgets/glass_card.dart';
 import 'phone_login_screen.dart';
 import '../services/gemini_service.dart';
 import '../services/razorpay_service.dart';
+import '../services/currency_service.dart';
 import '../services/scan_gate.dart';
 import '../services/subscription_service.dart';
 import 'referral_screen.dart';
@@ -33,6 +34,10 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
   /// the server (`intro_eligible`) — the paywall never promises ₹1 to an
   /// account whose checkout would charge ₹49 from day one.
   bool _introEligible = true;
+
+  /// Prices on this screen are re-labelled in the buyer's own currency (see
+  /// [CurrencyService]); what Razorpay actually charges stays ₹49 INR.
+  final CurrencyService _money = CurrencyService.instance;
 
   @override
   void initState() {
@@ -278,7 +283,7 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
                 _subscribed
                     ? (_isAdmin
                           ? 'All Pro features, free forever'
-                          : 'Enjoy all features. The ₹49 autopay runs from month 2.')
+                          : 'Enjoy all features. The ${_money.monthlyLabel} autopay runs from month 2.')
                     : 'Snap, log, track your week automatically',
                 textAlign: TextAlign.center,
                 style: TextStyle(
@@ -291,12 +296,14 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
                 const SizedBox(height: 12),
                 Text(
                   _introEligible
-                      ? 'Pro costs ₹1 for the first month — you approve the '
-                          '₹49/month autopay at checkout, and the first ₹49 '
-                          'charge happens 30 days in. Cancel anytime.'
-                      : 'Pro is ₹49/month — cancel anytime. Your ₹1 first '
-                          'month was already used on this account, so billing '
-                          'starts today.',
+                      ? 'Pro costs ${_money.introLabel} for the first month — '
+                            'you approve the ${_money.monthlyLabel}/month autopay '
+                            'at checkout, and the first '
+                            '${_money.monthlyLabel} charge happens 30 days in. '
+                            'Cancel anytime.'
+                      : 'Pro is ${_money.monthlyLabel}/month — cancel anytime. '
+                            'Your ${_money.introLabel} first month was already '
+                            'used on this account, so billing starts today.',
                   textAlign: TextAlign.center,
                   style: TextStyle(
                     fontSize: 13,
@@ -370,7 +377,7 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              '\u20B9',
+                              _money.currency.symbol,
                               style: TextStyle(
                                 fontSize: 24,
                                 fontWeight: FontWeight.w700,
@@ -379,7 +386,7 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
                             ),
                             const SizedBox(width: 2),
                             Text(
-                              '49',
+                              _money.amount(CurrencyService.proMonthlyInr),
                               style: TextStyle(
                                 fontSize: 56,
                                 fontWeight: FontWeight.w800,
@@ -414,8 +421,8 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
                                   ? 'Lifetime \u2022 Free forever'
                                   : 'Auto-renews monthly')
                             : (_introEligible
-                                  ? 'First month ₹1, then ₹49/month'
-                                  : '₹49/month \u2022 renews automatically'),
+                                  ? 'First month ${_money.introLabel}, then ${_money.monthlyLabel}/month'
+                                  : '${_money.monthlyLabel}/month \u2022 renews automatically'),
                         textAlign: TextAlign.center,
                         style: TextStyle(
                           fontSize: 13,
@@ -425,6 +432,24 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
                           ).withValues(alpha: 0.8),
                         ),
                       ),
+                      // Only shown when the price had to be converted: the
+                      // buyer is told which currency their bank settles in, so
+                      // the label and the statement never surprise each other.
+                      if (_money.chargeNote != null) ...[
+                        const SizedBox(height: 6),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 12),
+                          child: Text(
+                            _money.chargeNote!,
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              fontSize: 11,
+                              height: 1.35,
+                              color: MacroSnapTheme.textTertiary(context),
+                            ),
+                          ),
+                        ),
+                      ],
                     ],
                   ),
                 ),
@@ -531,8 +556,8 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
                         const SizedBox(height: 20),
                         GradientButton(
                           label: _introEligible
-                              ? 'Approve & Start — ₹1 Today'
-                              : 'Start Pro — ₹49 Today',
+                              ? 'Approve & Start — ${_money.introLabel} Today'
+                              : 'Start Pro — ${_money.monthlyLabel} Today',
                           icon: Icons.lock_rounded,
                           loading: _submitting,
                           onPressed: _payWithRazorpay,
@@ -541,8 +566,8 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
                         const SizedBox(height: 8),
                         Text(
                           _introEligible
-                              ? '₹1 today • approves ₹49/month autopay • ₹49 from day 31'
-                              : '₹49 today • renews monthly • cancel anytime',
+                              ? '${_money.introLabel} today • approves ${_money.monthlyLabel}/month autopay • ${_money.monthlyLabel} from day 31'
+                              : '${_money.monthlyLabel} today • renews monthly • cancel anytime',
                           textAlign: TextAlign.center,
                           style: TextStyle(
                             fontSize: 12,
@@ -727,7 +752,10 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
                   color: isDark ? Colors.white : const Color(0xFF1A1A1A),
                 ),
               ),
-              _planChip('\u20B90', MacroSnapTheme.textSecondary(context)),
+              _planChip(
+                '${_money.currency.symbol}0',
+                MacroSnapTheme.textSecondary(context),
+              ),
               if (!_subscribed)
                 _planChip('CURRENT PLAN', MacroSnapTheme.neonCyan),
             ],
@@ -758,8 +786,8 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
         ),
         _planChip(
           _introEligible
-              ? '\u20B949 / MONTH · \u20B91 FIRST MONTH'
-              : '\u20B949 / MONTH',
+              ? '${_money.monthlyLabel} / MONTH · ${_money.introLabel} FIRST MONTH'
+              : '${_money.monthlyLabel} / MONTH',
           MacroSnapTheme.neonOrange,
         ),
         if (_subscribed)

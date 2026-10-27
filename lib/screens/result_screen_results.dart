@@ -244,13 +244,29 @@ extension _ResultResults on _ResultScreenState {
                           label: 'Log This Meal',
                           onPressed: () async {
                             HapticFeedback.heavyImpact();
+                            final id = const Uuid().v4();
+                            final loggedAt = DateTime.now();
+                            // Keep the photo for the next 24 hours so the
+                            // logged meal card and the history can show what
+                            // was actually scanned. The file the scanner
+                            // handed us lives in the OS temp directory and is
+                            // deleted when this screen goes away, so it is
+                            // copied before the meal is recorded — and the
+                            // copy is stamped with the log time, which is
+                            // what its 24 hours are measured from.
+                            final keptImage = await MealImageStore.instance
+                                .save(
+                                  mealId: id,
+                                  sourcePath: widget.imagePath,
+                                  at: loggedAt,
+                                );
                             // The name the user sees (possibly renamed) is
                             // the name that gets logged, so the meal list and
                             // the card never disagree.
-                            MealStore.instance.add(
+                            await MealStore.instance.add(
                               MealRecord(
-                                id: const Uuid().v4(),
-                                date: DateTime.now(),
+                                id: id,
+                                date: loggedAt,
                                 name: _cardTitle,
                                 category: '',
                                 calories: r.calories,
@@ -260,6 +276,7 @@ extension _ResultResults on _ResultScreenState {
                                 fiber: r.fiber,
                                 serving: r.description,
                                 tastiness: _cardTastiness?.id,
+                                imagePath: keptImage,
                               ),
                             );
                             if (mounted) {

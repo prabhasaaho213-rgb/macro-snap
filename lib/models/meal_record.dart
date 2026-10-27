@@ -15,6 +15,13 @@ class MealRecord {
   /// logged before this existed, and meals logged without rating, are valid.
   final String? tastiness;
 
+  /// Path to the photo this meal was logged from, in app storage — or null,
+  /// which is the normal state: manual entries never had one, and a scanned
+  /// meal's photo is deleted 24 hours after it was taken (see
+  /// [MealImageStore]). A path here is therefore a *maybe*: it is only ever
+  /// shown after the file is confirmed to still exist.
+  final String? imagePath;
+
   MealRecord({
     required this.id,
     required this.date,
@@ -27,7 +34,25 @@ class MealRecord {
     required this.fiber,
     required this.serving,
     this.tastiness,
+    this.imagePath,
   });
+
+  /// A copy of this record with a different (or cleared) photo path. Used by
+  /// the store when the file behind [imagePath] has aged out.
+  MealRecord withImagePath(String? path) => MealRecord(
+    id: id,
+    date: date,
+    name: name,
+    category: category,
+    calories: calories,
+    protein: protein,
+    carbs: carbs,
+    fats: fats,
+    fiber: fiber,
+    serving: serving,
+    tastiness: tastiness,
+    imagePath: path,
+  );
 
   Map<String, dynamic> toJson() => {
     'id': id,
@@ -41,6 +66,10 @@ class MealRecord {
     'fiber': fiber,
     'serving': serving,
     if (tastiness != null) 'tastiness': tastiness,
+    // Omitted rather than written as null: an old build reading this file must
+    // not stumble over a key it has never seen, and the parser treats a missing
+    // key and a null the same way.
+    if (imagePath != null) 'imagePath': imagePath,
   };
 
   factory MealRecord.fromJson(Map<String, dynamic> json) => MealRecord(
@@ -55,6 +84,7 @@ class MealRecord {
     fiber: (json['fiber'] as num).toDouble(),
     serving: json['serving'] as String? ?? '',
     tastiness: json['tastiness'] as String?,
+    imagePath: json['imagePath'] as String?,
   );
 
   /// Parses one stored/cloud record, returning null instead of throwing when

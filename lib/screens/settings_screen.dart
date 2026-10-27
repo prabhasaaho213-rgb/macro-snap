@@ -25,7 +25,6 @@ import '../services/gemini_service.dart';
 import 'subscription_screen.dart';
 import 'phone_login_screen.dart';
 import 'onboarding_screen.dart';
-import 'profile_screen.dart';
 import 'updates_screen.dart';
 import 'referral_screen.dart';
 import '../services/crash_reporting.dart';
@@ -168,7 +167,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
         context,
         // Onboarding first (nextScreen: login), so a returning user goes
         // through the full setup again before signing back in.
-        MaterialPageRoute(builder: (_) => OnboardingScreen(nextScreen: const PhoneLoginScreen())),
+        MaterialPageRoute(
+          builder: (_) =>
+              OnboardingScreen(nextScreen: const PhoneLoginScreen()),
+        ),
         (route) => false,
       );
     }
@@ -571,26 +573,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 children: [
                   AnimatedEntrance(
                     delayMs: 50,
-                    child: _settingTile(
-                      Icons.person_rounded,
-                      'Profile',
-                      _isAdmin
-                          ? '${_name.isNotEmpty ? _name : 'User'} · Lifetime Pro'
-                          : '${_name.isNotEmpty ? _name : 'User'} · ${_subscribed ? 'Pro Member' : 'Free User'}',
-                      () async {
-                        await Navigator.push(
-                          context,
-                          habitFlowRoute(const ProfileScreen()),
-                        );
-                        // The profile editor can rename the user.
-                        if (mounted) await _load();
-                      },
-                      isDark,
-                    ),
-                  ),
-                  const Divider(height: 24),
-                  AnimatedEntrance(
-                    delayMs: 120,
                     child: _settingTile(
                       Icons.subscriptions_rounded,
                       _isAdmin

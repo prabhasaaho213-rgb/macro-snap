@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:macro_snap/screens/payment_result_screen.dart';
+import 'package:macro_snap/services/currency_service.dart';
 import 'package:macro_snap/services/razorpay_service.dart';
 
 /// The purchase now happens inside the app, so the three outcomes each get a
@@ -34,7 +35,13 @@ void main() {
     await tester.pump(const Duration(milliseconds: 1200));
 
     expect(find.text("You're Pro"), findsOneWidget);
-    expect(find.text('₹1 first month · then ₹49/month · cancel anytime'), findsOneWidget);
+    expect(
+      find.text(
+        '${CurrencyService.instance.introLabel} first month · then '
+        '${CurrencyService.instance.monthlyLabel}/month · cancel anytime',
+      ),
+      findsOneWidget,
+    );
     expect(find.text('Unlimited AI food scans'), findsOneWidget);
 
     await tester.tap(find.text('Start using MacroSnap'));

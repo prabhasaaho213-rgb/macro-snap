@@ -17,6 +17,8 @@ import '../services/weight_store.dart';
 
 import '../widgets/animations.dart';
 import '../widgets/bmi_gauge.dart';
+import '../widgets/meal_photo.dart';
+import '../widgets/pro_badge.dart';
 import '../widgets/weight_trend_chart.dart';
 import '../widgets/calorie_trend_card.dart';
 import '../widgets/confetti_celebration.dart';
@@ -251,27 +253,39 @@ class _HomeScreenState extends State<HomeScreen>
         // Sits on the tab body, above the shell's bottom nav — its position
         // is fixed and it never moves with the scrolling content.
         padding: const EdgeInsets.only(bottom: 12),
-        child: FloatingActionButton(
-          onPressed: () => Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (_) => _guruUnlocked
-                  // Pro (paid or in the free plan): Guru answers.
-                  ? const ChatScreen()
-                  // Free user: the backend would refuse every turn, so open the
-                  // plans instead of a chat that cannot reply.
-                  : const SubscriptionScreen(),
+        child: Stack(
+          clipBehavior: Clip.none,
+          children: [
+            FloatingActionButton(
+              onPressed: () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => _guruUnlocked
+                      // Pro (paid or in the free plan): Guru answers.
+                      ? const ChatScreen()
+                      // Free user: the backend would refuse every turn, so open
+                      // the plans instead of a chat that cannot reply.
+                      : const SubscriptionScreen(),
+                ),
+              ),
+              tooltip: _guruUnlocked ? 'Ask Guru' : 'Ask Guru \u2014 Pro',
+              backgroundColor: MacroSnapTheme.neonPink,
+              child: Icon(
+                _guruUnlocked
+                    ? Icons.chat_bubble_rounded
+                    : Icons.lock_outline_rounded,
+                color: Colors.white,
+                size: 24,
+              ),
             ),
-          ),
-          tooltip: _guruUnlocked ? 'Ask Guru' : 'Ask Guru \u2014 Pro',
-          backgroundColor: MacroSnapTheme.neonPink,
-          child: Icon(
-            _guruUnlocked
-                ? Icons.chat_bubble_rounded
-                : Icons.lock_outline_rounded,
-            color: Colors.white,
-            size: 24,
-          ),
+            // Guru is a Pro feature; the chip says so on the button itself,
+            // and the locked icon inside says whether this account has it.
+            const Positioned(
+              top: -4,
+              right: -4,
+              child: ProBadge(compact: true),
+            ),
+          ],
         ),
       ),
       body: SafeArea(

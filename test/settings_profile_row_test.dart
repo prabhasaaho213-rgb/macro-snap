@@ -5,8 +5,10 @@ import 'package:macro_snap/screens/settings_screen.dart';
 import 'package:macro_snap/services/meal_store.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-/// The App Version row was removed and Profile took its place at the top of
-/// Settings — the first row is now "who am I", not a build number.
+/// Profile used to be the first row of Settings. It is its own tab on the
+/// bottom nav now (home · cam · habits · profile), so this file pins two
+/// things: Settings no longer offers it, and the screen itself still renders
+/// on its own.
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
@@ -19,7 +21,7 @@ void main() {
     await MealStore.instance.reload();
   });
 
-  testWidgets('Profile is the first Settings row and App Version is gone', (
+  testWidgets('Profile is gone from Settings and App Version stays gone', (
     tester,
   ) async {
     await tester.pumpWidget(const MaterialApp(home: SettingsScreen()));
@@ -28,19 +30,13 @@ void main() {
 
     expect(tester.takeException(), isNull);
     expect(find.text('App Version'), findsNothing);
-    expect(find.text('Profile'), findsOneWidget);
-
-    // First row means above every other setting, not merely present.
-    final profileY = tester.getTopLeft(find.text('Profile')).dy;
-    for (final other in ['Upgrade to Pro', "What's New", 'Contact Support']) {
-      final finder = find.text(other);
-      if (finder.evaluate().isEmpty) continue;
-      expect(
-        profileY,
-        lessThan(tester.getTopLeft(finder).dy),
-        reason: 'Profile must sit above "$other"',
-      );
-    }
+    expect(
+      find.text('Profile'),
+      findsNothing,
+      reason: 'Profile is a bottom-nav tab now, not a settings row',
+    );
+    // The subscriber row moved up to take the first slot.
+    expect(find.text('Upgrade to Pro'), findsOneWidget);
   });
 
   testWidgets('profile screen says when there is nothing saved yet', (

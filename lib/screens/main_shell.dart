@@ -3,12 +3,14 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../core/app_nav.dart';
 import '../core/haptics.dart';
 import '../core/theme.dart';
+import '../services/currency_service.dart';
 import '../services/rate_us_service.dart';
 import '../services/subscription_service.dart';
 import '../widgets/notification_prompt.dart';
 import '../widgets/badge_board.dart';
 import 'home_screen.dart';
 import 'habits_tab.dart';
+import 'profile_screen.dart';
 import 'scan_screen.dart';
 import 'subscription_screen.dart';
 
@@ -207,8 +209,8 @@ class _MainShellState extends State<MainShell> {
                           // The ₹1 intro is once per account, so only promise
                           // it when this account still has it.
                           SubscriptionService.instance.introEligible
-                              ? 'SUBSCRIBE · ₹49/mo · ₹1 first month'
-                              : 'SUBSCRIBE · ₹49/mo',
+                              ? 'SUBSCRIBE · ${CurrencyService.instance.monthlyLabel}/mo · ${CurrencyService.instance.introLabel} first month'
+                              : 'SUBSCRIBE · ${CurrencyService.instance.monthlyLabel}/mo',
                           maxLines: 1,
                           softWrap: false,
                           textAlign: TextAlign.center,
@@ -268,10 +270,16 @@ class _MainShellState extends State<MainShell> {
   }
 
   /// Cached tab pages so switching tabs doesn't re-create screens.
+  ///
+  /// Order is the nav order: Home · Cam · Habits · Profile. Profile is a tab
+  /// of its own now — it used to be the first row inside Settings, which hid
+  /// the one screen that answers "what does the app know about me?" behind a
+  /// settings list.
   late final List<Widget> _tabPages = const [
     HomeScreen(),
     ScanScreen(),
     HabitsTab(),
+    ProfileScreen(),
   ];
 
   /// Keeps every visited tab mounted and paints only the selected one.
@@ -350,9 +358,9 @@ class _MainShellState extends State<MainShell> {
       ),
       child: SafeArea(
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
+          padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
           child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
             children: [
               _NavItem(
                 icon: Icons.home_rounded,
@@ -361,10 +369,9 @@ class _MainShellState extends State<MainShell> {
                 onTap: () => _goToTab(0),
               ),
               _NavItem(
-                icon: Icons.camera_alt_rounded,
-                label: 'Scan',
+                icon: Icons.photo_camera_rounded,
+                label: 'Cam',
                 isSelected: _currentIndex == 1,
-                isScan: true,
                 onTap: () => _goToTab(1),
               ),
               _NavItem(
@@ -372,6 +379,12 @@ class _MainShellState extends State<MainShell> {
                 label: 'Habits',
                 isSelected: _currentIndex == 2,
                 onTap: () => _goToTab(2),
+              ),
+              _NavItem(
+                icon: Icons.person_rounded,
+                label: 'Profile',
+                isSelected: _currentIndex == 3,
+                onTap: () => _goToTab(3),
               ),
             ],
           ),
@@ -381,111 +394,87 @@ class _MainShellState extends State<MainShell> {
   }
 }
 
+/// One tab button: the selected one is a filled pill carrying its label, the
+/// rest are plain circles of the same height.
+///
+/// Every button keeps the same 46 dp height and a 46 dp minimum width, so the
+/// row never shifts as selection moves — only the selected pill grows a label,
+/// and the row is `spaceEvenly` so the growth is absorbed rather than pushing
+/// the neighbouring circles sideways.
 class _NavItem extends StatelessWidget {
   final IconData icon;
   final String label;
   final bool isSelected;
-  final bool isScan;
   final VoidCallback onTap;
 
   const _NavItem({
     required this.icon,
     required this.label,
     required this.isSelected,
-    this.isScan = false,
     required this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final unselectedIcon = isDark
+        ? Colors.white.withValues(alpha: 0.62)
+        : const Color(0xFF64748B);
 
-    if (isScan) {
-      return GestureDetector(
+    return Semantics(
+      button: true,
+      selected: isSelected,
+      label: label,
+      excludeSemantics: true,
+      child: GestureDetector(
         onTap: onTap,
-        child: Container(
-          // 46 (was 52): the scan button still leads, but no longer dwarfs
-          // the Home/Habits tabs; the halo carries the emphasis instead.
-          width: 46,
+        behavior: HitTestBehavior.opaque,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 220),
+          curve: Curves.easeOutCubic,
           height: 46,
+          constraints: const BoxConstraints(minWidth: 46),
+          padding: EdgeInsets.symmetric(horizontal: isSelected ? 16 : 6),
           decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            boxShadow: isSelected
-                ? [
-                    BoxShadow(
-                      color: MacroSnapTheme.neonOrange.withValues(alpha: 0.30),
-                      blurRadius: 14,
-                      spreadRadius: 1,
-                      offset: const Offset(0, 3),
-                    ),
-                  ]
-                : null,
-            gradient: isSelected
-                ? MacroSnapTheme.accentGradient
-                : LinearGradient(
-                    colors: [
-                      (isDark ? Colors.white : MacroSnapTheme.neonGreen)
-                          .withValues(alpha: 0.1),
-                      (isDark ? Colors.white : MacroSnapTheme.neonGreen)
-                          .withValues(alpha: 0.05),
-                    ],
-                  ),
-            border: Border.all(
-              color: isSelected
-                  ? MacroSnapTheme.neonGreen
-                  : (isDark ? Colors.white : MacroSnapTheme.neonGreen)
-                        .withValues(alpha: 0.2),
-              width: 1.5,
-            ),
-          ),
-          child: Icon(
-            icon,
             color: isSelected
-                ? Colors.black
-                : (isDark
-                      ? Colors.white54
-                      : MacroSnapTheme.neonGreen.withValues(alpha: 0.6)),
-            size: 22,
+                ? MacroSnapTheme.neonGreen
+                : (isDark ? Colors.white : Colors.black).withValues(
+                    alpha: 0.06,
+                  ),
+            borderRadius: BorderRadius.circular(24),
           ),
-        ),
-      );
-    }
-
-    return GestureDetector(
-      onTap: onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        decoration: BoxDecoration(
-          color: isSelected
-              ? (isDark
-                    ? MacroSnapTheme.neonGreen.withValues(alpha: 0.15)
-                    : MacroSnapTheme.neonGreen.withValues(alpha: 0.1))
-              : Colors.transparent,
-          borderRadius: BorderRadius.circular(16),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              icon,
-              size: 20,
-              color: isSelected
-                  ? MacroSnapTheme.neonGreen
-                  : (MacroSnapTheme.textTertiary(context)),
-            ),
-            if (isSelected) ...[
-              const SizedBox(width: 6),
-              Text(
-                label,
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w700,
-                  color: MacroSnapTheme.greenText(context),
-                ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                icon,
+                size: 21,
+                color: isSelected ? Colors.black : unselectedIcon,
               ),
+              if (isSelected) ...[
+                const SizedBox(width: 7),
+                // Capped width: four buttons have to fit a 320 dp phone, and
+                // at 2x system text "Profile" is wider than its share of the
+                // row. Ellipsising the label keeps the row inside its bounds —
+                // an overflowing nav bar is a visible pink stripe on screen.
+                ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 64),
+                  child: Text(
+                    label,
+                    maxLines: 1,
+                    softWrap: false,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w900,
+                      color: Colors.black,
+                    ),
+                  ),
+                ),
+              ],
             ],
-          ],
+          ),
         ),
       ),
     );
