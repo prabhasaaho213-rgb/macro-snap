@@ -51,7 +51,7 @@ class _UpdatesScreenState extends State<UpdatesScreen> {
       isLatest: true,
       notes: [
         'Prices are quoted in the right currency — the India check reads your phone\'s timezone by name now, so a +5:30 clock outside India (Sri Lanka) is no longer shown rupees',
-        'The new M icon is on your home screen — the launcher no longer draws the old camera lens',
+        'The orange-and-green M icon is on your home screen at last — the old green circle is gone',
         'Home leads with your calorie ring; the meal streak card is gone',
         'Cloud backup no longer stops partway through a long history: meals sync in batches, and one unusually long food name can no longer break the rest',
         'The owner account never sees the subscribe popup',

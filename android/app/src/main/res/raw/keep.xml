@@ -7,4 +7,4 @@
   "invalid_icon: resource could not be found" at runtime.
 -->
 <resources xmlns:tools="http://schemas.android.com/tools"
-    tools:keep="@drawable/ic_notification,@drawable/launch_background,@drawable/ic_launcher_foreground" />
+    tools:keep="@drawable/ic_notification,@drawable/launch_background,@mipmap/ic_launcher_foreground" />

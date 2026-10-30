@@ -1,4 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="ic_launcher_background">#059669</color>
+    <!-- Black plate behind the gradient "M" + leaf artwork, matching
+         assets/branding/app_icon_512.png. Was #059669 (the retired green
+         circle) and never updated when the artwork changed. -->
+    <color name="ic_launcher_background">#000000</color>
 </resources>
