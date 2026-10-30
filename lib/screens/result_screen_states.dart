@@ -298,17 +298,79 @@ extension _ResultStates on _ResultScreenState {
     final meal = widget.existingMeal;
     if (meal == null || meal.imagePath == null) return fallback;
 
+    // The meal-detail card is the one place a full-size photo shows, so this
+    // is where "Save to Gallery" lives: over the photo, top right, when (and
+    // only when) there is still a live file to save.
+    final path = meal.imagePath!;
+    final stillLive =
+        DateTime.now().difference(meal.date) < MealImageStore.retention;
+
     // MealPhoto already resolves the 24-hour rule and a file the OS removed;
     // a live photo fills the slot at the same 180 dp the scan view uses.
     return SizedBox(
       height: 180,
       width: double.infinity,
-      child: MealPhoto(
-        meal: meal,
-        size: 180,
-        width: double.infinity,
-        radius: 24,
-        fallback: fallback,
+      child: Stack(
+        children: [
+          Positioned.fill(
+            child: MealPhoto(
+              meal: meal,
+              size: 180,
+              width: double.infinity,
+              radius: 24,
+              fallback: fallback,
+            ),
+          ),
+          if (stillLive)
+            Positioned(
+              top: 10,
+              right: 10,
+              child: GestureDetector(
+                onTap: () async {
+                  HapticFeedback.lightImpact();
+                  final ok = await MealImageStore.saveToGallery(path);
+                  if (!mounted) return;
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(
+                        ok
+                            ? 'Photo saved to your Gallery — Pictures/MacroSnap'
+                            : 'Could not save the photo',
+                      ),
+                      behavior: SnackBarBehavior.floating,
+                      duration: const Duration(seconds: 3),
+                    ),
+                  );
+                },
+                child: Container(
+                  padding: const EdgeInsets.all(6),
+                  decoration: BoxDecoration(
+                    color: Colors.black.withValues(alpha: 0.55),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: const Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        Icons.save_alt_rounded,
+                        color: Colors.white,
+                        size: 16,
+                      ),
+                      SizedBox(width: 5),
+                      Text(
+                        'Save',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+        ],
       ),
     );
   }

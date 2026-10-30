@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
 import '../models/meal_record.dart';
@@ -27,6 +29,86 @@ class MealSyncService {
 
   static bool _isGuestUid(String? uid) => uid == null || uid.isEmpty;
 
+  /// The most writes one batch is allowed to carry.
+  ///
+  /// Firestore's hard limit is 500 operations per batch; 400 leaves headroom
+  /// and keeps each commit well under the 10 MiB request size.
+  static const int maxBatchOperations = 400;
+
+  // ─── Payload ceiling, mirrored from firestore.rules ─────────────────────
+  //
+  // `validMeal()` in firestore.rules REJECTS a meal whose name is over 80
+  // bytes, calories are outside 0..10000, or a macro is outside 0..1000. A
+  // rejected write fails on its own; inside a bulk batch it takes every other
+  // operation in that batch down with it. Names come from the AI scan, so an
+  // unusually long dish name was enough to break sync for the whole account.
+  // The rules and these limits must stay in step.
+  static const int _maxNameBytes = 80;
+  static const int _maxServingBytes = 200;
+  static const int _maxCategoryBytes = 40;
+  static const int _maxCalories = 10000;
+  static const double _maxMacro = 1000;
+
+  /// Trims [text] and cuts it to at most [maxBytes] UTF-8 bytes.
+  ///
+  /// Rules measure string size in BYTES, so two emoji take 8, not 4 — a
+  /// character count would still let a name of emoji through. The cut never
+  /// lands in the middle of a multi-byte character, so the result is always
+  /// valid UTF-8 and can be re-read by every restore path.
+  @visibleForTesting
+  static String clampText(String text, int maxBytes, {String fallback = ''}) {
+    final trimmed = text.trim();
+    if (trimmed.isEmpty) return fallback;
+    if (utf8.encode(trimmed).length <= maxBytes) return trimmed;
+    final buffer = <int>[];
+    for (final rune in trimmed.runes) {
+      final bytes = utf8.encode(String.fromCharCode(rune));
+      if (buffer.length + bytes.length > maxBytes) break;
+      buffer.addAll(bytes);
+    }
+    final cut = utf8.decode(buffer).trim();
+    return cut.isEmpty ? fallback : cut;
+  }
+
+  static double _clampMacro(double value) {
+    if (value.isNaN || value.isInfinite) return 0;
+    return value.clamp(0, _maxMacro).toDouble();
+  }
+
+  /// The document body written for [meal] — [MealRecord.toJson] with every
+  /// value pulled back inside the limits firestore.rules enforces.
+  ///
+  /// Only the UPLOAD is clamped: the local record keeps the original numbers,
+  /// so a restore on a new device brings back the clamped copy. That is a
+  /// deliberate trade — one clamped meal is better than an account that
+  /// cannot back up at all — and the clamp only bites on values no real food
+  /// produces (a name over 80 bytes, 10,000+ kcal, a macro over 1 kg).
+  @visibleForTesting
+  static Map<String, dynamic> mealDoc(MealRecord meal, String uid) {
+    final json = meal.toJson();
+    // Rules require an int: clamp() returns num, so convert back explicitly.
+    final calories = meal.calories.clamp(0, _maxCalories).toInt();
+    final doc = <String, dynamic>{
+      ...json,
+      'name': clampText(meal.name, _maxNameBytes, fallback: 'Meal'),
+      'category': clampText(meal.category, _maxCategoryBytes),
+      'serving': clampText(meal.serving, _maxServingBytes),
+      'calories': calories,
+      'protein': _clampMacro(meal.protein),
+      'carbs': _clampMacro(meal.carbs),
+      'fats': _clampMacro(meal.fats),
+      'fiber': _clampMacro(meal.fiber),
+      'uid': uid,
+    };
+    // `date` is an ISO-8601 string, well under the rule's 40-byte cap; trim it
+    // defensively in case a malformed record ever reaches a write.
+    doc['date'] = clampText(meal.date.toIso8601String(), 40, fallback: '');
+    if ((doc['date'] as String).isEmpty) {
+      doc['date'] = DateTime.now().toIso8601String();
+    }
+    return doc;
+  }
+
   // ═══════════════════════════════════════════════════════════════
   // MEALS
   // ═══════════════════════════════════════════════════════════════
@@ -35,11 +117,12 @@ class MealSyncService {
   static Future<bool> syncMeal(MealRecord meal) async {
     final uid = await _uid();
     if (_isGuestUid(uid)) return false;
+    final owner = uid!; // promoted: _isGuestUid only rejects null/empty
     try {
-      await _db.collection('meals').doc(meal.id).set({
-        ...meal.toJson(),
-        'uid': uid,
-      }, SetOptions(merge: true));
+      await _db
+          .collection('meals')
+          .doc(meal.id)
+          .set(mealDoc(meal, owner), SetOptions(merge: true));
       SyncStatusService.instance.reportSuccess();
       return true;
     } catch (e) {
@@ -137,24 +220,34 @@ class MealSyncService {
     try {
       final db = _db;
       final col = db.collection('meals');
-      final existing = await col.where('uid', isEqualTo: uid).get();
+      final owner = uid!; // promoted: _isGuestUid only rejects null/empty
+      final existing = await col.where('uid', isEqualTo: owner).get();
       final localIds = meals.map((m) => m.id).toSet();
-      final batch = db.batch();
-      var ops = 0;
+
+      // Collect the operations first, then commit them in fixed-size chunks.
+      // One batch could previously carry every delete and every set at once —
+      // a long history hit Firestore's 500-operation limit and the release
+      // build failed the ENTIRE backup with "Bulk meal sync failed".
+      final writes = <void Function(WriteBatch batch)>[];
       for (final doc in existing.docs) {
         if (!localIds.contains(doc.id)) {
-          batch.delete(doc.reference);
-          ops++;
+          writes.add((batch) => batch.delete(doc.reference));
         }
       }
       for (final meal in meals) {
-        batch.set(col.doc(meal.id), {
-          ...meal.toJson(),
-          'uid': uid,
-        }, SetOptions(merge: true));
-        ops++;
+        final data = mealDoc(meal, owner);
+        final ref = col.doc(meal.id);
+        writes.add((batch) => batch.set(ref, data, SetOptions(merge: true)));
       }
-      if (ops > 0) await batch.commit();
+
+      for (var start = 0; start < writes.length; start += maxBatchOperations) {
+        final end = (start + maxBatchOperations).clamp(0, writes.length);
+        final batch = db.batch();
+        for (var i = start; i < end; i++) {
+          writes[i](batch);
+        }
+        await batch.commit();
+      }
       SyncStatusService.instance.reportSuccess();
     } catch (e) {
       debugPrint('MealSyncService.syncAllMeals failed: $e');

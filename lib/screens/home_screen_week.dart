@@ -182,14 +182,18 @@ extension _HomeWeek on _HomeScreenState {
         onTap: () async {
           // BMI is a Pro feature: free users land on the paywall instead of
           // the calculator — same rule as the AI meal plan. The card still
-          // shows their current number as the teaser.
-          if (!SubscriptionService.instance.isSubscribed) {
+          // shows their current number as the teaser. unlocksPro() also
+          // admits the admin's lifetime grant, so the owner never sees the
+          // paywall here.
+          if (!await SubscriptionService.instance.unlocksPro()) {
+            if (!context.mounted) return;
             await Navigator.push(
               context,
               habitFlowRoute(const SubscriptionScreen()),
             );
             return;
           }
+          if (!context.mounted) return;
           await Navigator.push(context, habitFlowRoute(const BmiScreen()));
           // The calculator can save a new weight — repaint with it.
           if (mounted) _rebuild(() {});
@@ -229,26 +233,11 @@ extension _HomeWeek on _HomeScreenState {
                               ),
                             ),
                             if (!SubscriptionService.instance.isSubscribed)
+                              // ProBadge audit: Pro marks must all be ONE shared
+                              // chip, not a screen-invented orange variant.
                               Container(
-                                margin: const EdgeInsets.only(left: 6),
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 5,
-                                  vertical: 1.5,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: MacroSnapTheme.neonOrange
-                                      .withValues(alpha: 0.15),
-                                  borderRadius: BorderRadius.circular(6),
-                                ),
-                                child: Text(
-                                  'PRO',
-                                  style: TextStyle(
-                                    fontSize: 8.5,
-                                    fontWeight: FontWeight.w900,
-                                    letterSpacing: 0.5,
-                                    color: MacroSnapTheme.neonOrange,
-                                  ),
-                                ),
+                                margin: const EdgeInsets.only(left: 8),
+                                child: const ProBadge(),
                               ),
                           ],
                         ),

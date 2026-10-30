@@ -1,6 +1,6 @@
 # MacroSnap — project handoff
 
-Last updated: 22 Oct 2026 · version `1.4.97+98`
+Last updated: 30 Oct 2026 · version `1.5.9+110`
 
 This file used to contain machine-specific paths, a personal email address and
 the filename of a service-account key. All of that has been removed: nothing
@@ -11,7 +11,7 @@ here identifies a person, a laptop or a credential.
 - Flutter (Dart 3) app, Android-first; iOS/macOS/Linux folders are present but
   Android is the shipping target.
 - Firebase Auth (Google + phone) and Cloud Firestore for data; Razorpay for the
-  ₹29/month Pro subscription.
+  ₹49/month Pro subscription.
 - A separate Node backend (own repository) owns payments, trials and the
   authoritative scan allowance.
 
@@ -76,8 +76,8 @@ previous release, then a real payment on a release build.
 
 ## Repository and folder names
 
-- Local folder: `MACROSNAP/extracted/macro-snap` — version-less on purpose. It
-  was `macro-snap-source-1.4.5`, which stopped matching the app at 1.4.96.
+- Local folder: `MACROSNAP/app` — version-less on purpose. It was
+  `macro-snap-source-1.4.5`, which stopped matching the app at 1.4.96.
 - GitHub: `prabhasaaho213-rgb/macro-snap`, renamed from
   `macro-snap-source-1.4.5`. Raw/API links to the old name still redirect.
 - `prabhasaaho213-rgb/macro-snap-source-1.4.5` is deliberately kept as a tiny

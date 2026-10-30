@@ -20,6 +20,11 @@ class RecentFood {
   final DateTime scannedAt;
   final String? imagePath; // optional thumbnail
 
+  /// True when the user starred this food (long-press on the card) so it can
+  /// resurface first. Optional on purpose: foods saved before the star existed
+  /// are simply not favorites, and the parser treats a missing key the same.
+  final bool favorite;
+
   const RecentFood({
     required this.id,
     required this.name,
@@ -31,7 +36,28 @@ class RecentFood {
     this.serving = '',
     required this.scannedAt,
     this.imagePath,
+    this.favorite = false,
   });
+
+  /// A quick 'what kind of food is this' tag the Recent Foods chips row
+  /// filters by. Derived from the macros, never stored: the same food can't
+  /// carry two tags and a bulk edit could never disagree with the list.
+  String get tag {
+    if (protein >= 15 && protein >= carbs && protein >= fats) {
+      return 'Protein-heavy';
+    }
+    if (calories <= 200) return 'Light bite';
+    if (calories >= 500) return 'Filling meal';
+    return 'Balanced';
+  }
+
+  /// Every tag shown in the filter row, always the same order.
+  static const List<String> tags = [
+    'Protein-heavy',
+    'Light bite',
+    'Filling meal',
+    'Balanced',
+  ];
 
   /// Convert to a MealRecord for logging.
   MealRecord toMealRecord() => MealRecord(
@@ -58,6 +84,9 @@ class RecentFood {
     'serving': serving,
     'scannedAt': scannedAt.toIso8601String(),
     'imagePath': imagePath,
+    // Omitted when false, like the other optional keys: an old build reading
+    // this list must not stumble over a key it has never seen.
+    if (favorite) 'favorite': true,
   };
 
   factory RecentFood.fromJson(Map<String, dynamic> json) => RecentFood(
@@ -72,6 +101,7 @@ class RecentFood {
     scannedAt:
         DateTime.tryParse(json['scannedAt'] as String? ?? '') ?? DateTime.now(),
     imagePath: json['imagePath'] as String?,
+    favorite: json['favorite'] as bool? ?? false,
   );
 }
 
@@ -144,13 +174,54 @@ class RecentFoodService {
     _syncToCloud();
   }
 
-  /// Get the N most recent foods (for quick display).
-  List<RecentFood> recent({int count = 10}) => _foods.take(count).toList();
+  /// Get the N most recent foods (for quick display). Favorites keep their
+  /// recency order but always sort ahead of the rest, so a starred food can
+  /// never drift below 50 other scans.
+  List<RecentFood> recent({int count = 10}) => sortedFoods.take(count).toList();
 
-  /// Search recent foods by name.
+  /// The full list with favorites first (relative order preserved) — what the
+  /// Recent Foods screen shows when no tag filter is active.
+  List<RecentFood> get sortedFoods {
+    final favs = _foods.where((f) => f.favorite).toList();
+    final rest = _foods.where((f) => !f.favorite).toList();
+    return [...favs, ...rest];
+  }
+
+  /// Stars (or unstars) one food and persists the change.
+  Future<void> toggleFavorite(String id) async {
+    final index = _foods.indexWhere((f) => f.id == id);
+    if (index < 0) return;
+    final f = _foods[index];
+    _foods[index] = RecentFood(
+      id: f.id,
+      name: f.name,
+      calories: f.calories,
+      protein: f.protein,
+      carbs: f.carbs,
+      fats: f.fats,
+      fiber: f.fiber,
+      serving: f.serving,
+      scannedAt: f.scannedAt,
+      imagePath: f.imagePath,
+      favorite: !f.favorite,
+    );
+    await _save();
+    _syncToCloud();
+  }
+
+  /// Foods tagged [tag].
+  List<RecentFood> tagged(String tag) =>
+      _foods.where((f) => f.tag == tag).toList();
+
+  /// Search recent foods by name (favorites still sort first).
   List<RecentFood> search(String query) {
     final q = query.toLowerCase();
-    return _foods.where((f) => f.name.toLowerCase().contains(q)).toList();
+    final matches = _foods
+        .where((f) => f.name.toLowerCase().contains(q))
+        .toList();
+    final favs = matches.where((f) => f.favorite).toList();
+    final rest = matches.where((f) => !f.favorite).toList();
+    return [...favs, ...rest];
   }
 
   Future<void> _save() async {

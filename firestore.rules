@@ -17,21 +17,25 @@ service cloud.firestore {
     }
     function isOwner(uid) {
       return request.auth.uid == uid;
-    }    // Admin/owner entitlement comes from the `admin` CUSTOM CLAIM, set by the
+    }
+
+    // Admin/owner entitlement comes from the `admin` CUSTOM CLAIM, set by the
     // backend's Admin SDK. It used to compare the token's email against a
     // hardcoded address, which kept a personal address in the rules file and
     // made the privilege depend on an email string rather than on a claim only
     // the server can mint.
+    //
+    // The old trial_ends_at clause is gone on purpose: free trials no longer
+    // exist, so a legacy doc carrying trial_ends_at must not keep granting
+    // access to Pro-only data.
     function hasPro(uid) {
-      let userPath = /databases/$(database)/documents/users/$(uid);      return request.auth.token.admin == true
+      let userPath = /databases/$(database)/documents/users/$(uid);
+      return request.auth.token.admin == true
         || (exists(userPath) && (
           get(userPath).data.subscribed == true
           || (get(userPath).data.pro_until_at is timestamp
             && get(userPath).data.pro_until_at > request.time)
         ));
-      // The old trial_ends_at clause is REMOVED: free trials no longer exist,
-      // so a legacy doc carrying trial_ends_at must not keep granting direct
-      // Firestore access. Placeholder keeps the parens balanced.
     }
 
     // ─── users/{uid} — profile, subscription flag, scan counters ────────
@@ -120,9 +124,9 @@ service cloud.firestore {
 
     // ─── deletedAccounts/{identifier} — deletion tombstones ────────────
     // Written ONLY by the backend via the Admin SDK (rules bypass) when an
-    // account deletes itself, and NEVER wiped. It remembers the identifier
-    // and its consumed trial so delete -> re-register can never re-claim
-    // the free trial. Clients must never read or write it.
+    // account deletes itself, and NEVER wiped. It remembers the identifier so
+    // delete -> re-register cannot re-claim the offers that are once per
+    // account (the ₹1 intro month). Clients must never read or write it.
     match /deletedAccounts/{identifier} {
       allow read, write: if false;
     }
@@ -141,6 +145,33 @@ service cloud.firestore {
       allow read: if signedIn()
         && resource.data.uid == request.auth.uid;
       allow write: if false;
+    }
+
+    // ─── mealPhotos/{mealId} — cloud-backed meal photos (Pro) ────────────
+    // Documents are written ONLY by the backend's photo routes via the Admin
+    // SDK (which bypasses these rules) — that is also where the Pro gate
+    // lives. If clients could write the collection, a free account could
+    // push photos for every meal straight into Firestore and the paywall
+    // would be cosmetic. The app never needs direct access at all: uploads,
+    // downloads and deletes all go through the authenticated backend.
+    match /mealPhotos/{mealId} {
+      allow read, write: if false;
+    }
+
+    // ─── analytics/{uid} — nav A/B experiment counters ─────────
+    // One doc per user, written by the client (FieldValues are just numbers —
+    // there is nothing here worth escalating into a server call). Owner-only,
+    // so one account can never read or reset another's counters, and no
+    // document ever carries more than a handful of keys.
+    //
+    // Read and write are split because `request.resource` is NULL on a read:
+    // the old combined rule evaluated `request.resource.data.size()` there,
+    // which errors, so the owner could not read back their own counters.
+    // The size cap belongs on the write, where a payload actually exists.
+    match /analytics/{uid} {
+      allow read: if signedIn() && isOwner(uid);
+      allow write: if signedIn() && isOwner(uid)
+        && request.resource.data.size() <= 10;
     }
 
     // ─── referrals/{code} — referral-code index ─────────────────────────

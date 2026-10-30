@@ -198,6 +198,18 @@ class SubscriptionService extends ChangeNotifier {
     await _grantLifetimeAdmin();
   }
 
+  /// Pro truth for paywall GATES: Pro right now (paid, a referral window, or
+  /// the admin's lifetime grant) OR the `admin` claim.
+  ///
+  /// Gates await this instead of reading [isSubscribed] bare: a gate decided
+  /// before Firebase restores the session (and [refreshAdminState] applies the
+  /// grant) is how the owner got asked to subscribe on a Pro-on-launch pass.
+  /// The claim read is cached per process, so repeated calls are cheap.
+  Future<bool> unlocksPro() async {
+    await refreshAdminState();
+    return isSubscribed || await isAdmin();
+  }
+
   /// Loads the persisted flag. Called once at app startup, but safe to call
   /// again — re-reads prefs and only notifies when the value changed.
   ///

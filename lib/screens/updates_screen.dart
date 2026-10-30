@@ -34,7 +34,7 @@ class UpdatesScreen extends StatefulWidget {
   /// the user has already seen and puts a dot on the "What's New" row when the
   /// two differ — so a new release announces itself instead of waiting to be
   /// found.
-  static const String latestVersion = '1.5.8';
+  static const String latestVersion = '1.5.9';
 
   /// SharedPreferences key holding the latest version the user has seen.
   static const String seenVersionKey = 'updates_seen_version';
@@ -49,6 +49,17 @@ class _UpdatesScreenState extends State<UpdatesScreen> {
       version: UpdatesScreen.latestVersion,
       date: 'Latest',
       isLatest: true,
+      notes: [
+        'Prices are quoted in the right currency — the India check reads your phone\'s timezone by name now, so a +5:30 clock outside India (Sri Lanka) is no longer shown rupees',
+        'The new M icon is on your home screen — the launcher no longer draws the old camera lens',
+        'Home leads with your calorie ring; the meal streak card is gone',
+        'Cloud backup no longer stops partway through a long history: meals sync in batches, and one unusually long food name can no longer break the rest',
+        'The owner account never sees the subscribe popup',
+      ],
+    ),
+    _UpdateEntry(
+      version: '1.5.8',
+      date: 'Earlier',
       notes: [
         'The Pro price now shows in your own currency — rupees, dollars, euros, dirhams and more',
         'Profile moved out of Settings and became its own tab, right after Habits',

@@ -16,6 +16,8 @@ import '../models/diet_profile.dart';
 import '../widgets/glass_card.dart';
 import '../widgets/animations.dart';
 import '../services/badge_service.dart';
+import '../services/currency_service.dart';
+import '../services/meal_image_store.dart';
 import '../services/meal_store.dart';
 import '../services/meal_sync_service.dart';
 import '../services/habit_store.dart';
@@ -28,6 +30,172 @@ import 'onboarding_screen.dart';
 import 'updates_screen.dart';
 import 'referral_screen.dart';
 import '../services/crash_reporting.dart';
+
+/// The account-deletion flow, as top-level functions so it can be opened from
+/// BOTH Settings and the Profile quick-action — Profile is a top-level tab now
+/// and "delete my account" is exactly the kind of task the brainstorm wanted
+/// one tap away there.
+///
+/// Behaviour is byte-for-byte the old Settings flow: guests only wipe local
+/// data, signed-in users confirm, the backend wipes the cloud account and
+/// leaves a tombstone, then local data wipes and the app lands on login.
+Future<bool?> confirmAccountDeletion(
+  BuildContext context,
+  bool isDark, {
+  required String title,
+  required String body,
+}) {
+  return showDialog<bool>(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      backgroundColor: isDark ? MacroSnapTheme.cardDark : Colors.white,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      title: Text(title),
+      content: Text(body, style: const TextStyle(fontSize: 13, height: 1.5)),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(ctx, false),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.pop(ctx, true),
+          style: FilledButton.styleFrom(
+            backgroundColor: MacroSnapTheme.neonPink,
+          ),
+          child: const Text('Delete'),
+        ),
+      ],
+    ),
+  );
+}
+
+/// Wipes every local store + prefs for the active account, signs out of
+/// Firebase/Google, and returns to the login screen.
+Future<void> wipeLocalAndSignOut(BuildContext context) async {
+  try {
+    // Firebase Auth has no instance-level deleteUser(); the correct API is
+    // delete() on the currently signed-in user.
+    await FirebaseAuth.instance.currentUser?.delete();
+  } catch (e) {
+    // delete() needs a recent login; fall back to plain signOut.
+    debugPrint('Firebase delete user failed: $e');
+    try {
+      await FirebaseAuth.instance.signOut();
+    } catch (e2) {
+      debugPrint('Error: $e2');
+    }
+  }
+  try {
+    await GoogleSignIn().signOut();
+  } catch (e) {
+    debugPrint('Error: $e');
+  }
+  // Clear ALL local preferences (this device's partition + globals).
+  try {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.clear();
+  } catch (e) {
+    debugPrint('Error: $e');
+  }
+  // Clearing prefs wipes the trophy case on disk, but BadgeService is a
+  // singleton holding the awards in memory — without this the next account
+  // would open Profile and see the deleted user's badges, then save them
+  // under its own key.
+  await BadgeService.instance.clear();
+  if (context.mounted) {
+    Navigator.of(context).pushAndRemoveUntil(
+      MaterialPageRoute(builder: (_) => const PhoneLoginScreen()),
+      (route) => false,
+    );
+  }
+}
+
+/// In-app self-service account deletion.
+///
+/// 1. Shows a confirmation dialog explaining this is permanent.
+/// 2. Calls the backend `POST /account/delete`, which wipes all cloud data
+///    (Firestore docs and the legacy tables) but keeps a tombstone of the
+///    identifier (phone / email) — so the same identity cannot be farmed again
+///    with a future pricing experiment by deleting and re-registering.
+/// 3. Wipes this device's local data and signs out, returning to login.
+Future<void> deleteAccountFlow(
+  BuildContext context, {
+  bool isDark = false,
+}) async {
+  final prefs = await SharedPreferences.getInstance();
+  final phone = prefs.getString('phone') ?? '';
+  final isGuest = phone.isEmpty || phone.startsWith('guest_');
+  if (!context.mounted) return;
+
+  if (isGuest) {
+    // Guests have no server account to delete — just clear local data.
+    final confirmed = await confirmAccountDeletion(
+      context,
+      isDark,
+      title: 'Clear All Data?',
+      body:
+          'This removes all meals, habits and settings stored on this device. '
+          'This cannot be undone.',
+    );
+    if (confirmed != true || !context.mounted) return;
+    await wipeLocalAndSignOut(context);
+    return;
+  }
+  final confirmed = await confirmAccountDeletion(
+    context,
+    isDark,
+    title: 'Delete Account?',
+    body:
+        'This permanently deletes your account and ALL associated data: '
+        'meals, habits, diet plans, subscription and personal info. '
+        'This cannot be undone.\n\n'
+        'Note: your phone / email will be remembered so this identity is '
+        'never reused for an active account.',
+  );
+  if (confirmed != true || !context.mounted) return;
+
+  // Show a blocking progress dialog while we delete.
+  showDialog(
+    context: context,
+    barrierDismissible: false,
+    builder: (_) => const Center(child: CircularProgressIndicator()),
+  );
+
+  var serverOk = false;
+  try {
+    // The token identifies the account being deleted — nothing else is sent.
+    final uri = Uri.parse('${GeminiService.serverUrl}/account/delete');
+    final res = await AuthHttp.post(
+      uri,
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode(const <String, dynamic>{}),
+    ).timeout(const Duration(seconds: 20));
+    serverOk = res.statusCode == 200;
+  } catch (e) {
+    debugPrint('Delete account server call failed: $e');
+  }
+
+  if (!context.mounted) return;
+  Navigator.of(context).pop(); // dismiss progress dialog
+
+  if (!serverOk || !context.mounted) {
+    // Backend unreachable — do NOT wipe locally, so the user can retry or
+    // still use the app. Tell them it failed.
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Could not reach the server to delete your account. '
+            'Please check your connection and try again.',
+          ),
+        ),
+      );
+    }
+    return;
+  }
+
+  await wipeLocalAndSignOut(context);
+}
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -80,6 +248,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           UpdatesScreen.latestVersion;
     });
     _isAdmin = await SubscriptionService.instance.isAdmin();
+    await _loadPhotoCloudSync();
     if (mounted) setState(() {});
   }
 
@@ -176,155 +345,148 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
   }
 
-  /// In-app self-service account deletion.
-  ///
-  /// 1. Shows a confirmation dialog explaining this is permanent.
-  /// 2. Calls the backend `POST /account/delete`, which wipes all cloud data
-  ///    (Firestore docs and the legacy tables) but keeps a tombstone of the identifier
-  ///    (phone / email) — so the same identity cannot be farmed again with a
-  ///    future pricing experiment by deleting and re-registering.
-  /// 3. Wipes this device's local data and signs out, returning to login.
-  Future<void> _deleteAccount(BuildContext context, bool isDark) async {
-    if (_isGuest) {
-      // Guests have no server account to delete — just clear local data.
-      final confirmed = await _confirmDeleteDialog(
-        context,
-        isDark,
-        title: 'Clear All Data?',
-        body:
-            'This removes all meals, habits and settings stored on this device. '
-            'This cannot be undone.',
-      );
-      if (confirmed != true || !context.mounted) return;
-      await _wipeLocalAndSignOut(context);
-      return;
-    }
+  Future<void> _deleteAccount(BuildContext context, bool isDark) =>
+      deleteAccountFlow(context, isDark: isDark);
 
-    final confirmed = await _confirmDeleteDialog(
-      context,
-      isDark,
-      title: 'Delete Account?',
-      body:
-          'This permanently deletes your account and ALL associated data: '
-          'meals, habits, diet plans, subscription and personal info. '
-          'This cannot be undone.\n\n'
-          'Note: your phone / email will be remembered so this identity is '
-          'never reused for an active account.',
-    );
-    if (confirmed != true || !context.mounted) return;
+  // ══════════════ Meal photos: retention + cloud sync ══════════════
 
-    // Show a blocking progress dialog while we delete.
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (_) => const Center(child: CircularProgressIndicator()),
-    );
-
-    var serverOk = false;
-    try {
-      // The token identifies the account being deleted — nothing else is sent.
-      final uri = Uri.parse('${GeminiService.serverUrl}/account/delete');
-      final res = await AuthHttp.post(
-        uri,
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode(const <String, dynamic>{}),
-      ).timeout(const Duration(seconds: 20));
-      serverOk = res.statusCode == 200;
-    } catch (e) {
-      debugPrint('Delete account server call failed: $e');
-    }
-
-    if (!context.mounted) return;
-    Navigator.of(context).pop(); // dismiss progress dialog
-
-    if (!serverOk) {
-      // Backend unreachable — do NOT wipe locally, so the user can retry or
-      // still use the app. Tell them it failed.
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-              'Could not reach the server to delete your account. '
-              'Please check your connection and try again.',
-            ),
-          ),
-        );
-      }
-      return;
-    }
-
-    await _wipeLocalAndSignOut(context);
+  /// The storage window the Meal Photos tile advertises.
+  String _photoRetentionLabel() {
+    return switch (MealImageStore.retentionHours) {
+      0 => 'Keep forever — Pro',
+      168 => 'Keep for 7 days',
+      720 => 'Keep for 30 days',
+      _ => 'Keep for 24 hours',
+    };
   }
 
-  Future<bool?> _confirmDeleteDialog(
-    BuildContext context,
-    bool isDark, {
-    required String title,
-    required String body,
-  }) {
-    return showDialog<bool>(
+  /// The Sync Meal Photos tile's subtitle, which is also its OFFER: free
+  /// users see the Pro pitch, Pro users the current state.
+  String _photoSyncSubtitle() {
+    if (!_subscribed && !_isAdmin) return 'Pro — keep photos across devices';
+    return _photoCloudSync
+        ? 'Photos upload with your meals'
+        : 'Off — photos stay on this device';
+  }
+
+  /// The retention picker. Six years of the original 24-hour rule said "a
+  /// photo of every meal is private data"; Forever re-opens that trade-off,
+  /// so it is Pro-only out of the box.
+  Future<void> _pickPhotoRetention(bool isDark) async {
+    final chosen = await showDialog<int>(
       context: context,
-      builder: (ctx) => AlertDialog(
+      builder: (ctx) => SimpleDialog(
         backgroundColor: isDark ? MacroSnapTheme.cardDark : Colors.white,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: Text(title),
-        content: Text(body, style: const TextStyle(fontSize: 13, height: 1.5)),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            style: FilledButton.styleFrom(
-              backgroundColor: MacroSnapTheme.neonPink,
+        title: const Text('Keep meal photos'),
+        children: [
+          for (final option in const [
+            (24, '24 hours'),
+            (168, '7 days'),
+            (720, '30 days'),
+            (0, 'Forever (Pro)'),
+          ])
+            SimpleDialogOption(
+              onPressed: () => Navigator.pop(ctx, option.$1),
+              child: Text(option.$2),
             ),
-            child: const Text('Delete'),
-          ),
         ],
       ),
     );
+    if (chosen == null || !mounted) return;
+    if (chosen == 0 && !_subscribed && !_isAdmin) {
+      // "Forever" stores every meal photo on the phone for good — that's
+      // the Pro promise, so a free user tapping it lands on the paywall
+      // instead of silently watering the setting down.
+      await Navigator.push(
+        context,
+        habitFlowRoute(const SubscriptionScreen()),
+      );
+      await SubscriptionService.instance.load();
+      if (mounted) setState(() => _subscribed = SubscriptionService.instance.isSubscribed);
+      return;
+    }
+    await MealImageStore.setRetentionHours(chosen);
+    if (mounted) setState(() {});
   }
 
-  /// Wipes every local store + prefs for the active account, signs out of
-  /// Firebase/Google, and returns to the login screen.
-  Future<void> _wipeLocalAndSignOut(BuildContext context) async {
-    try {
-      // Firebase Auth has no instance-level deleteUser(); the correct API is
-      // delete() on the currently signed-in user.
-      await FirebaseAuth.instance.currentUser?.delete();
-    } catch (e) {
-      // delete() needs a recent login; fall back to plain signOut.
-      debugPrint('Firebase delete user failed: $e');
-      try {
-        await FirebaseAuth.instance.signOut();
-      } catch (e2) {
-        debugPrint('Error: $e2');
-      }
-    }
-    try {
-      await GoogleSignIn().signOut();
-    } catch (e) {
-      debugPrint('Error: $e');
-    }
-    // Clear ALL local preferences (this device's partition + globals).
+  // ══════════════ Price market picker ══════════════
+
+  /// What the Price Market tile advertises: the picked market, or "Auto —
+  /// detected as India" style summary of what detection resolved.
+  String _priceMarketLabel() {
+    final picked = CurrencyService.instance.marketLabel;
+    if (picked != null) return 'Pro prices in $picked';
+    return 'Auto — ${CurrencyService.instance.countryCode} detected';
+  }
+
+  /// The market picker. The charge NEVER moves — Razorpay bills INR no matter
+  /// what — so the dialog says exactly that; the pick only changes which
+  /// currency the labels display.
+  Future<void> _pickPriceMarket(bool isDark) async {
+    final chosen = await showDialog<String>(
+      context: context,
+      builder: (ctx) => SimpleDialog(
+        backgroundColor: isDark ? MacroSnapTheme.cardDark : Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text('Show Pro prices in'),
+        children: [
+          const Padding(
+            padding: EdgeInsets.fromLTRB(24, 0, 24, 8),
+            child: Text(
+              'The charge is always \u20B949 INR — this only changes the '
+              'currency the price is displayed in.',
+              style: TextStyle(fontSize: 12.5, height: 1.4),
+            ),
+          ),
+          for (final (label, code) in CurrencyService.markets)
+            SimpleDialogOption(
+              onPressed: () => Navigator.pop(
+                ctx,
+                code ?? '',
+              ),
+              child: Text(label),
+            ),
+        ],
+      ),
+    );
+    if (chosen == null || !mounted) return;
+    await CurrencyService.instance.setMarket(chosen.isEmpty ? null : chosen);
+    if (mounted) setState(() {});
+  }
+
+  bool _photoCloudSync = false;
+
+  /// Reads the cloud-photo toggle to paint the tile's subtitle.
+  Future<void> _loadPhotoCloudSync() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      await prefs.clear();
-    } catch (e) {
-      debugPrint('Error: $e');
+      if (!mounted) return;
+      setState(() => _photoCloudSync = prefs.getBool('meal_photo_cloud_sync') ?? false);
+    } catch (_) {
+      // No prefs — the tile just shows Off.
     }
-    // Clearing prefs wipes the trophy case on disk, but BadgeService is a
-    // singleton holding the awards in memory — without this the next account
-    // would open Profile and see the deleted user's badges, then save them
-    // under its own key.
-    await BadgeService.instance.clear();
-    if (context.mounted) {
-      Navigator.of(context).pushAndRemoveUntil(
-        MaterialPageRoute(builder: (_) => const PhoneLoginScreen()),
-        (route) => false,
+  }
+
+  /// The cloud-sync toggle. Pro-only: uploading a photo of every meal to the
+  /// cloud is the retention feature the paywall sells alongside unlimited
+  /// scans, so a free user tapping it lands on the paywall too.
+  Future<void> _togglePhotoCloudSync(bool isDark) async {
+    if (!_subscribed && !_isAdmin) {
+      await Navigator.push(
+        context,
+        habitFlowRoute(const SubscriptionScreen()),
       );
+      await SubscriptionService.instance.load();
+      if (mounted) {
+        setState(() => _subscribed = SubscriptionService.instance.isSubscribed);
+      }
+      return;
     }
+    final prefs = await SharedPreferences.getInstance();
+    final next = !(prefs.getBool('meal_photo_cloud_sync') ?? false);
+    await prefs.setBool('meal_photo_cloud_sync', next);
+    if (mounted) setState(() => _photoCloudSync = next);
   }
 
   Future<void> _sendFeedback(bool isDark) async {
@@ -617,6 +779,39 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       },
                       isDark,
                       showBadge: _hasUnseenUpdate,
+                    ),
+                  ),
+                  const Divider(height: 24),
+                  AnimatedEntrance(
+                    delayMs: 235,
+                    child: _settingTile(
+                      Icons.photo_rounded,
+                      'Meal Photos',
+                      _photoRetentionLabel(),
+                      () => _pickPhotoRetention(isDark),
+                      isDark,
+                    ),
+                  ),
+                  const Divider(height: 24),
+                  AnimatedEntrance(
+                    delayMs: 240,
+                    child: _settingTile(
+                      Icons.currency_exchange_rounded,
+                      'Price Market',
+                      _priceMarketLabel(),
+                      () => _pickPriceMarket(isDark),
+                      isDark,
+                    ),
+                  ),
+                  const Divider(height: 24),
+                  AnimatedEntrance(
+                    delayMs: 245,
+                    child: _settingTile(
+                      Icons.cloud_upload_outlined,
+                      'Sync Meal Photos',
+                      _photoSyncSubtitle(),
+                      () => _togglePhotoCloudSync(isDark),
+                      isDark,
                     ),
                   ),
                   const Divider(height: 24),

@@ -1,9 +1,11 @@
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../core/app_nav.dart';
 import '../core/haptics.dart';
 import '../core/theme.dart';
 import '../services/currency_service.dart';
+import '../services/nav_ab_test.dart';
 import '../services/rate_us_service.dart';
 import '../services/subscription_service.dart';
 import '../widgets/notification_prompt.dart';
@@ -55,6 +57,10 @@ class _MainShellState extends State<MainShell> {
     // the bar never feels dead. Light impact (not selectionClick) — the
     // selection tick was too faint to notice on most phones.
     Haptics.light();
+    // The nav A/B test counts every change, including the re-tap — which tab
+    // people re-tap is part of what the two designs are measured on. Best
+    // effort, never awaited.
+    NavAbTest.instance.recordTabSelect(index);
     if (index == _currentIndex) return;
     setState(() {
       _currentIndex = index;
@@ -84,11 +90,23 @@ class _MainShellState extends State<MainShell> {
 
   Future<void> _maybeShowSubscription() async {
     await SubscriptionService.instance.load();
+    // Give Firebase a moment to restore the session before deciding: the
+    // admin's lifetime grant lands via authStateChanges a beat later, and a
+    // decision made before that is how the owner got asked to subscribe on
+    // every fresh install.
+    try {
+      await FirebaseAuth.instance.authStateChanges().first.timeout(
+        const Duration(seconds: 2),
+        onTimeout: () => null,
+      );
+    } catch (_) {
+      // No Firebase (tests, a build without it) — decide with what we have.
+    }
     final prefs = await SharedPreferences.getInstance();
     final offered = prefs.getBool('subscription_offered') ?? false;
-    final subscribed = SubscriptionService.instance.isSubscribed;
+    final proOrAdmin = await SubscriptionService.instance.unlocksPro();
     final phone = prefs.getString('phone');
-    if (!offered && !subscribed && phone != null && mounted) {
+    if (!offered && !proOrAdmin && phone != null && mounted) {
       await prefs.setBool('subscription_offered', true);
       if (mounted) {
         await showDialog(
@@ -355,37 +373,62 @@ class _MainShellState extends State<MainShell> {
             width: 0.5,
           ),
         ),
-      ),
-      child: SafeArea(
+      ),          child: SafeArea(
         child: Padding(
           padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceEvenly,
             children: [
-              _NavItem(
-                icon: Icons.home_rounded,
-                label: 'Home',
-                isSelected: _currentIndex == 0,
-                onTap: () => _goToTab(0),
-              ),
-              _NavItem(
-                icon: Icons.photo_camera_rounded,
-                label: 'Cam',
-                isSelected: _currentIndex == 1,
-                onTap: () => _goToTab(1),
-              ),
-              _NavItem(
-                icon: Icons.favorite_rounded,
-                label: 'Habits',
-                isSelected: _currentIndex == 2,
-                onTap: () => _goToTab(2),
-              ),
-              _NavItem(
-                icon: Icons.person_rounded,
-                label: 'Profile',
-                isSelected: _currentIndex == 3,
-                onTap: () => _goToTab(3),
-              ),
+              // The A/B test decides which nav design this install draws:
+              // pill (reference) or circle (previous). Same targets either
+              // way, so the two arms differ only in the bar.
+              if (NavAbTest.instance.variant == NavVariant.circle) ...[
+                _NavItemCircle(
+                  icon: Icons.home_rounded,
+                  isSelected: _currentIndex == 0,
+                  onTap: () => _goToTab(0),
+                ),
+                _NavItemCircle(
+                  icon: Icons.photo_camera_rounded,
+                  isSelected: _currentIndex == 1,
+                  onTap: () => _goToTab(1),
+                ),
+                _NavItemCircle(
+                  icon: Icons.favorite_rounded,
+                  isSelected: _currentIndex == 2,
+                  onTap: () => _goToTab(2),
+                ),
+                _NavItemCircle(
+                  icon: Icons.person_rounded,
+                  isSelected: _currentIndex == 3,
+                  onTap: () => _goToTab(3),
+                ),
+              ] else ...[
+                _NavItem(
+                  icon: Icons.home_rounded,
+                  label: 'Home',
+                  isSelected: _currentIndex == 0,
+                  onTap: () => _goToTab(0),
+                ),
+                _NavItem(
+                  icon: Icons.photo_camera_rounded,
+                  label: 'Cam',
+                  isSelected: _currentIndex == 1,
+                  onTap: () => _goToTab(1),
+                ),
+                _NavItem(
+                  icon: Icons.favorite_rounded,
+                  label: 'Habits',
+                  isSelected: _currentIndex == 2,
+                  onTap: () => _goToTab(2),
+                ),
+                _NavItem(
+                  icon: Icons.person_rounded,
+                  label: 'Profile',
+                  isSelected: _currentIndex == 3,
+                  onTap: () => _goToTab(3),
+                ),
+              ],
             ],
           ),
         ),
@@ -474,6 +517,64 @@ class _NavItem extends StatelessWidget {
                 ),
               ],
             ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// The previous nav design, preserved as the A/B control arm: every tab is a
+/// plain icon-only circle of the same 46 dp height, the selected one filled
+/// green. No label, no growing pill — the shape a user of 1.5.0–1.5.7 knew.
+class _NavItemCircle extends StatelessWidget {
+  final IconData icon;
+  final bool isSelected;
+  final VoidCallback onTap;
+
+  const _NavItemCircle({
+    required this.icon,
+    required this.isSelected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final unselectedIcon = isDark
+        ? Colors.white.withValues(alpha: 0.62)
+        : const Color(0xFF64748B);
+
+    return Semantics(
+      button: true,
+      selected: isSelected,
+      label: switch (icon) {
+        Icons.home_rounded => 'Home',
+        Icons.photo_camera_rounded => 'Cam',
+        Icons.favorite_rounded => 'Habits',
+        _ => 'Profile',
+      },
+      excludeSemantics: true,
+      child: GestureDetector(
+        onTap: onTap,
+        behavior: HitTestBehavior.opaque,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          curve: Curves.easeOutCubic,
+          width: 46,
+          height: 46,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: isSelected
+                ? MacroSnapTheme.neonGreen
+                : (isDark ? Colors.white : Colors.black).withValues(
+                    alpha: 0.06,
+                  ),
+          ),
+          child: Icon(
+            icon,
+            size: 21,
+            color: isSelected ? Colors.black : unselectedIcon,
           ),
         ),
       ),

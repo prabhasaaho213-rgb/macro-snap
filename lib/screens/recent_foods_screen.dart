@@ -17,6 +17,10 @@ class RecentFoodsScreen extends StatefulWidget {
 
 class _RecentFoodsScreenState extends State<RecentFoodsScreen> {
   String _searchQuery = '';
+
+  /// The active tag chip, or null for "All". One chip at a time: the row is a
+  /// quick way into a kind of food, not a saved view.
+  String? _activeTag;
   final _searchController = TextEditingController();
 
   @override
@@ -26,10 +30,33 @@ class _RecentFoodsScreenState extends State<RecentFoodsScreen> {
   }
 
   List<RecentFood> get _filteredFoods {
-    if (_searchQuery.isEmpty) {
-      return RecentFoodService.instance.foods;
+    final base = _searchQuery.isEmpty
+        ? RecentFoodService.instance.sortedFoods
+        : RecentFoodService.instance.search(_searchQuery);
+    if (_activeTag == null) return base;
+    // '★' filters the starred foods; any other value is a [RecentFood.tag].
+    if (_activeTag == '★') {
+      return base.where((f) => f.favorite).toList();
     }
-    return RecentFoodService.instance.search(_searchQuery);
+    return base.where((f) => f.tag == _activeTag).toList();
+  }
+
+  Future<void> _toggleFavorite(RecentFood food) async {
+    await RecentFoodService.instance.toggleFavorite(food.id);
+    if (!mounted) return;
+    setState(() {});
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          food.favorite
+              ? 'Removed "${food.name}" from favorites'
+              : '"${food.name}" favorited — it now sits at the top',
+        ),
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        duration: const Duration(seconds: 2),
+      ),
+    );
   }
 
   Future<void> _logFood(RecentFood food) async {
@@ -160,6 +187,28 @@ class _RecentFoodsScreenState extends State<RecentFoodsScreen> {
             ),
           ),
 
+          // Tag filter row: All · ★ · the derived categories. Only when there
+          // is anything saved — an empty list gets nothing but the empty state.
+          if (RecentFoodService.instance.foods.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
+              child: SizedBox(
+                height: 34,
+                child: ListView(
+                  scrollDirection: Axis.horizontal,
+                  children: [
+                    _tagChip('All', null, isDark),
+                    const SizedBox(width: 8),
+                    _tagChip('★ Favorites', '★', isDark),
+                    for (final tag in RecentFood.tags) ...[
+                      const SizedBox(width: 8),
+                      _tagChip(tag, tag, isDark),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+
           // Stats header
           if (foods.isNotEmpty)
             Padding(
@@ -176,7 +225,7 @@ class _RecentFoodsScreenState extends State<RecentFoodsScreen> {
                   ),
                   const Spacer(),
                   Text(
-                    'Tap to log · Swipe to delete',
+                    'Tap to log · Long-press to favorite · Swipe to delete',
                     style: TextStyle(
                       fontSize: 12,
                       color: MacroSnapTheme.textQuaternary(context),
@@ -314,6 +363,12 @@ class _RecentFoodsScreenState extends State<RecentFoodsScreen> {
             HapticFeedback.lightImpact();
             _logFood(food);
           },
+          // Long-press stars the food, per the recent-foods plan: the next
+          // scan-find is faster than typing a search.
+          onLongPress: () {
+            HapticFeedback.mediumImpact();
+            _toggleFavorite(food);
+          },
           child: Container(
             padding: const EdgeInsets.all(16),
             decoration: MacroSnapTheme.habitlyCard(context),
@@ -354,6 +409,28 @@ class _RecentFoodsScreenState extends State<RecentFoodsScreen> {
                       const SizedBox(height: 3),
                       Row(
                         children: [
+                          // Category tag
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 6,
+                              vertical: 1.5,
+                            ),
+                            decoration: BoxDecoration(
+                              color: MacroSnapTheme.neonCyan.withValues(
+                                alpha: 0.12,
+                              ),
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: Text(
+                              food.tag,
+                              style: TextStyle(
+                                fontSize: 10,
+                                fontWeight: FontWeight.w700,
+                                color: MacroSnapTheme.neonCyan,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
                           // Macros
                           Text(
                             'P${food.protein.round()} · C${food.carbs.round()} · F${food.fats.round()}',
@@ -413,6 +490,39 @@ class _RecentFoodsScreenState extends State<RecentFoodsScreen> {
                 ),
               ],
             ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// One chip in the filter row. [value] null means "All"; '★' means the
+  /// favorites filter, everything else is a derived [RecentFood.tag].
+  Widget _tagChip(String label, String? value, bool isDark) {
+    final selected = value == null
+        ? _activeTag == null
+        : (_activeTag == value);
+    return GestureDetector(
+      onTap: () => setState(() => _activeTag = value),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+        decoration: BoxDecoration(
+          color: selected
+              ? MacroSnapTheme.neonGreen
+              : (isDark
+                    ? Colors.white.withValues(alpha: 0.08)
+                    : Colors.black.withValues(alpha: 0.05)),
+          borderRadius: BorderRadius.circular(20),
+        ),
+        alignment: Alignment.center,
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 12.5,
+            fontWeight: FontWeight.w800,
+            color: selected
+                ? Colors.black
+                : (isDark ? Colors.white70 : const Color(0xFF475569)),
           ),
         ),
       ),

@@ -1,6 +1,6 @@
 # MacroSnap → Firestore Migration Design
 
-> Status: **In progress.** Phases 1–2 done (backend dual-write `macro-snap-backend/firestore.js`,
+> Status: **In progress.** Phases 1–2 done (backend dual-write `backend/firestore.js`,
 > `backfill_firestore.js`). **Phase 3 (app swap) implemented:** `MealSyncService` now reads/writes
 > Firestore directly (`meals/{id}`, `habitData/{uid}`) keyed by Firebase Auth UID;
 > `SubscriptionService.verifyServerSubscription` reads `users/{uid}.subscribed` with a
@@ -14,7 +14,7 @@ MacroSnap already uses **Firebase Authentication** for all sign-in methods
 (phone OTP, Google, email/password). What lives on a third-party backend today
 is the **user data layer**:
 
-- `macro-snap-backend/server.js` — Node/Express on Railway
+- `backend/server.js` — Node/Express on Railway
 - **PostgreSQL** database (tables: `users`, `meals`, `habit_data`,
   `subscriptions`, `payments`)
 
@@ -197,7 +197,7 @@ Each phase is independently shippable; phases 1–2 are zero-risk.
 
 ### Phase 1 — Backend dual-write (reversible)
 
-- Add `firebase-admin` to `macro-snap-backend` (service-account credential via
+- Add `firebase-admin` to `backend/` (service-account credential via
   env var, e.g. `GOOGLE_APPLICATION_CREDENTIALS_JSON`).
 - Every Postgres write also writes to Firestore with identical data:
   - `/register` → `users/{uid}` + `userIndex/{identifier}`

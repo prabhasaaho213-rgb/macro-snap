@@ -46,6 +46,15 @@ jobs:
       - name: Get dependencies
         run: flutter pub get
 
+      # Gates run BEFORE the signed artifacts, so a tag can never publish a
+      # build that fails static analysis or the test suite. Codemagic already
+      # runs both; this workflow used to publish whatever compiled.
+      - name: Analyze
+        run: flutter analyze
+
+      - name: Test
+        run: flutter test
+
       - name: Build AAB (release)
         run: flutter build appbundle --release
 

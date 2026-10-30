@@ -1,16 +1,22 @@
 import 'package:flutter/material.dart';
+import 'package:share_plus/share_plus.dart' show Share;
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../core/haptics.dart';
 import '../core/theme.dart';
 import '../models/bmi.dart';
 import '../models/diet_profile.dart';
 import '../services/meal_sync_service.dart';
+import '../services/referral_service.dart';
 import '../services/subscription_service.dart';
 import '../widgets/animations.dart';
 import '../widgets/badge_board.dart';
+import '../widgets/pro_badge.dart';
 import 'bmi_screen.dart';
 import 'diet_plan_screen.dart';
+import 'referral_screen.dart';
+import 'settings_screen.dart' show deleteAccountFlow;
 import 'subscription_screen.dart';
 
 /// The one place that answers "what does the app know about me?" — name,
@@ -197,6 +203,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         ),
                         const SizedBox(height: 16),
                         AnimatedEntrance(
+                          delayMs: 110,
+                          child: _buildQuickActionsCard(context, isDark),
+                        ),
+                        const SizedBox(height: 16),
+                        AnimatedEntrance(
                           delayMs: 130,
                           child: const BadgeBoard(),
                         ),
@@ -236,6 +247,145 @@ class _ProfileScreenState extends State<ProfileScreen> {
       decoration: MacroSnapTheme.habitlyCard(context),
       child: child,
     );
+  }
+
+  // ─── QUICK ACTIONS ──────────────────────────────────────────────
+  //
+  // The brainstorm flagged Profile as the one screen that answers "what does
+  // the app know about me", but its most-used tasks still hid inside Settings
+  // or a dialog. These are the shortcuts: name edit, referral code, invite,
+  // account deletion and the privacy/support page — all one tap from the top
+  // of the tab.
+  Widget _buildQuickActionsCard(BuildContext context, bool isDark) {
+    return _card(
+      context,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _sectionTitle(context, 'QUICK ACTIONS', isDark),
+          const SizedBox(height: 12),
+          // Wrap, not Row: tiles must wrap onto a second line on a 320 dp
+          // phone at 2x system text instead of overflowing.
+          Wrap(
+            spacing: 10,
+            runSpacing: 10,
+            children: [
+              _quickActionTile(
+                Icons.edit_rounded,
+                'Edit name',
+                isDark,
+                _editName,
+              ),
+              _quickActionTile(
+                Icons.card_giftcard_rounded,
+                'Referral code',
+                isDark,
+                () async {
+                  await Navigator.push(
+                    context,
+                    habitFlowRoute(const ReferralScreen()),
+                  );
+                },
+              ),
+              _quickActionTile(
+                Icons.share_rounded,
+                'Invite friends',
+                isDark,
+                _inviteFriends,
+              ),
+              _quickActionTile(
+                Icons.privacy_tip_outlined,
+                'Terms & Support',
+                isDark,
+                _openPrivacy,
+              ),
+              _quickActionTile(
+                Icons.delete_forever_outlined,
+                'Delete account',
+                isDark,
+                () async {
+                  await deleteAccountFlow(context, isDark: isDark);
+                },
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _quickActionTile(
+    IconData icon,
+    String label,
+    bool isDark,
+    VoidCallback onTap,
+  ) {
+    return ScaleOnPress(
+      onTap: () {
+        Haptics.tap();
+        onTap();
+      },
+      scaleAmount: 0.94,
+      child: Container(
+        width: 92,
+        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 4),
+        decoration: BoxDecoration(
+          color: MacroSnapTheme.neonCyan.withValues(alpha: 0.08),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: MacroSnapTheme.neonCyan.withValues(alpha: 0.22),
+          ),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, color: MacroSnapTheme.neonCyan, size: 22),
+            const SizedBox(height: 6),
+            Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 10.5,
+                fontWeight: FontWeight.w700,
+                color: isDark ? Colors.white70 : const Color(0xFF475569),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Shares the standard invite text with this account's referral code. The
+  /// code is generated server-side (same call the Referral screen uses, which
+  /// is idempotent), so a fresh code isn't minted here.
+  Future<void> _inviteFriends() async {
+    final playLink =
+        'https://play.google.com/store/apps/details?id=com.macrosnap.macro_snap';
+    try {
+      final code = await ReferralService.generateCode();
+      await Share.share(
+        'Get 30 days of MacroSnap Pro — free.\n\n'
+        'Download MacroSnap and enter my code: $code\n'
+        '$playLink\n\n'
+        'Snap a photo of your food, get calories and protein in seconds.',
+      );
+    } catch (_) {
+      // No code (guest/offline) — invite without one rather than nothing.
+      await Share.share(
+        'Snap a photo of your food, get calories and macros in seconds.\n\n'
+        'Download MacroSnap: $playLink',
+      );
+    }
+  }
+
+  Future<void> _openPrivacy() async {
+    final uri = Uri.parse('https://prabhasaaho213-rgb.github.io/macro-snap/');
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    }
   }
 
   Widget _buildIdentityCard(BuildContext context, bool isDark) {
@@ -491,14 +641,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
       onTap: () async {
         Haptics.tap();
         // BMI is Pro: free users land on the paywall instead of the
-        // calculator — same rule as the AI meal plan.
-        if (!SubscriptionService.instance.isSubscribed) {
+        // calculator — same rule as the AI meal plan. unlocksPro() also
+        // admits the admin's lifetime grant, so the owner never sees the
+        // paywall here.
+        if (!await SubscriptionService.instance.unlocksPro()) {
+          if (!context.mounted) return;
           await Navigator.push(
             context,
             habitFlowRoute(const SubscriptionScreen()),
           );
           return;
         }
+        if (!context.mounted) return;
         await Navigator.push(context, habitFlowRoute(const BmiScreen()));
         await DietPlanService.instance.load();
         if (mounted) setState(() {});
@@ -534,28 +688,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
                               : const Color(0xFF1A1A1A),
                         ),
                       ),
+                      // ProBadge audit: Pro marks must all be ONE shared chip,
+                      // not a screen-invented orange variant.
                       if (!_subscribed)
                         Container(
-                          margin: const EdgeInsets.only(left: 6),
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 5,
-                            vertical: 1.5,
-                          ),
-                          decoration: BoxDecoration(
-                            color: MacroSnapTheme.neonOrange.withValues(
-                              alpha: 0.15,
-                            ),
-                            borderRadius: BorderRadius.circular(6),
-                          ),
-                          child: Text(
-                            'PRO',
-                            style: TextStyle(
-                              fontSize: 8.5,
-                              fontWeight: FontWeight.w900,
-                              letterSpacing: 0.5,
-                              color: MacroSnapTheme.neonOrange,
-                            ),
-                          ),
+                          margin: const EdgeInsets.only(left: 8),
+                          child: const ProBadge(),
                         ),
                     ],
                   ),

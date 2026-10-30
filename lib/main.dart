@@ -8,6 +8,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'app.dart';
 import 'services/currency_service.dart';
+import 'services/meal_image_store.dart';
+import 'services/nav_ab_test.dart';
 import 'services/meal_store.dart';
 import 'models/diet_profile.dart';
 import 'services/notification_service.dart';
@@ -111,6 +113,13 @@ Future<void> _bootstrap() async {
     _guardStartup(
       () => CurrencyService.instance.refresh(),
       'CurrencyService.refresh',
+    ),
+    // Which bottom-nav design this install draws for the A/B test — and how
+    // long meal photos are kept, both plain prefs reads.
+    _guardStartup(() => NavAbTest.instance.load(), 'NavAbTest.load'),
+    _guardStartup(
+      () => MealImageStore.loadRetention(),
+      'MealImageStore.loadRetention',
     ),
   ]);
 

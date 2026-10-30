@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'package:flutter_timezone/flutter_timezone.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// One currency, and the reference rate used to re-label an INR price in it.
@@ -45,9 +46,10 @@ class Currency {
 /// close approximation rather than a quote; being roughly right beats showing
 /// a rupee sign to someone who has never held a rupee.
 ///
-/// The country comes from the device locale, with one correction: a phone
-/// number from India wins, because an Indian account using an `en_US` locale
-/// (very common) must still be quoted in rupees.
+/// The country comes from the device locale, with two corrections: the
+/// device's IANA timezone (`Asia/Kolkata`), because a phone imported with an
+/// `en_US` locale while sitting in India must still be quoted in rupees, and a
+/// phone number from India, which settles the question outright.
 class CurrencyService {
   CurrencyService._();
   static final CurrencyService instance = CurrencyService._();
@@ -68,6 +70,71 @@ class CurrencyService {
   /// so that stays the floor rather than inventing dollars for an unknown
   /// user.
   static const String defaultCountry = 'IN';
+
+  /// Test seam: force the device's IANA timezone instead of asking the
+  /// platform. Set to null again to go back to real detection.
+  @visibleForTesting
+  static String? timezoneOverride;
+
+  /// The device's IANA timezone name (`Asia/Kolkata`), cached by [refresh];
+  /// null until then or when the platform could not report one.
+  String? _timezone;
+
+  /// Prefs key for the market the user PICKED in Settings (a two-letter
+  /// country code). Absent = auto-detection.
+  static const String marketPrefKey = 'price_market';
+
+  /// The picked market, cached; null until [refresh] reads it (or the user has
+  /// never picked one — the normal case).
+  String? _marketOverride;
+
+  /// The markets Settings offers in the picker, label + ISO code — a curated
+  /// set of where buyers actually live, not every country on earth. First
+  /// entry is "Auto", which is how the service behaves without a pick.
+  static const List<(String, String?)> markets = [
+    ('Auto (detected)', null),
+    ('India · ₹', 'IN'),
+    ('United States · \u0024', 'US'),
+    ('United Kingdom · \u00A3', 'GB'),
+    ('Eurozone · \u20AC', 'DE'),
+    ('Canada · CA\u0024', 'CA'),
+    ('Australia · A\u0024', 'AU'),
+    ('UAE · AED', 'AE'),
+    ('Saudi Arabia · SAR', 'SA'),
+    ('Singapore · S\u0024', 'SG'),
+    ('Japan · \u00A5', 'JP'),
+    ('Korea · \u20A9', 'KR'),
+    ('Brazil · R\u0024', 'BR'),
+    ('Nigeria · \u20A6', 'NG'),
+    ('South Africa · R', 'ZA'),
+    ('Mexico · MX\u0024', 'MX'),
+  ];
+
+  /// Persists the user's market pick. [code] null clears it (back to auto).
+  /// Applied immediately: the next price label build shows it.
+  Future<void> setMarket(String? code) async {
+    _marketOverride = (code == null || code.isEmpty) ? null : code.toUpperCase();
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      if (_marketOverride == null) {
+        await prefs.remove(marketPrefKey);
+      } else {
+        await prefs.setString(marketPrefKey, _marketOverride!);
+      }
+    } catch (_) {
+      // No prefs — the session keeps the pick anyway.
+    }
+  }
+
+  /// A short label for Settings' subtitle. Null = auto-detection.
+  String? get marketLabel {
+    final code = _marketOverride;
+    if (code == null) return null;
+    for (final (label, c) in markets) {
+      if (c == code) return label.split(' · ').first;
+    }
+    return code;
+  }
 
   /// Reference rates: INR per one unit of the currency. Update the table when
   /// the rates drift far enough that the label stops being a fair warning.
@@ -283,24 +350,41 @@ class CurrencyService {
   String? _phone;
 
   /// Call once at startup (before the first paywall can open) so an Indian
-  /// account with an `en_US` locale is quoted in rupees.
+  /// account with an `en_US` locale is quoted in rupees, and so a market the
+  /// user picked is already in force.
   Future<void> refresh() async {
     try {
       final prefs = await SharedPreferences.getInstance();
       _phone = prefs.getString('phone');
+      _marketOverride = prefs.getString(marketPrefKey);
     } catch (_) {
       // No prefs (or a test harness without a binding) — locale still resolves.
     }
+    try {
+      _timezone = timezoneOverride ??
+          (await FlutterTimezone.getLocalTimezone()).identifier;
+    } catch (_) {
+      // No platform plugin (a pure Dart test, an unsupported platform): the
+      // timezone signal is simply absent and the other signals decide.
+    }
   }
 
-  /// The country the price should be quoted in.
+  /// The country the price should be quoted in, in priority order: an
+  /// explicit pick in Settings wins (a traveler who wants prices in their
+  /// own money regardless of where their locale points), then the Indian
+  /// phone number, then the device timezone, then the device locale.
   String get countryCode {
     final override = countryOverride;
     if (override != null && override.isNotEmpty) return override.toUpperCase();
+    final picked = _marketOverride;
+    if (picked != null && picked.isNotEmpty) return picked.toUpperCase();
     // An Indian number is the strongest signal we have: this is an Indian
     // account whatever the phone's locale happens to be set to.
     final phone = _phone;
     if (phone != null && _looksIndian(phone)) return 'IN';
+    // Physical location beats locale: a phone imported with an en_US locale
+    // while actually sitting in India still reads rupees.
+    if (_inIndiaTimezone) return 'IN';
     return _deviceCountry() ?? defaultCountry;
   }
 
@@ -319,6 +403,18 @@ class CurrencyService {
     if (digits.length == 10) return digits.isNotEmpty;
     if (digits.startsWith('91')) return true;
     return phone.startsWith('+91');
+  }
+
+  /// True when this device's timezone is India's.
+  ///
+  /// This asks for the IANA zone name (`Asia/Kolkata`) rather than the raw
+  /// UTC offset: Sri Lanka is also UTC+05:30, so an offset check quoted
+  /// Colombo's users in rupees. `Asia/Calcutta` is the legacy alias some
+  /// Android builds still report and covers the same place.
+  bool get _inIndiaTimezone {
+    final tz = _timezone;
+    if (tz == null || tz.isEmpty) return false;
+    return tz == 'Asia/Kolkata' || tz == 'Asia/Calcutta';
   }
 
   /// The device's region, from the primary locale or the first preferred one

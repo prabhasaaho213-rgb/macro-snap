@@ -8,6 +8,7 @@ import '../models/meal_record.dart';
 import 'account_partition.dart';
 import 'badge_service.dart';
 import 'meal_image_store.dart';
+import 'meal_photo_sync.dart';
 import 'meal_sync_service.dart';
 import 'crash_reporting.dart';
 
@@ -143,18 +144,44 @@ class MealStore {
       if (cloudMeals.isEmpty) return;
       final localIds = _meals.map((m) => m.id).toSet();
       bool added = false;
+      final mergedIds = <String>[];
       for (final meal in cloudMeals) {
         if (!localIds.contains(meal.id)) {
           _meals.add(meal);
+          mergedIds.add(meal.id);
           added = true;
         }
       }
       if (added) {
         await _save();
+        await _restoreCloudPhotos(mergedIds);
       }
     } catch (e, st) {
       logError('MealStore._doSyncFromCloud', e, st);
     } // Silently fail — local data is primary
+  }
+
+  /// Brings cloud-backed photos down for meals this device had never seen.
+  /// Runs after the meal merge, only for meals that were just restored and
+  /// still lack a local photo: a fresh device shows the meal immediately,
+  /// and the picture arrives moments later without blocking the load.
+  /// Pro + toggle are checked inside [MealPhotoSyncService.enabled].
+  Future<void> _restoreCloudPhotos(List<String> mealIds) async {
+    var changed = false;
+    for (final id in mealIds) {
+      final index = _meals.indexWhere((m) => m.id == id);
+      if (index < 0) continue;
+      final meal = _meals[index];
+      if (meal.imagePath != null && meal.imagePath!.isNotEmpty) continue;
+      final path = await MealPhotoSyncService.downloadForMeal(meal);
+      if (path == null) continue;
+      _meals[index] = _meals[index].withImagePath(path);
+      changed = true;
+    }
+    if (changed) {
+      await _save();
+      changeNotifier.value++;
+    }
   }
 
   Future<void> add(MealRecord meal) async {
@@ -170,6 +197,10 @@ class MealStore {
     unawaited(BadgeService.instance.noteMealLogged(_meals.length));
     // Async sync to cloud (fire-and-forget)
     MealSyncService.syncMeal(meal);
+    // Photo backup rides on the log (fire-and-forget, Pro + toggle gated):
+    // uploading here is what makes "Keep forever (Pro)" survive a phone
+    // change, not only longer local retention.
+    unawaited(MealPhotoSyncService.uploadForMeal(meal));
   }
 
   Future<void> remove(String id) async {
@@ -184,6 +215,9 @@ class MealStore {
     unawaited(MealImageStore.instance.remove(imagePath));
     // Async remove from cloud (fire-and-forget)
     MealSyncService.removeMeal(id);
+    // The cloud copy goes with the meal too — the same "a kept picture is
+    // just someone's food on a server" rule as the local one.
+    unawaited(MealPhotoSyncService.removeForMeal(id));
   }
 
   /// Deletes every meal photo past its 24-hour life and strips the dead path

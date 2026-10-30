@@ -8,7 +8,6 @@ import '../navigation/route_observer.dart';
 import '../services/meal_store.dart';
 import '../models/meal_record.dart';
 import '../services/scan_gate.dart';
-import '../services/meal_streak_service.dart';
 import '../services/subscription_service.dart';
 import '../models/diet_profile.dart';
 import '../models/bmi.dart';
@@ -50,8 +49,6 @@ class _HomeScreenState extends State<HomeScreen>
   late Animation<double> _fadeAnim;
   late Animation<Offset> _slideAnim;
   String _name = '';
-  int _streak = 0;
-  int _bestStreak = 0;
   int _scansLeft = 3;
   bool _previousGoalMet = false; // Track to detect transition to goal-met
 
@@ -86,6 +83,20 @@ class _HomeScreenState extends State<HomeScreen>
     // correct on the first frame; _loadAll() and the listener keep it current.
     _guruUnlocked = SubscriptionService.instance.isSubscribed;
     _loadAll();
+    // The admin's lifetime grant often lands after the first frame (Firebase
+    // restores the session asynchronously) — re-check the claim so the owner
+    // gets the assistant, not the paywall, on a cold start.
+    unawaited(_resolveGuruUnlock());
+  }
+
+  /// Confirms the Guru unlock against the admin claim. Cached after the first
+  /// read per process; a no-op once Pro is already true.
+  Future<void> _resolveGuruUnlock() async {
+    if (SubscriptionService.instance.isSubscribed) return;
+    final admin = await SubscriptionService.instance.isAdmin();
+    if (admin && mounted && !_guruUnlocked) {
+      setState(() => _guruUnlocked = true);
+    }
   }
 
   @override
@@ -116,6 +127,10 @@ class _HomeScreenState extends State<HomeScreen>
     setState(() {
       _guruUnlocked = SubscriptionService.instance.isSubscribed;
     });
+    // Pro fell OFF between reads (a windowed grant expiring) while the admin
+    // grant may not have been applied yet — re-check the claim so the owner
+    // never sees the lock return.
+    unawaited(_resolveGuruUnlock());
   }
 
   Future<void> _refreshName() async {
@@ -180,16 +195,12 @@ class _HomeScreenState extends State<HomeScreen>
     await SubscriptionService.instance.load();
     final prefs = await SharedPreferences.getInstance();
     final name = prefs.getString('name') ?? '';
-    final streak = await MealStreakService.getCurrent();
-    final best = await MealStreakService.getBest();
     // Local estimate first (today's remainder, reset on the IST day boundary).
     final scans = await ScanGate.getScansRemaining();
 
     if (!mounted) return;
     setState(() {
       _name = name;
-      _streak = streak;
-      _bestStreak = best;
       _scansLeft = scans;
       _guruUnlocked = SubscriptionService.instance.isSubscribed;
     });
@@ -257,17 +268,26 @@ class _HomeScreenState extends State<HomeScreen>
           clipBehavior: Clip.none,
           children: [
             FloatingActionButton(
-              onPressed: () => Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => _guruUnlocked
-                      // Pro (paid or in the free plan): Guru answers.
-                      ? const ChatScreen()
-                      // Free user: the backend would refuse every turn, so open
-                      // the plans instead of a chat that cannot reply.
-                      : const SubscriptionScreen(),
-                ),
-              ),
+              onPressed: () async {
+                // Re-check the admin claim on tap: a cold-start owner who taps
+                // before the lifetime grant lands still gets the assistant,
+                // never the paywall. (Cached claim read — effectively free.)
+                final unlocked =
+                    _guruUnlocked ||
+                    await SubscriptionService.instance.unlocksPro();
+                if (!context.mounted) return;
+                await Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => unlocked
+                        // Pro (paid or in the free plan): Guru answers.
+                        ? const ChatScreen()
+                        // Free user: the backend would refuse every turn, so
+                        // open the plans instead of a chat that cannot reply.
+                        : const SubscriptionScreen(),
+                  ),
+                );
+              },
               tooltip: _guruUnlocked ? 'Ask Guru' : 'Ask Guru \u2014 Pro',
               backgroundColor: MacroSnapTheme.neonPink,
               child: Icon(
@@ -297,33 +317,31 @@ class _HomeScreenState extends State<HomeScreen>
               physics: const BouncingScrollPhysics(),
               slivers: [
                 SliverToBoxAdapter(child: _buildHeader(context, isDark)),
+                // The calorie ring is the first card: it is the number people
+                // open the app for. The old Meal Streak card above it was
+                // removed — the streak still lives in reminders and the
+                // week strip, just not as a home-screen slot.
                 SliverToBoxAdapter(
                   child: AnimatedEntrance(
                     delayMs: 50,
-                    child: _buildStreakCard(context, isDark),
-                  ),
-                ),
-                SliverToBoxAdapter(
-                  child: AnimatedEntrance(
-                    delayMs: 100,
                     child: _buildCalorieRing(context, isDark),
                   ),
                 ),
                 SliverToBoxAdapter(
                   child: AnimatedEntrance(
-                    delayMs: 150,
+                    delayMs: 100,
                     child: _buildMacroBars(context, isDark),
                   ),
                 ),
                 SliverToBoxAdapter(
                   child: AnimatedEntrance(
-                    delayMs: 165,
+                    delayMs: 150,
                     child: _buildBmiCard(context, isDark),
                   ),
                 ),
                 SliverToBoxAdapter(
                   child: AnimatedEntrance(
-                    delayMs: 175,
+                    delayMs: 165,
                     child: CalorieTrendCard(
                       goalCalories:
                           DietPlanService.instance.profile?.targetCalories ??
@@ -333,19 +351,19 @@ class _HomeScreenState extends State<HomeScreen>
                 ),
                 SliverToBoxAdapter(
                   child: AnimatedEntrance(
-                    delayMs: 200,
+                    delayMs: 175,
                     child: _buildWeekStrip(context, isDark),
                   ),
                 ),
                 SliverToBoxAdapter(
                   child: AnimatedEntrance(
-                    delayMs: 250,
+                    delayMs: 200,
                     child: _buildQuickActions(context, isDark),
                   ),
                 ),
                 SliverToBoxAdapter(
                   child: AnimatedEntrance(
-                    delayMs: 300,
+                    delayMs: 250,
                     child: _buildRecentMeals(context, isDark),
                   ),
                 ),

@@ -1,13 +1,19 @@
 package com.macrosnap.macro_snap
 
 import android.content.ActivityNotFoundException
+import android.content.ContentValues
 import android.content.Intent
+import android.media.MediaScannerConnection
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
+import android.os.Environment
+import android.provider.MediaStore
 import androidx.core.view.WindowCompat
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
+import java.io.File
 
 /**
  * Main entry point for MacroSnap.
@@ -37,8 +43,71 @@ class MainActivity : FlutterActivity() {
         ).setMethodCallHandler { call, result ->
             when (call.method) {
                 "openPlayStore" -> result.success(openPlayStore())
+                "saveToGallery" -> result.success(saveToGallery(call.argument<String>("path")))
                 else -> result.notImplemented()
             }
+        }
+    }
+
+    /**
+     * Copies a local image file into the device's photo gallery — how a
+     * meal's photo gets an explicit "Save to Gallery" button without a
+     * gallery-saver plugin (the dependency freeze means a MethodChannel is
+     * both lighter and free).
+     *
+     * API 29+ inserts through MediaStore under Pictures/MacroSnap; until Q
+     * the file is written into the public Pictures folder and indexed by a
+     * MediaScanner pass. Returns false (never throws) when the file is
+     * missing or the insert fails, so Dart can show an honest error.
+     */
+    private fun saveToGallery(path: String?): Boolean {
+        if (path == null) return false
+        val file = File(path)
+        if (!file.exists()) return false
+        val name = "MacroSnap_" + System.currentTimeMillis() + ".jpg"
+        return try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                val resolver = applicationContext.contentResolver
+                val values = ContentValues().apply {
+                    put(MediaStore.Images.Media.DISPLAY_NAME, name)
+                    put(MediaStore.Images.Media.MIME_TYPE, "image/jpeg")
+                    put(
+                        MediaStore.Images.Media.RELATIVE_PATH,
+                        Environment.DIRECTORY_PICTURES + "/MacroSnap",
+                    )
+                    put(MediaStore.Images.Media.IS_PENDING, 1)
+                }
+                val uri = resolver.insert(
+                    MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
+                    values,
+                ) ?: return false
+                resolver.openOutputStream(uri)?.use { out ->
+                    file.inputStream().use { it.copyTo(out) }
+                } ?: return false
+                values.clear()
+                values.put(MediaStore.Images.Media.IS_PENDING, 0)
+                resolver.update(uri, values, null, null)
+                true
+            } else {
+                val dir = File(
+                    Environment.getExternalStoragePublicDirectory(
+                        Environment.DIRECTORY_PICTURES,
+                    ),
+                    "MacroSnap",
+                )
+                if (!dir.exists()) dir.mkdirs()
+                val dest = File(dir, name)
+                file.copyTo(dest, overwrite = true)
+                MediaScannerConnection.scanFile(
+                    applicationContext,
+                    arrayOf(dest.absolutePath),
+                    arrayOf("image/jpeg"),
+                    null,
+                )
+                true
+            }
+        } catch (_: Exception) {
+            false
         }
     }
 

@@ -49,7 +49,11 @@ class _DietPlanScreenState extends State<DietPlanScreen> {
     await DietPlanService.instance.load();
     final p = DietPlanService.instance.profile;
     await SubscriptionService.instance.load();
-    final subscribed = SubscriptionService.instance.isSubscribed;
+    // The admin's lifetime grant: the claim check is cached per process, so
+    // this stays cheap while keeping the label truthful on a cold start.
+    final subscribed =
+        SubscriptionService.instance.isSubscribed ||
+        await SubscriptionService.instance.isAdmin();
     if (mounted) {
       setState(() => _subscribed = subscribed);
       if (p != null) {
@@ -214,13 +218,17 @@ class _DietPlanScreenState extends State<DietPlanScreen> {
 
   Future<void> _generateAiPlan() async {
     if (_profile == null) return;
-    if (!_subscribed) {
+    // unlocksPro() also admits the admin's lifetime grant, so the owner
+    // never gets routed to the paywall from here.
+    if (!await SubscriptionService.instance.unlocksPro()) {
+      if (!mounted) return;
       Navigator.push(
         context,
         MaterialPageRoute(builder: (_) => const SubscriptionScreen()),
       );
       return;
     }
+    if (!mounted) return;
     setState(() {
       _generating = true;
       _aiError = '';

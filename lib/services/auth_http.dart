@@ -60,6 +60,9 @@ class AuthHttp {
   static Future<http.Response> get(Uri url, {Map<String, String>? headers}) =>
       _send((h) => client.get(url, headers: h), headers);
 
+  static Future<http.Response> delete(Uri url, {Map<String, String>? headers}) =>
+      _send((h) => client.delete(url, headers: h), headers);
+
   static Future<http.Response> post(
     Uri url, {
     Map<String, String>? headers,
