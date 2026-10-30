@@ -127,7 +127,7 @@ class RazorpayService {
       final key = created['razorpay_key'];
       if (key is! String || key.isEmpty) {
         // No publishable key from the server → the native sheet cannot open.
-        return _openHostedPage(subscriptionId);
+        return await _openHostedPage(subscriptionId);
       }
 
       final pending = Completer<PaymentResult>();
@@ -154,11 +154,17 @@ class RazorpayService {
         // Some SDK versions throw instead of reporting the recurrence bug.
         debugPrint('Razorpay checkout could not open ($e) — using hosted page');
         _pending = null;
-        return _openHostedPage(subscriptionId);
+        return await _openHostedPage(subscriptionId);
       }
       // Safety valve: some SDK builds close the sheet without firing either
       // callback, which would leave the caller's button spinning forever.
-      return pending.future.timeout(
+      //
+      // Awaited so `finally` clears `_starting` when the checkout actually
+      // resolves rather than the instant the sheet opens: while this future
+      // is in flight a second tap gets the "payment already in progress"
+      // guard, exactly as it does in the native-sheet path (where `_pending`
+      // does that job).
+      return await pending.future.timeout(
         const Duration(minutes: 10),
         onTimeout: () {
           _pending = null;

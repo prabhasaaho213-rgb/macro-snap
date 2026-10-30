@@ -119,7 +119,10 @@ class MealPhotoSyncService {
       final body = jsonDecode(utf8.decode(res.bodyBytes));
       final data = body is Map ? body['data'] : null;
       if (data is! String || data.isEmpty) return null;
-      return MealImageStore.instance.saveBytes(
+      // Awaited so a storage failure lands in the catch below (logged, then
+      // null) instead of escaping the caller as an unhandled async error —
+      // the whole point of this try block.
+      return await MealImageStore.instance.saveBytes(
         mealId: meal.id,
         bytes: base64Decode(data),
         at: meal.date,
