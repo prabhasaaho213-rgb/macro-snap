@@ -4,9 +4,34 @@ import 'package:mobile_scanner/mobile_scanner.dart';
 import '../core/theme.dart';
 import '../models/meal_record.dart';
 import '../services/barcode_db.dart';
+import '../services/barcode_lookup.dart';
 import '../services/meal_store.dart';
+import '../widgets/animations.dart';
 import '../widgets/glass_card.dart';
 import '../widgets/gradient_button.dart';
+import 'manual_barcode_entry_screen.dart';
+
+/// Turns a barcode product plus a portion into the meal that gets logged.
+///
+/// Barcode nutrition is always per 100 g, so everything is scaled by the eaten
+/// weight — logging the raw per-100 g numbers was wrong for every packet that
+/// is not eaten a whole 100 g at a time. Pure, so the arithmetic is testable
+/// without a camera.
+MealRecord mealFromBarcode(BarcodeFood food, int grams, {DateTime? now}) {
+  final ratio = grams / 100.0;
+  return MealRecord(
+    id: 'barcode_${(now ?? DateTime.now()).millisecondsSinceEpoch}',
+    date: now ?? DateTime.now(),
+    name: food.name,
+    category: food.brand,
+    calories: (food.caloriesPer100g * ratio).round(),
+    protein: food.proteinPer100g * ratio,
+    carbs: food.carbsPer100g * ratio,
+    fats: food.fatsPer100g * ratio,
+    fiber: food.fiberPer100g * ratio,
+    serving: '${grams}g',
+  );
+}
 
 class BarcodeScanScreen extends StatefulWidget {
   const BarcodeScanScreen({super.key});
@@ -19,168 +44,86 @@ class _BarcodeScanScreenState extends State<BarcodeScanScreen> {
   BarcodeFood? _found;
   bool _scanning = true;
 
+  /// Set while a barcode is being resolved. Also stops the scanner for that
+  /// moment, so one package does not fire five lookups and five dialogs.
+  bool _lookingUp = false;
+  String? _pendingCode;
+
+  /// How many grams were eaten. Barcode nutrition is per 100 g, but a packet
+  /// is never eaten a full 100 g at a time — without this the meal was logged
+  /// as exactly 100 g every single scan, with no way to correct it.
+  final TextEditingController _gramsCtrl = TextEditingController(text: '100');
+
+  @override
+  void dispose() {
+    _gramsCtrl.dispose();
+    super.dispose();
+  }
+
+  /// Parsed portion, clamped to something a single meal can plausibly be.
+  int get _grams {
+    final typed = int.tryParse(_gramsCtrl.text.trim()) ?? 100;
+    return typed.clamp(1, 2000);
+  }
+
+  double get _ratio => _grams / 100.0;
+
+  void _setGrams(int grams) {
+    setState(() => _gramsCtrl.text = grams.toString());
+    HapticFeedback.selectionClick();
+  }
+
   void _onDetect(BarcodeCapture capture) {
-    if (!_scanning) return;
-    final barcode = capture.barcodes.firstOrNull?.rawValue;
-    if (barcode == null) return;
-    final food = BarcodeDb.lookup(barcode);
-    if (food != null && mounted) {
+    if (!_scanning || _lookingUp) return;
+    final code = capture.barcodes.firstOrNull?.rawValue;
+    if (code == null || code.trim().isEmpty) return;
+    _resolve(code.trim());
+  }
+
+  /// Bundled table → Open Food Facts → manual entry.
+  ///
+  /// The bundled table only ever held a few dozen products, so nearly every
+  /// real package used to land on "Product Not Found" with no way out. The
+  /// remote lookup is what makes scanning work on an arbitrary label.
+  Future<void> _resolve(String code) async {
+    setState(() {
+      _scanning = false;
+      _lookingUp = true;
+      _pendingCode = code;
+    });
+    HapticFeedback.mediumImpact();
+
+    final food = await BarcodeService.lookup(code);
+    if (!mounted) return;
+
+    if (food != null) {
       HapticFeedback.heavyImpact();
       setState(() {
         _found = food;
-        _scanning = false;
+        _lookingUp = false;
       });
-    } else if (mounted) {
-      // Barcode not in DB — show manual entry
-      setState(() {
-        _found = null;
-        _scanning = false;
-      });
-      _showManualEntry(barcode);
+      return;
     }
+
+    setState(() => _lookingUp = false);
+    final manual = await Navigator.push<BarcodeFood>(
+      context,
+      habitFlowRoute<BarcodeFood>(ManualBarcodeEntryScreen(barcode: code)),
+    );
+    if (!mounted) return;
+    setState(() {
+      _found = manual;
+      // Cancel means "scan something else", not a dead end.
+      _scanning = manual == null;
+      _pendingCode = null;
+    });
   }
 
   Future<void> _log() async {
-    if (_found == null) return;
-    MealStore.instance.add(
-      MealRecord(
-        id: 'barcode_${DateTime.now().millisecondsSinceEpoch}',
-        date: DateTime.now(),
-        name: _found!.name,
-        category: _found!.brand,
-        calories: (_found!.caloriesPer100g).round(),
-        protein: _found!.proteinPer100g,
-        carbs: _found!.carbsPer100g,
-        fats: _found!.fatsPer100g,
-        fiber: _found!.fiberPer100g,
-        serving: '100g',
-      ),
-    );
+    final food = _found;
+    if (food == null) return;
+    MealStore.instance.add(mealFromBarcode(food, _grams));
     if (mounted) Navigator.pop(context);
-  }
-
-  Future<void> _showManualEntry(String barcode) async {
-    final nameCtrl = TextEditingController();
-    final calCtrl = TextEditingController();
-    final proCtrl = TextEditingController();
-    final carbCtrl = TextEditingController();
-    final fatCtrl = TextEditingController();
-
-    await showDialog(
-      context: context,
-      builder: (ctx) {
-        final isDark = Theme.of(context).brightness == Brightness.dark;
-        return AlertDialog(
-          backgroundColor: isDark ? MacroSnapTheme.cardDark : Colors.white,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(24),
-          ),
-          title: const Text('Product Not Found'),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  'Barcode not in our database. Enter nutrition manually:',
-                  style: TextStyle(fontSize: 13),
-                ),
-                const SizedBox(height: 14),
-                TextField(
-                  controller: nameCtrl,
-                  decoration: const InputDecoration(
-                    labelText: 'Food name',
-                    border: OutlineInputBorder(),
-                    isDense: true,
-                  ),
-                ),
-                const SizedBox(height: 10),
-                TextField(
-                  controller: calCtrl,
-                  keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(
-                    labelText: 'Calories (per 100g)',
-                    border: OutlineInputBorder(),
-                    isDense: true,
-                  ),
-                ),
-                const SizedBox(height: 10),
-                Row(
-                  children: [
-                    Expanded(
-                      child: TextField(
-                        controller: proCtrl,
-                        keyboardType: TextInputType.number,
-                        decoration: const InputDecoration(
-                          labelText: 'Protein (g)',
-                          border: OutlineInputBorder(),
-                          isDense: true,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: TextField(
-                        controller: carbCtrl,
-                        keyboardType: TextInputType.number,
-                        decoration: const InputDecoration(
-                          labelText: 'Carbs (g)',
-                          border: OutlineInputBorder(),
-                          isDense: true,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: TextField(
-                        controller: fatCtrl,
-                        keyboardType: TextInputType.number,
-                        decoration: const InputDecoration(
-                          labelText: 'Fats (g)',
-                          border: OutlineInputBorder(),
-                          isDense: true,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () {
-                Navigator.pop(ctx);
-                setState(() => _scanning = true);
-              },
-              child: const Text('Cancel'),
-            ),
-            FilledButton(
-              onPressed: () {
-                if (nameCtrl.text.trim().isEmpty) return;
-                final food = BarcodeFood(
-                  barcode: barcode,
-                  name: nameCtrl.text.trim(),
-                  brand: 'Manual Entry',
-                  caloriesPer100g: int.tryParse(calCtrl.text) ?? 0,
-                  proteinPer100g: double.tryParse(proCtrl.text) ?? 0,
-                  carbsPer100g: double.tryParse(carbCtrl.text) ?? 0,
-                  fatsPer100g: double.tryParse(fatCtrl.text) ?? 0,
-                );
-                setState(() => _found = food);
-                Navigator.pop(ctx);
-              },
-              child: const Text('Log It'),
-            ),
-          ],
-        );
-      },
-    );
-    nameCtrl.dispose();
-    calCtrl.dispose();
-    proCtrl.dispose();
-    carbCtrl.dispose();
-    fatCtrl.dispose();
   }
 
   @override
@@ -221,6 +164,33 @@ class _BarcodeScanScreenState extends State<BarcodeScanScreen> {
             ),
           ),
         ),
+        if (_lookingUp)
+          Positioned.fill(
+            child: ColoredBox(
+              color: Colors.black.withValues(alpha: 0.78),
+              child: Center(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const SizedBox(
+                      width: 34,
+                      height: 34,
+                      child: CircularProgressIndicator(strokeWidth: 3),
+                    ),
+                    const SizedBox(height: 18),
+                    Text(
+                      'Looking up ${_pendingCode ?? 'barcode'}',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
         Positioned(
           bottom: 80,
           left: 0,
@@ -291,41 +261,43 @@ class _BarcodeScanScreenState extends State<BarcodeScanScreen> {
                   ),
                 ),
                 const Divider(height: 32),
+                _amountEditor(isDark),
+                const Divider(height: 32),
                 _row(
                   'Calories',
-                  '${f.caloriesPer100g} kcal',
+                  '${(f.caloriesPer100g * _ratio).round()} kcal',
                   MacroSnapTheme.macroCalories,
                   isDark,
                 ),
                 _row(
                   'Protein',
-                  '${f.proteinPer100g.toStringAsFixed(1)}g',
+                  '${(f.proteinPer100g * _ratio).toStringAsFixed(1)}g',
                   MacroSnapTheme.macroProtein,
                   isDark,
                 ),
                 _row(
                   'Carbs',
-                  '${f.carbsPer100g.toStringAsFixed(1)}g',
+                  '${(f.carbsPer100g * _ratio).toStringAsFixed(1)}g',
                   MacroSnapTheme.macroCalories,
                   isDark,
                 ),
                 _row(
                   'Fats',
-                  '${f.fatsPer100g.toStringAsFixed(1)}g',
+                  '${(f.fatsPer100g * _ratio).toStringAsFixed(1)}g',
                   MacroSnapTheme.macroFats,
                   isDark,
                 ),
                 if (f.fiberPer100g > 0)
                   _row(
                     'Fiber',
-                    '${f.fiberPer100g.toStringAsFixed(1)}g',
+                    '${(f.fiberPer100g * _ratio).toStringAsFixed(1)}g',
                     MacroSnapTheme.greenText(context),
                     isDark,
                   ),
                 if (f.sugarPer100g > 0)
                   _row(
                     'Sugar',
-                    '${f.sugarPer100g.toStringAsFixed(1)}g',
+                    '${(f.sugarPer100g * _ratio).toStringAsFixed(1)}g',
                     const Color(0xFFDB2777),
                     isDark,
                   ),
@@ -344,6 +316,7 @@ class _BarcodeScanScreenState extends State<BarcodeScanScreen> {
                   onPressed: () => setState(() {
                     _found = null;
                     _scanning = true;
+                    _gramsCtrl.text = '100';
                   }),
                   style: FilledButton.styleFrom(
                     backgroundColor: isDark
@@ -367,6 +340,65 @@ class _BarcodeScanScreenState extends State<BarcodeScanScreen> {
           ),
         ],
       ),
+    );
+  }
+
+  /// The portion picker. A typable grams box plus the usual packet sizes, so
+  /// "I ate 30 g of this" is one tap — or a typed number for anything else.
+  Widget _amountEditor(bool isDark) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Text(
+              'Amount eaten',
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w700,
+                color: MacroSnapTheme.textPrimaryMuted(context),
+              ),
+            ),
+            const Spacer(),
+            SizedBox(
+              width: 96,
+              child: TextField(
+                controller: _gramsCtrl,
+                keyboardType: TextInputType.number,
+                textAlign: TextAlign.center,
+                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                onChanged: (_) => setState(() {}),
+                decoration: const InputDecoration(
+                  labelText: 'grams',
+                  border: OutlineInputBorder(),
+                  isDense: true,
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 10),
+        Wrap(
+          spacing: 8,
+          runSpacing: 4,
+          children: [
+            for (final grams in const [30, 50, 100, 150, 200])
+              ChoiceChip(
+                label: Text('${grams}g', style: const TextStyle(fontSize: 12)),
+                selected: _grams == grams,
+                onSelected: (_) => _setGrams(grams),
+              ),
+          ],
+        ),
+        const SizedBox(height: 6),
+        Text(
+          'Label values are per 100 g — the numbers below are for $_grams g',
+          style: TextStyle(
+            fontSize: 11.5,
+            color: MacroSnapTheme.textTertiary(context),
+          ),
+        ),
+      ],
     );
   }
 
