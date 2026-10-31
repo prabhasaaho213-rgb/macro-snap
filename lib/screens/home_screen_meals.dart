@@ -223,32 +223,6 @@ extension _HomeMeals on _HomeScreenState {
                 color: MacroSnapTheme.textSecondary(context),
               ),
             ),
-            const SizedBox(height: 14),
-            SizedBox(
-              width: double.infinity,
-              child: FilledButton.icon(
-                onPressed: () async {
-                  await Navigator.push(
-                    context,
-                    habitFlowRoute(const ScanScreen()),
-                  );
-                  if (mounted) _refresh();
-                },
-                icon: const Icon(Icons.bolt_rounded, size: 20),
-                label: const Text(
-                  'Scan your first meal',
-                  style: TextStyle(fontWeight: FontWeight.w800),
-                ),
-                style: FilledButton.styleFrom(
-                  backgroundColor: MacroSnapTheme.neonGreen,
-                  foregroundColor: Colors.black,
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                ),
-              ),
-            ),
           ],
         ),
       ),

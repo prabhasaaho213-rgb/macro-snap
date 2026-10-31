@@ -16,8 +16,6 @@ import '../models/diet_profile.dart';
 import '../widgets/glass_card.dart';
 import '../widgets/animations.dart';
 import '../services/badge_service.dart';
-import '../services/currency_service.dart';
-import '../services/meal_image_store.dart';
 import '../services/meal_store.dart';
 import '../services/meal_sync_service.dart';
 import '../services/habit_store.dart';
@@ -248,7 +246,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
           UpdatesScreen.latestVersion;
     });
     _isAdmin = await SubscriptionService.instance.isAdmin();
-    await _loadPhotoCloudSync();
     if (mounted) setState(() {});
   }
 
@@ -347,207 +344,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   Future<void> _deleteAccount(BuildContext context, bool isDark) =>
       deleteAccountFlow(context, isDark: isDark);
-
-  // ══════════════ Meal photos: retention + cloud sync ══════════════
-
-  /// The storage window the Meal Photos tile advertises.
-  String _photoRetentionLabel() {
-    return switch (MealImageStore.retentionHours) {
-      0 => 'Keep forever — Pro',
-      168 => 'Keep for 7 days',
-      720 => 'Keep for 30 days',
-      _ => 'Keep for 24 hours',
-    };
-  }
-
-  /// The Sync Meal Photos tile's subtitle, which is also its OFFER: free
-  /// users see the Pro pitch, Pro users the current state.
-  String _photoSyncSubtitle() {
-    if (!_subscribed && !_isAdmin) return 'Pro — keep photos across devices';
-    return _photoCloudSync
-        ? 'Photos upload with your meals'
-        : 'Off — photos stay on this device';
-  }
-
-  /// The retention picker. Six years of the original 24-hour rule said "a
-  /// photo of every meal is private data"; Forever re-opens that trade-off,
-  /// so it is Pro-only out of the box.
-  Future<void> _pickPhotoRetention(bool isDark) async {
-    final chosen = await showDialog<int>(
-      context: context,
-      builder: (ctx) => SimpleDialog(
-        backgroundColor: isDark ? MacroSnapTheme.cardDark : Colors.white,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Text('Keep meal photos'),
-        children: [
-          for (final option in const [
-            (24, '24 hours'),
-            (168, '7 days'),
-            (720, '30 days'),
-            (0, 'Forever (Pro)'),
-          ])
-            SimpleDialogOption(
-              onPressed: () => Navigator.pop(ctx, option.$1),
-              child: Text(option.$2),
-            ),
-        ],
-      ),
-    );
-    if (chosen == null || !mounted) return;
-    if (chosen == 0 && !_subscribed && !_isAdmin) {
-      // "Forever" stores every meal photo on the phone for good — that's
-      // the Pro promise, so a free user tapping it lands on the paywall
-      // instead of silently watering the setting down.
-      await Navigator.push(
-        context,
-        habitFlowRoute(const SubscriptionScreen()),
-      );
-      await SubscriptionService.instance.load();
-      if (mounted) setState(() => _subscribed = SubscriptionService.instance.isSubscribed);
-      return;
-    }
-    await MealImageStore.setRetentionHours(chosen);
-    if (mounted) setState(() {});
-  }
-
-  // ══════════════ Price market picker ══════════════
-
-  /// What the Price Market tile advertises: the picked market, or "Auto —
-  /// detected as India" style summary of what detection resolved.
-  String _priceMarketLabel() {
-    final picked = CurrencyService.instance.marketLabel;
-    if (picked != null) return 'Pro prices in $picked';
-    return 'Auto — ${CurrencyService.instance.countryCode} detected';
-  }
-
-  /// The market picker. The charge NEVER moves — Razorpay bills INR no matter
-  /// what — so the dialog says exactly that; the pick only changes which
-  /// currency the labels display.
-  Future<void> _pickPriceMarket(bool isDark) async {
-    final chosen = await showDialog<String>(
-      context: context,
-      builder: (ctx) => SimpleDialog(
-        backgroundColor: isDark ? MacroSnapTheme.cardDark : Colors.white,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Text('Show Pro prices in'),
-        children: [
-          const Padding(
-            padding: EdgeInsets.fromLTRB(24, 0, 24, 8),
-            child: Text(
-              'The charge is always \u20B949 INR — this only changes the '
-              'currency the price is displayed in.',
-              style: TextStyle(fontSize: 12.5, height: 1.4),
-            ),
-          ),
-          for (final (label, code) in CurrencyService.markets)
-            SimpleDialogOption(
-              onPressed: () => Navigator.pop(
-                ctx,
-                code ?? '',
-              ),
-              child: Text(label),
-            ),
-        ],
-      ),
-    );
-    if (chosen == null || !mounted) return;
-    await CurrencyService.instance.setMarket(chosen.isEmpty ? null : chosen);
-    if (mounted) setState(() {});
-  }
-
-  bool _photoCloudSync = false;
-
-  /// Reads the cloud-photo toggle to paint the tile's subtitle.
-  Future<void> _loadPhotoCloudSync() async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      if (!mounted) return;
-      setState(() => _photoCloudSync = prefs.getBool('meal_photo_cloud_sync') ?? false);
-    } catch (_) {
-      // No prefs — the tile just shows Off.
-    }
-  }
-
-  /// The cloud-sync toggle. Pro-only: uploading a photo of every meal to the
-  /// cloud is the retention feature the paywall sells alongside unlimited
-  /// scans, so a free user tapping it lands on the paywall too.
-  Future<void> _togglePhotoCloudSync(bool isDark) async {
-    if (!_subscribed && !_isAdmin) {
-      await Navigator.push(
-        context,
-        habitFlowRoute(const SubscriptionScreen()),
-      );
-      await SubscriptionService.instance.load();
-      if (mounted) {
-        setState(() => _subscribed = SubscriptionService.instance.isSubscribed);
-      }
-      return;
-    }
-    final prefs = await SharedPreferences.getInstance();
-    final next = !(prefs.getBool('meal_photo_cloud_sync') ?? false);
-    await prefs.setBool('meal_photo_cloud_sync', next);
-    if (mounted) setState(() => _photoCloudSync = next);
-  }
-
-  Future<void> _sendFeedback(bool isDark) async {
-    final ctrl = TextEditingController();
-    await showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: isDark ? MacroSnapTheme.cardDark : Colors.white,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-        title: const Text('Send Feedback'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Text(
-              'Your feedback helps us improve MacroSnap!',
-              style: TextStyle(fontSize: 13),
-            ),
-            const SizedBox(height: 14),
-            TextField(
-              controller: ctrl,
-              maxLines: 4,
-              maxLength: 500,
-              decoration: const InputDecoration(
-                hintText: 'Tell us what you think...',
-                border: OutlineInputBorder(),
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () async {
-              final msg = ctrl.text.trim();
-              if (msg.isEmpty) return;
-              final uri = Uri.parse(
-                'mailto:macrosnap7@gmail.com?subject=MacroSnap Feedback&body=${Uri.encodeComponent(msg)}',
-              );
-              if (await canLaunchUrl(uri)) {
-                await launchUrl(uri);
-              }
-              if (mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Thank you for your feedback!'),
-                    behavior: SnackBarBehavior.floating,
-                  ),
-                );
-                if (ctx.mounted) Navigator.pop(ctx);
-              }
-            },
-            child: const Text('Send'),
-          ),
-        ],
-      ),
-    );
-    ctrl.dispose();
-  }
 
   Future<void> _editName() async {
     final ctrl = TextEditingController(text: _name);
@@ -783,39 +579,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   ),
                   const Divider(height: 24),
                   AnimatedEntrance(
-                    delayMs: 235,
-                    child: _settingTile(
-                      Icons.photo_rounded,
-                      'Meal Photos',
-                      _photoRetentionLabel(),
-                      () => _pickPhotoRetention(isDark),
-                      isDark,
-                    ),
-                  ),
-                  const Divider(height: 24),
-                  AnimatedEntrance(
-                    delayMs: 240,
-                    child: _settingTile(
-                      Icons.currency_exchange_rounded,
-                      'Price Market',
-                      _priceMarketLabel(),
-                      () => _pickPriceMarket(isDark),
-                      isDark,
-                    ),
-                  ),
-                  const Divider(height: 24),
-                  AnimatedEntrance(
-                    delayMs: 245,
-                    child: _settingTile(
-                      Icons.cloud_upload_outlined,
-                      'Sync Meal Photos',
-                      _photoSyncSubtitle(),
-                      () => _togglePhotoCloudSync(isDark),
-                      isDark,
-                    ),
-                  ),
-                  const Divider(height: 24),
-                  AnimatedEntrance(
                     delayMs: 250,
                     child: _settingTile(
                       Icons.mail_outline_rounded,
@@ -901,17 +664,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       isDark,
                     ),
                   ),
-                  const Divider(height: 24),
-                  AnimatedEntrance(
-                    delayMs: 300,
-                    child: _settingTile(
-                      Icons.feedback_rounded,
-                      'Send Feedback',
-                      'Help us improve MacroSnap',
-                      () => _sendFeedback(isDark),
-                      isDark,
-                    ),
-                  ),
+
                   const Divider(height: 24),
                   AnimatedEntrance(
                     delayMs: 320,
@@ -927,13 +680,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
             ),
             const SizedBox(height: 20),
-            Text(
-              'Made with ❤️ in India',
-              style: TextStyle(
-                fontSize: 12,
-                color: MacroSnapTheme.textQuaternary(context),
-              ),
-            ),
           ],
         ),
       ),

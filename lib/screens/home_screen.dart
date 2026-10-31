@@ -11,7 +11,6 @@ import '../services/scan_gate.dart';
 import '../services/subscription_service.dart';
 import '../models/diet_profile.dart';
 import '../models/bmi.dart';
-import '../services/share_service.dart';
 import '../services/weight_store.dart';
 
 import '../widgets/animations.dart';
@@ -19,7 +18,6 @@ import '../widgets/bmi_gauge.dart';
 import '../widgets/meal_photo.dart';
 import '../widgets/pro_badge.dart';
 import '../widgets/weight_trend_chart.dart';
-import '../widgets/calorie_trend_card.dart';
 import '../widgets/confetti_celebration.dart';
 import 'diet_plan_screen.dart';
 import 'scan_screen.dart';
@@ -31,9 +29,9 @@ import 'barcode_scan_screen.dart';
 import 'result_screen.dart';
 import '../widgets/macro_bar.dart';
 
+part 'home_screen_week.dart';
 part 'home_screen_header.dart';
 part 'home_screen_calories.dart';
-part 'home_screen_week.dart';
 part 'home_screen_meals.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -337,22 +335,6 @@ class _HomeScreenState extends State<HomeScreen>
                   child: AnimatedEntrance(
                     delayMs: 150,
                     child: _buildBmiCard(context, isDark),
-                  ),
-                ),
-                SliverToBoxAdapter(
-                  child: AnimatedEntrance(
-                    delayMs: 165,
-                    child: CalorieTrendCard(
-                      goalCalories:
-                          DietPlanService.instance.profile?.targetCalories ??
-                          2000,
-                    ),
-                  ),
-                ),
-                SliverToBoxAdapter(
-                  child: AnimatedEntrance(
-                    delayMs: 175,
-                    child: _buildWeekStrip(context, isDark),
                   ),
                 ),
                 SliverToBoxAdapter(

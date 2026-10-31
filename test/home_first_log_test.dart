@@ -48,7 +48,7 @@ void main() {
     await MealStore.instance.reload();
   });
 
-  testWidgets('an empty Home offers the scan instead of hiding the section', (
+  testWidgets('an empty Home still shows the logged-yet state without a scan CTA', (
     tester,
   ) async {
     await pumpHome(tester);
@@ -56,7 +56,11 @@ void main() {
 
     expect(tester.takeException(), isNull);
     expect(find.text('Nothing logged yet today'), findsOneWidget);
-    expect(find.text('Scan your first meal'), findsOneWidget);
+    expect(
+      find.text('Scan your first meal'),
+      findsNothing,
+      reason: 'the scan CTA was removed from Home in 1.5.10',
+    );
   });
 
   testWidgets('the first meal of the day is celebrated once', (tester) async {

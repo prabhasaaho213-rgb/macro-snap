@@ -464,7 +464,7 @@ class _NavItem extends StatelessWidget {
         ? Colors.white.withValues(alpha: 0.62)
         : const Color(0xFF64748B);
 
-    return Semantics(
+    return Expanded(child: Center(heightFactor: 1, child:Semantics(
       button: true,
       selected: isSelected,
       label: label,
@@ -520,7 +520,7 @@ class _NavItem extends StatelessWidget {
           ),
         ),
       ),
-    );
+    )));
   }
 }
 
@@ -545,7 +545,7 @@ class _NavItemCircle extends StatelessWidget {
         ? Colors.white.withValues(alpha: 0.62)
         : const Color(0xFF64748B);
 
-    return Semantics(
+    return Expanded(child: Center(heightFactor: 1, child:Semantics(
       button: true,
       selected: isSelected,
       label: switch (icon) {
@@ -578,6 +578,6 @@ class _NavItemCircle extends StatelessWidget {
           ),
         ),
       ),
-    );
+    )));
   }
 }

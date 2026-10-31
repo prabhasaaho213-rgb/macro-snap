@@ -34,7 +34,7 @@ class UpdatesScreen extends StatefulWidget {
   /// the user has already seen and puts a dot on the "What's New" row when the
   /// two differ — so a new release announces itself instead of waiting to be
   /// found.
-  static const String latestVersion = '1.5.9';
+  static const String latestVersion = '1.5.10';
 
   /// SharedPreferences key holding the latest version the user has seen.
   static const String seenVersionKey = 'updates_seen_version';
@@ -49,6 +49,18 @@ class _UpdatesScreenState extends State<UpdatesScreen> {
       version: UpdatesScreen.latestVersion,
       date: 'Latest',
       isLatest: true,
+      notes: [
+        'Settings is down to the rows that change how the app works: meal-photo retention, price market, photo sync and Send Feedback are gone',
+        'Profile no longer carries the quick-action tiles',
+        'Changing weight or height in the BMI calculator now saves the moment you tap Save in the dialog',
+        'Home drops the calorie trend card, the This Week strip and the scan-your-first-meal button',
+        'The footer line under Settings is gone',
+        'Bottom tabs sit in equal slots, so the selected pill no longer shifts the others',
+      ],
+    ),
+    _UpdateEntry(
+      version: '1.5.9',
+      date: '2026-10-30',
       notes: [
         'Prices are quoted in the right currency — the India check reads your phone\'s timezone by name now, so a +5:30 clock outside India (Sri Lanka) is no longer shown rupees',
         'The orange-and-green M icon is on your home screen at last — the old green circle is gone',

@@ -99,6 +99,9 @@ class _BmiScreenState extends State<BmiScreen> {
       }
       _dirty = true;
     });
+    // Persist immediately: the dialog Save used to write widget state only,
+    // so leaving the screen dropped the change.
+    if (_profile != null) await _saveToProfile();
   }
 
   /// Writes the entered numbers back to the diet profile so calorie targets
