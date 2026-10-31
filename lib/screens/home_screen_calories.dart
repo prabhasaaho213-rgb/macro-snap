@@ -9,7 +9,6 @@ extension _HomeCalories on _HomeScreenState {
     final targetCal = profile?.targetCalories ?? 2000;
     final consumed = MealStore.instance.todayCalories;
     final progress = (consumed / targetCal).clamp(0.0, 1.0);
-    final remaining = max(targetCal - consumed, 0);
 
     // 🎉 Detect: calorie goal just met → confetti celebration!
     final goalMet = consumed >= targetCal;
@@ -23,7 +22,7 @@ extension _HomeCalories on _HomeScreenState {
     }
 
     return Padding(
-      padding: const EdgeInsets.fromLTRB(24, 8, 24, 8),
+      padding: const EdgeInsets.fromLTRB(24, 8, 24, 6),
       child: Container(
         padding: const EdgeInsets.all(22),
         decoration: MacroSnapTheme.habitlyHeroCard(context),
@@ -116,39 +115,13 @@ extension _HomeCalories on _HomeScreenState {
                   ),
                 ),
                 const SizedBox(width: 8),
-                // "255 left" — the number carries the colour, the word stays
-                // quiet beside it. One Text with two styles would need a
-                // TextSpan; two Texts read the same and keep the size jump
-                // between the number and the word explicit.
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.baseline,
-                  textBaseline: TextBaseline.alphabetic,
-                  children: [
-                    Text(
-                      '$remaining',
-                      maxLines: 1,
-                      style: TextStyle(
-                        color: MacroSnapTheme.greenText(context),
-                        fontSize: 20,
-                        height: 1,
-                        fontWeight: FontWeight.w900,
-                      ),
-                    ),
-                    const SizedBox(width: 5),
-                    Text(
-                      'left',
-                      maxLines: 1,
-                      style: TextStyle(
-                        color: isDark
-                            ? Colors.white70
-                            : MacroSnapTheme.textSecondary(context),
-                        fontSize: 14,
-                        height: 1,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ],
+                // The flame replaces the "N left" figure: the left side
+                // already states "0 of 2546 kcal", so the right side now
+                // carries the same streak mark the Habits tab draws, read
+                // from the same source so the two tabs can never disagree.
+                StreakFlame(
+                  streak: HabitStore.instance.totalStreakPower,
+                  fontSize: 15,
                 ),
               ],
             ),
@@ -169,7 +142,7 @@ extension _HomeCalories on _HomeScreenState {
     final targetF = profile?.targetFats ?? 67;
 
     return Padding(
-      padding: const EdgeInsets.fromLTRB(24, 8, 24, 4),
+      padding: const EdgeInsets.fromLTRB(24, 6, 24, 6),
       child: Container(
         padding: const EdgeInsets.all(20),
         decoration: MacroSnapTheme.habitlyCard(context),

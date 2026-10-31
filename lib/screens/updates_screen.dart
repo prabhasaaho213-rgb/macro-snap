@@ -34,7 +34,7 @@ class UpdatesScreen extends StatefulWidget {
   /// the user has already seen and puts a dot on the "What's New" row when the
   /// two differ — so a new release announces itself instead of waiting to be
   /// found.
-  static const String latestVersion = '1.5.10';
+  static const String latestVersion = '1.5.11';
 
   /// SharedPreferences key holding the latest version the user has seen.
   static const String seenVersionKey = 'updates_seen_version';
@@ -49,6 +49,17 @@ class _UpdatesScreenState extends State<UpdatesScreen> {
       version: UpdatesScreen.latestVersion,
       date: 'Latest',
       isLatest: true,
+      notes: [
+        'The calorie card now shows your streak flame where the calories-left figure used to sit',
+        'Changing your details from Profile finally sticks — the editor saves when you leave it instead of dropping the edit',
+        'PRO badges are for free accounts only: they disappear the moment you subscribe',
+        'The reminder time is picked on smooth wheels that tick once per step, not a clock dial that buzzes as you drag',
+        'Home and Habits cards share one gutter and one gap, so the BMI card is no longer tighter or wider than its neighbours',
+      ],
+    ),
+    _UpdateEntry(
+      version: '1.5.10',
+      date: '2026-10-31',
       notes: [
         'Settings is down to the rows that change how the app works: meal-photo retention, price market, photo sync and Send Feedback are gone',
         'Profile no longer carries the quick-action tiles',

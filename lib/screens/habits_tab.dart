@@ -14,6 +14,7 @@ import '../widgets/streak_flame.dart';
 import 'settings_screen.dart';
 import 'subscription_screen.dart';
 import '../widgets/swipe_action_background.dart';
+import '../widgets/reminder_time_picker.dart';
 
 part 'habits_tab_cards.dart';
 part 'habits_tab_mission.dart';

@@ -2,8 +2,8 @@ part of 'home_screen.dart';
 
 // Split out of home_screen.dart. Same library, so these builders keep access to
 // the screen's private state without threading parameters through.
-extension _HomeWeek on _HomeScreenState {
-  // ─── WEEK STRIP (Habitly style) ────────────────────────────
+extension _HomeBmi on _HomeScreenState {
+  // ─── BMI CARD (Habitly style) ────────────────────────────
   Widget _buildBmiCard(BuildContext context, bool isDark) {
     final profile = DietPlanService.instance.profile;
     final bmi = profile == null
@@ -24,7 +24,7 @@ extension _HomeWeek on _HomeScreenState {
     final trend = WeightStore.instance.summary(days: 30);
 
     return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
+      padding: const EdgeInsets.fromLTRB(24, 6, 24, 6),
       child: InkWell(
         borderRadius: BorderRadius.circular(22),
         onTap: () async {

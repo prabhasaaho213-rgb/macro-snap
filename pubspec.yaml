@@ -1,7 +1,7 @@
 name: macro_snap
 description: "Snap a photo, get your macros instantly."
 publish_to: 'none'
-version: 1.5.10+114
+version: 1.5.11+115
 
 environment:
   sdk: ^3.12.2

@@ -6,7 +6,7 @@ extension _HomeMeals on _HomeScreenState {
   // ─── QUICK ACTIONS (Habitly style) ──────────────────────────
   Widget _buildQuickActions(BuildContext context, bool isDark) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(24, 8, 24, 8),
+      padding: const EdgeInsets.fromLTRB(24, 6, 24, 6),
       child: Container(
         padding: const EdgeInsets.all(20),
         decoration: MacroSnapTheme.habitlyCard(context),
@@ -136,7 +136,7 @@ extension _HomeMeals on _HomeScreenState {
     if (meals.isEmpty) return _buildNoMealsYet(isDark);
 
     return Padding(
-      padding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
+      padding: const EdgeInsets.fromLTRB(24, 6, 24, 24),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -181,7 +181,7 @@ extension _HomeMeals on _HomeScreenState {
   Widget _buildNoMealsYet(bool isDark) {
     final titleColour = isDark ? Colors.white : const Color(0xFF1A1A1A);
     return Padding(
-      padding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
+      padding: const EdgeInsets.fromLTRB(24, 6, 24, 24),
       child: Container(
         width: double.infinity,
         padding: const EdgeInsets.fromLTRB(18, 20, 18, 18),

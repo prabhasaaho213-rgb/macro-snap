@@ -72,8 +72,47 @@ class _DietPlanScreenState extends State<DietPlanScreen> {
     }
   }
 
+  /// Persists whatever is typed in the form when the editor closes.
+  ///
+  /// The screen's only save path was the "Calculate & Save" button, so a user
+  /// who changed a weight and tapped back had the edit silently dropped —
+  /// Profile then re-read the old file and the change looked lost. Runs from
+  /// [dispose] so the back arrow and the system back gesture both count.
+  void _persistIfChanged() {
+    final w = double.tryParse(_weightCtrl.text);
+    final h = double.tryParse(_heightCtrl.text);
+    final a = int.tryParse(_ageCtrl.text);
+    if (w == null || h == null || a == null || w <= 0 || h <= 0 || a <= 0) {
+      return; // a half-typed form is not a profile
+    }
+    final saved = _profile;
+    if (saved != null &&
+        saved.weightKg == w &&
+        saved.heightCm == h &&
+        saved.age == a &&
+        saved.gender == _gender &&
+        saved.goal == _goal &&
+        saved.activity == _activity &&
+        saved.diet == _diet) {
+      return; // nothing changed, so nothing to write
+    }
+    DietPlanService.instance.save(
+      DietProfile(
+        weightKg: w,
+        heightCm: h,
+        age: a,
+        gender: _gender,
+        goal: _goal,
+        activity: _activity,
+        diet: _diet,
+        avatar: saved?.avatar ?? _avatar,
+      ),
+    );
+  }
+
   @override
   void dispose() {
+    _persistIfChanged();
     _weightCtrl.dispose();
     _heightCtrl.dispose();
     _ageCtrl.dispose();

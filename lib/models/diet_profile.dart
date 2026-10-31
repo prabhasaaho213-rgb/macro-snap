@@ -167,7 +167,15 @@ class DietPlanService {
   DietProfile? _profile;
   DietProfile? get profile => _profile;
 
+  /// The last disk write started by [save]. [load] waits for it, because the
+  /// profile editor saves as it closes and Profile re-reads straight after —
+  /// without this the read could land mid-write and return the old values.
+  static Future<void> _pendingWrite = Future<void>.value();
+
   Future<void> load() async {
+    // Land any write already in flight before reading, or the caller sees the
+    // values it just replaced and reports the edit as lost.
+    await _pendingWrite;
     // A stale in-memory profile from another account must never linger when
     // this account has no profile file of its own.
     _profile = null;
@@ -208,6 +216,12 @@ class DietPlanService {
 
   Future<void> save(DietProfile profile) async {
     _profile = profile;
+    final write = _writeToDisk(profile);
+    _pendingWrite = write.catchError((_) {});
+    await write;
+  }
+
+  Future<void> _writeToDisk(DietProfile profile) async {
     try {
       final dir = await getApplicationDocumentsDirectory();
       final prefs = await SharedPreferences.getInstance();

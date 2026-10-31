@@ -663,9 +663,9 @@ extension _HabitsSheets on _HabitsTabState {
                     width: double.infinity,
                     child: FilledButton.tonalIcon(
                       onPressed: () async {
-                        final picked = await showTimePicker(
+                        final picked = await showReminderTimePicker(
                           context: context,
-                          initialTime: TimeOfDay(
+                          initial: TimeOfDay(
                             hour: reminderHour,
                             minute: reminderMinute,
                           ),

@@ -114,43 +114,6 @@ class _ScaleOnPressState extends State<ScaleOnPress>
   }
 }
 
-// ─── STAGGERED LIST ENTRANCE (Habit Flow style) ───────────────
-
-/// A list whose items animate in one by one with a slide+fade.
-/// Each item index gets a progressive delay.
-class StaggeredList extends StatelessWidget {
-  final int itemCount;
-  final Widget Function(BuildContext context, int index) itemBuilder;
-  final ScrollPhysics? physics;
-  final EdgeInsetsGeometry? padding;
-  final Duration staggerDelay;
-
-  const StaggeredList({
-    super.key,
-    required this.itemCount,
-    required this.itemBuilder,
-    this.physics,
-    this.padding,
-    this.staggerDelay = const Duration(milliseconds: 60),
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return ListView.builder(
-      physics: physics ?? const BouncingScrollPhysics(),
-      padding: padding,
-      itemCount: itemCount,
-      itemBuilder: (context, index) {
-        return _StaggeredItem(
-          index: index,
-          staggerDelay: staggerDelay,
-          child: itemBuilder(context, index),
-        );
-      },
-    );
-  }
-}
-
 class _StaggeredItem extends StatefulWidget {
   final int index;
   final Duration staggerDelay;
@@ -204,44 +167,6 @@ class _StaggeredItemState extends State<_StaggeredItem>
     );
   }
 }
-
-// ─── BOTTOM NAV SPRING INDICATOR ──────────────────────────────
-
-/// An animated indicator dot for bottom nav items with a spring feel.
-class SpringNavDot extends StatelessWidget {
-  final bool selected;
-  final Color color;
-
-  const SpringNavDot({
-    super.key,
-    required this.selected,
-    this.color = const Color(0xFF059669),
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 300),
-      curve: Curves.elasticOut,
-      width: selected ? 20 : 4,
-      height: 3,
-      decoration: BoxDecoration(
-        color: color,
-        borderRadius: BorderRadius.circular(1.5),
-      ),
-    );
-  }
-}
-
-// ─── SMOOTH VALUE ANIMATION for rings & progress bars ────────
-
-/// Animates a value toward [target] over a [duration], used for progress
-/// bars and calorie rings.
-///
-/// On first render the value fills from 0 → target. When [target] changes it
-/// tweens from the value currently on screen (even mid-flight) to the new
-/// target — progress only ever glides to its destination, it never jumps or
-/// snaps back to zero.
 class AnimatedValue extends StatefulWidget {
   final double target;
   final Widget Function(BuildContext context, double value) builder;

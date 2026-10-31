@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../core/theme.dart';
+import '../services/subscription_service.dart';
 
 /// The little "PRO" chip that marks a Pro feature wherever it appears.
 ///
@@ -21,6 +22,18 @@ class ProBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // The chip exists to sell the upgrade: it says "this feature is Pro".
+    // For an account that already has Pro it is pure noise, and a PRO tag on
+    // something you already paid for reads like a lock that should have been
+    // removed. So the mark is for free accounts only — access is still decided
+    // by SubscriptionService at each gate, never by this widget.
+    //
+    // isSubscribed covers all three ways to be Pro: a paid Razorpay plan, a
+    // referral window, and the admin lifetime grant (which is stored as a
+    // subscription with the 1900 marker), so the owner stops seeing chips too.
+    if (SubscriptionService.instance.isSubscribed) {
+      return const SizedBox.shrink();
+    }
     return Semantics(
       label: 'Pro feature',
       excludeSemantics: true,
