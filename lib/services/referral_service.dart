@@ -1,5 +1,7 @@
 import 'dart:convert';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'auth_http.dart';
+import 'firebase_identity.dart';
 import '../services/gemini_service.dart';
 
 /// Referral codes, authenticated by the caller's Firebase ID token.
@@ -12,6 +14,32 @@ class ReferralService {
   static String get _baseUrl => GeminiService.serverUrl;
 
   static const String _signedOut = 'Please sign in to use referrals';
+
+  /// The code this account was last issued, kept on device. The screen paints
+  /// it from here first, so opening Refer a Friend never shows a spinner while
+  /// a network round-trip regenerates a code that has not changed.
+  static const String _cachePrefix = 'referral_code_';
+
+  static Future<String?> cachedCode() async {
+    try {
+      final uid = await FirebaseIdentity.currentUid() ?? 'guest';
+      final prefs = await SharedPreferences.getInstance();
+      final code = prefs.getString('$_cachePrefix$uid');
+      return (code == null || code.isEmpty) ? null : code;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  static Future<void> cacheCode(String code) async {
+    try {
+      final uid = await FirebaseIdentity.currentUid() ?? 'guest';
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('$_cachePrefix$uid', code);
+    } catch (_) {
+      // A failed cache write must never break the screen.
+    }
+  }
 
   /// (Re)generates the caller's referral code server-side.
   static Future<String> generateCode() async {

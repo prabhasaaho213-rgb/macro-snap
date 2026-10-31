@@ -117,7 +117,7 @@ class _HabitsTabState extends State<HabitsTab> {
           },
           child: ListView(
             physics: const AlwaysScrollableScrollPhysics(),
-            padding: const EdgeInsets.fromLTRB(18, 10, 18, 120),
+            padding: const EdgeInsets.fromLTRB(24, 10, 24, 120),
             children: [
               // Title row
               Row(
@@ -179,7 +179,7 @@ class _HabitsTabState extends State<HabitsTab> {
               if (!hasHabits) ...[
                 const SizedBox(height: 40),
                 _emptyState(isDark),
-                const SizedBox(height: 24),
+                const SizedBox(height: 12),
                 _createButton(context),
               ]
               // ─── ─── HAS HABITS ─── FULL LAYOUT ──────────────
@@ -191,7 +191,7 @@ class _HabitsTabState extends State<HabitsTab> {
                   delayMs: 0,
                   child: _heroCard(progress, completed, active.length, isDark),
                 ),
-                const SizedBox(height: 18),
+                const SizedBox(height: 12),
 
                 // ─── 2. Today's Missions ────────────────────────
                 AnimatedEntrance(
@@ -206,7 +206,7 @@ class _HabitsTabState extends State<HabitsTab> {
                             child: Text(
                               "Today's Missions",
                               style: TextStyle(
-                                fontSize: 22,
+                                fontSize: 16,
                                 fontWeight: FontWeight.w900,
                                 color: isDark
                                     ? Colors.white
@@ -318,25 +318,25 @@ class _HabitsTabState extends State<HabitsTab> {
                     ],
                   ),
                 ),
-                const SizedBox(height: 18),
+                const SizedBox(height: 12),
 
                 // ─── 3. Create Habit Button ─────────────────────
                 AnimatedEntrance(delayMs: 100, child: _createButton(context)),
-                const SizedBox(height: 18),
+                const SizedBox(height: 12),
 
                 // ─── 4. Water Intake ────────────────────────────
                 AnimatedEntrance(
                   delayMs: 150,
                   child: _waterCard(waterProgress, isDark),
                 ),
-                const SizedBox(height: 24),
+                const SizedBox(height: 12),
 
                 // ─── 5. Consistency Map ─────────────────────────
                 AnimatedEntrance(
                   delayMs: 200,
                   child: _consistencyMapCard(isDark),
                 ),
-                const SizedBox(height: 24),
+                const SizedBox(height: 12),
               ],
             ],
           ),

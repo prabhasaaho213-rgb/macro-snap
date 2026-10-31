@@ -179,7 +179,7 @@ extension _HabitsMission on _HabitsTabState {
                                     color: MacroSnapTheme.textSecondary(
                                       context,
                                     ),
-                                    fontSize: 12,
+                                    fontSize: 13,
                                     fontWeight: FontWeight.w600,
                                   ),
                                 ),

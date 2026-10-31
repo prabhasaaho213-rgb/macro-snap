@@ -47,7 +47,7 @@ extension _HomeBmi on _HomeScreenState {
           if (mounted) _rebuild(() {});
         },
         child: Container(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.all(20),
           decoration: MacroSnapTheme.habitlyCard(context),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -73,7 +73,7 @@ extension _HomeBmi on _HomeScreenState {
                             Text(
                               'BMI',
                               style: TextStyle(
-                                fontSize: 14,
+                                fontSize: 16,
                                 fontWeight: FontWeight.w900,
                                 color: isDark
                                     ? Colors.white
@@ -94,7 +94,7 @@ extension _HomeBmi on _HomeScreenState {
                               ? 'Add your height & weight'
                               : '${BmiCalculator.formatHeight(profile.heightCm)} · ${profile.weightKg.toStringAsFixed(profile.weightKg % 1 == 0 ? 0 : 1)} kg',
                           style: TextStyle(
-                            fontSize: 12,
+                            fontSize: 13,
                             color: MacroSnapTheme.textSecondary(context),
                           ),
                         ),

@@ -16,7 +16,7 @@ extension _HomeMeals on _HomeScreenState {
             Text(
               'Quick Actions',
               style: TextStyle(
-                fontSize: 14,
+                fontSize: 16,
                 fontWeight: FontWeight.w900,
                 color: isDark ? Colors.white : const Color(0xFF1A1A1A),
               ),
@@ -146,7 +146,7 @@ extension _HomeMeals on _HomeScreenState {
               Text(
                 "Today's Meals",
                 style: TextStyle(
-                  fontSize: 14,
+                  fontSize: 16,
                   fontWeight: FontWeight.w900,
                   color: isDark ? Colors.white : const Color(0xFF1A1A1A),
                 ),
@@ -184,7 +184,7 @@ extension _HomeMeals on _HomeScreenState {
       padding: const EdgeInsets.fromLTRB(24, 6, 24, 24),
       child: Container(
         width: double.infinity,
-        padding: const EdgeInsets.fromLTRB(18, 20, 18, 18),
+        padding: const EdgeInsets.all(20),
         decoration: MacroSnapTheme.habitlyCard(context),
         child: Column(
           children: [
@@ -207,7 +207,7 @@ extension _HomeMeals on _HomeScreenState {
               'Nothing logged yet today',
               textAlign: TextAlign.center,
               style: TextStyle(
-                fontSize: 15,
+                fontSize: 16,
                 fontWeight: FontWeight.w900,
                 color: titleColour,
               ),
@@ -218,7 +218,7 @@ extension _HomeMeals on _HomeScreenState {
               'in a few seconds.',
               textAlign: TextAlign.center,
               style: TextStyle(
-                fontSize: 12.5,
+                fontSize: 13,
                 height: 1.45,
                 color: MacroSnapTheme.textSecondary(context),
               ),
@@ -278,7 +278,7 @@ extension _HomeMeals on _HomeScreenState {
                           '${m.calories} kcal',
                           style: TextStyle(
                             color: MacroSnapTheme.textSecondary(context),
-                            fontSize: 12,
+                            fontSize: 13,
                             fontWeight: FontWeight.w600,
                           ),
                         ),

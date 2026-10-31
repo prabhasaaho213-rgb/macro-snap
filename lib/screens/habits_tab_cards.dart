@@ -262,7 +262,7 @@ extension _HabitsCards on _HabitsTabState {
   Widget _consistencyMapCard(bool isDark) {
     final active = store.habits.where((h) => !h.paused).toList();
     return Container(
-      padding: const EdgeInsets.all(18),
+      padding: const EdgeInsets.all(20),
       decoration: MacroSnapTheme.habitlyCard(context),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -338,7 +338,7 @@ extension _HabitsCards on _HabitsTabState {
     final limit = HabitStore.freeHabitLimit;
     final pct = (used / limit).clamp(0.0, 1.0);
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(20),
       decoration: MacroSnapTheme.habitlyCard(context),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -356,8 +356,8 @@ extension _HabitsCards on _HabitsTabState {
               Text(
                 'Habit Limit',
                 style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w800,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w900,
                   color: isDark ? Colors.white : const Color(0xFF1A1A1A),
                 ),
               ),
@@ -391,7 +391,7 @@ extension _HabitsCards on _HabitsTabState {
                 ? 'Upgrade to Pro for unlimited habits'
                 : '${limit - used} habit${limit - used == 1 ? '' : 's'} remaining on Free',
             style: TextStyle(
-              fontSize: 12,
+              fontSize: 13,
               fontWeight: FontWeight.w600,
               color: MacroSnapTheme.textSecondary(context),
             ),
@@ -405,7 +405,7 @@ extension _HabitsCards on _HabitsTabState {
   Widget _emptyState(bool isDark) {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.symmetric(vertical: 36, horizontal: 20),
+      padding: const EdgeInsets.all(20),
       decoration: MacroSnapTheme.habitlyCard(context),
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -421,7 +421,7 @@ extension _HabitsCards on _HabitsTabState {
           Text(
             'Start your rhythm',
             style: TextStyle(
-              fontSize: 20,
+              fontSize: 16,
               fontWeight: FontWeight.w900,
               color: isDark ? Colors.white : const Color(0xFF1A1A1A),
             ),

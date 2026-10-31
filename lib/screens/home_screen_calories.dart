@@ -115,14 +115,26 @@ extension _HomeCalories on _HomeScreenState {
                   ),
                 ),
                 const SizedBox(width: 8),
-                // The flame replaces the "N left" figure: the left side
-                // already states "0 of 2546 kcal", so the right side now
-                // carries the same streak mark the Habits tab draws, read
-                // from the same source so the two tabs can never disagree.
-                StreakFlame(
-                  streak: HabitStore.instance.totalStreakPower,
-                  fontSize: 15,
-                ),
+                // The flame is an achievement, not decoration: it appears
+                // only once today's calorie goal is met. Until then the card
+                // states what is still to go — a habit streak sitting next to
+                // a half-filled ring read as a win on a day not finished.
+                goalMet
+                    ? StreakFlame(
+                        streak: HabitStore.instance.totalStreakPower,
+                        fontSize: 15,
+                      )
+                    : Text(
+                        '${(targetCal - consumed).round()} left',
+                        maxLines: 1,
+                        style: TextStyle(
+                          color: isDark
+                              ? Colors.white70
+                              : MacroSnapTheme.textSecondary(context),
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
               ],
             ),
           ],

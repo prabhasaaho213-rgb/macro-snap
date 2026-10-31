@@ -55,8 +55,19 @@ class _ReferralScreenState extends State<ReferralScreen> {
   }
 
   Future<void> _loadCode() async {
+    // Paint the code this account already has before touching the network:
+    // generating on every open left the card spinning (or blank) for as long
+    // as the request took, even though the code almost never changed.
+    final cached = await ReferralService.cachedCode();
+    if (cached != null && mounted) {
+      setState(() {
+        _myCode = cached;
+        _loading = false;
+      });
+    }
     try {
       final code = await ReferralService.generateCode();
+      await ReferralService.cacheCode(code);
       if (mounted) {
         setState(() {
           _myCode = code;
@@ -64,9 +75,9 @@ class _ReferralScreenState extends State<ReferralScreen> {
         });
       }
     } catch (e) {
-      if (mounted) {
+      // Offline with a cached code is fine — it is still the user's code.
+      if (mounted && _myCode == null) {
         setState(() {
-          _myCode = null;
           _loading = false;
         });
       }
