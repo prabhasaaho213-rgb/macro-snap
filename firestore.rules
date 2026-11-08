@@ -86,7 +86,12 @@ service cloud.firestore {
         && (!('protein' in d) || (d.protein is number && d.protein >= 0 && d.protein <= 1000))
         && (!('carbs' in d) || (d.carbs is number && d.carbs >= 0 && d.carbs <= 1000))
         && (!('fats' in d) || (d.fats is number && d.fats >= 0 && d.fats <= 1000))
-        && (!('fiber' in d) || (d.fiber is number && d.fiber >= 0 && d.fiber <= 1000));
+        && (!('fiber' in d) || (d.fiber is number && d.fiber >= 0 && d.fiber <= 1000))
+        // The scan breakdown is a list of maps on the record. Bounding its
+        // length keeps one photo from writing an arbitrarily large document.
+        && (!('items' in d) || (d.items is list && d.items.size() <= 40))
+        && (!('servingGrams' in d) || (d.servingGrams is int
+          && d.servingGrams >= 0 && d.servingGrams <= 5000));
     }
 
     match /meals/{mealId} {
@@ -99,27 +104,48 @@ service cloud.firestore {
     }
 
     // ─── habitData/{uid} — one doc per user: habits[], waterLog, waterGoal ─
+    // A free account may hold three habits. A write that does not GROW the
+    // list is always allowed, so an account that was Pro and lapsed with six
+    // habits keeps syncing edits, completions and water instead of having
+    // every habit write silently rejected. Adding a fourth still needs Pro.
     match /habitData/{uid} {
       allow read: if signedIn() && isOwner(uid);
-      allow create, update: if signedIn() && isOwner(uid)
+      allow create: if signedIn() && isOwner(uid)
         && request.resource.data.habits is list
         && (request.resource.data.habits.size() <= 3 || hasPro(uid));
+      allow update: if signedIn() && isOwner(uid)
+        && request.resource.data.habits is list
+        && (request.resource.data.habits.size() <= 3
+          || (resource.data.habits is list
+            && request.resource.data.habits.size() <= resource.data.habits.size())
+          || hasPro(uid));
       allow delete: if signedIn() && isOwner(uid);
     }
 
     // ─── dietProfiles/{uid} — diet profile (goal, activity, measurements) ─
+    // Split read/write: `request.resource` is null on a read, so a size cap
+    // has to live on the write half (the analytics rule learned this already).
     match /dietProfiles/{uid} {
-      allow read, write: if signedIn() && isOwner(uid);
+      allow read: if signedIn() && isOwner(uid);
+      allow write: if signedIn() && isOwner(uid)
+        && request.resource.data.size() <= 20;
     }
 
     // ─── recentFoods/{uid} — recently logged/searched foods ────────────
     match /recentFoods/{uid} {
-      allow read, write: if signedIn() && isOwner(uid);
+      allow read: if signedIn() && isOwner(uid);
+      allow write: if signedIn() && isOwner(uid)
+        && request.resource.data.size() <= 10
+        && (!('foods' in request.resource.data)
+          || (request.resource.data.foods is list
+            && request.resource.data.foods.size() <= 200));
     }
 
     // ─── userPreferences/{uid} — theme, display name, etc. ─────────────
     match /userPreferences/{uid} {
-      allow read, write: if signedIn() && isOwner(uid);
+      allow read: if signedIn() && isOwner(uid);
+      allow write: if signedIn() && isOwner(uid)
+        && request.resource.data.size() <= 10;
     }
 
     // ─── deletedAccounts/{identifier} — deletion tombstones ────────────
