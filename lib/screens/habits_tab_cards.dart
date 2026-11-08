@@ -141,10 +141,12 @@ extension _HabitsCards on _HabitsTabState {
     // Animated fill: ring + % count up on load and glide between values.
     // Track is white24 (not white10) to match the Home calorie ring — the
     // test suite treats the two hero rings as sharing one track color, and
-    // white10 left an unreadable ring at 0% progress.
+    // white10 left an unreadable ring at 0% progress. The fill is the brand
+    // accent (neonGreen), matching the Home calorie ring — neonPink is the
+    // danger colour now, so it made this ring read as a warning.
     return AnimatedProgressRing(
       value: progress,
-      color: MacroSnapTheme.neonPink,
+      color: MacroSnapTheme.neonGreen,
       backgroundColor: isDark ? Colors.white24 : const Color(0xFFE8DEFF),
       labelStyle: TextStyle(
         fontWeight: FontWeight.w900,
