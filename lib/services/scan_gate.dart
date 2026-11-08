@@ -141,7 +141,30 @@ class ScanGate {
   /// Asks the server for the authoritative numbers (`GET /me/entitlements`).
   /// Best-effort: a failure or a guest leaves the current state untouched and
   /// returns false, and the next scan simply lets the server decide.
-  static Future<bool> refreshFromServer() async {
+  /// How long a server answer is reused before another call goes out.
+  ///
+  /// Returning to the Cam tab and logging a meal both used to fire a fresh
+  /// `GET /me/entitlements`. A badge does not need re-verifying that often —
+  /// today's numbers can only change with a scan, and a successful scan
+  /// reports its own counts.
+  static const Duration _refreshWindow = Duration(seconds: 45);
+  static DateTime? _lastRefresh;
+
+  /// Asks the server for the authoritative numbers (`GET /me/entitlements`).
+  /// Best-effort: a failure or a guest leaves the current state untouched and
+  /// returns false, and the next scan simply lets the server decide.
+  ///
+  /// Throttled to one call per [_refreshWindow]; pass [force] to bypass it
+  /// after something that really changes the allowance (a purchase).
+  static Future<bool> refreshFromServer({bool force = false}) async {
+    final now = DateTime.now();
+    final last = _lastRefresh;
+    if (!force && last != null && now.difference(last) < _refreshWindow) {
+      // No request: answer with today's known state so the caller can repaint
+      // from the numbers already stored.
+      return (await _serverState()).isFresh;
+    }
+    _lastRefresh = now;
     try {
       final res = await AuthHttp.get(
         Uri.parse('${GeminiService.serverUrl}/me/entitlements'),

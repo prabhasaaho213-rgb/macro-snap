@@ -325,12 +325,10 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
                 'See your protein gaps and trends without manual tracking',
                 isDark,
               ),
-              _buildFeatureRow(
-                Icons.history_rounded,
-                'Complete Meal History',
-                'Review everything you ate, searchable by date',
-                isDark,
-              ),
+              // "Complete Meal History" sat here through 1.5.12. Nothing
+              // lists past meals by date — Home shows today only and Recent
+              // Foods is a search list — so the row sold a screen that does
+              // not exist. Removed for the same reason as "Cloud Backup".
               // "Cloud Backup" used to be listed here, but nothing locks it:
               // /meals/sync and /habits/sync accept any signed-in user, so it
               // is already free for everyone. A benefit that is not actually
@@ -761,7 +759,7 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
             ],
           ),
           _planPoint(context, 'Manual meal logging and macros'),
-          _planPoint(context, 'Streaks, meal history and charts'),
+          _planPoint(context, 'Streaks and charts'),
           _planPoint(context, '${ScanGate.freeLimitPerDay} AI scans a day'),
         ],
       ),

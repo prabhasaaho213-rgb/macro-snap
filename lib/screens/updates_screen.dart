@@ -34,6 +34,8 @@ class UpdatesScreen extends StatefulWidget {
   /// the user has already seen and puts a dot on the "What's New" row when the
   /// two differ — so a new release announces itself instead of waiting to be
   /// found.
+  /// `test/release_version_test.dart` fails when this drifts from the
+  /// version in `pubspec.yaml`, so a release bump cannot forget it.
   static const String latestVersion = '1.5.12';
 
   /// SharedPreferences key holding the latest version the user has seen.

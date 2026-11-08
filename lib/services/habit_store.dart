@@ -233,6 +233,13 @@ class HabitStore extends ChangeNotifier {
   }
 
   Future<void> update(Habit h, {bool syncReminder = true}) async {
+    // Replace the stored copy in place when the caller hands over an edited
+    // COPY instead of mutating the instance it got from [habits] — otherwise
+    // the edit was accepted and silently thrown away. Keeping the index
+    // preserves the user's drag order, and an in-place mutation passes the
+    // identical instance, so that path stays a no-op here.
+    final index = habits.indexWhere((x) => x.id == h.id);
+    if (index >= 0 && !identical(habits[index], h)) habits[index] = h;
     await save();
     _syncToCloud();
     // Re-sync the reminder plan when the habit's schedule or toggle changes.
