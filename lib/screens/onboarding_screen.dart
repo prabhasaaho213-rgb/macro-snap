@@ -87,10 +87,11 @@ class _OnboardingScreenState extends State<OnboardingScreen>
   }
 
   /// BMI from the dials as they currently stand.
-  double? get _bmi => BmiCalculator.value(
-    weightKg: _isKg ? _weight : _weight * 0.453592,
-    heightCm: _isCm ? _height : _height * 2.54,
-  );
+  /// [_weight] is always kilograms and [_height] always centimetres; the
+  /// dials convert only what they SHOW. Mixing stored and shown units is what
+  /// made a one-tap switch to lbs read 70 kg as 31.8 kg.
+  double? get _bmi =>
+      BmiCalculator.value(weightKg: _weight, heightCm: _height);
 
   bool get _isUnderweight {
     final bmi = _bmi;
@@ -153,8 +154,8 @@ class _OnboardingScreenState extends State<OnboardingScreen>
     }
 
     final profile = DietProfile(
-      weightKg: _isKg ? _weight : _weight * 0.453592,
-      heightCm: _isCm ? _height : _height * 2.54,
+      weightKg: _weight,
+      heightCm: _height,
       age: _age,
       gender: _gender,
       goal: _goal,
@@ -770,9 +771,12 @@ class _OnboardingScreenState extends State<OnboardingScreen>
   Widget _buildWeightDial(Color textColor, Color subText, bool isDark) {
     final minW = _isKg ? 30.0 : 66.0;
     final maxW = _isKg ? 200.0 : 440.0;
-    final step = _isKg ? 1.0 : 1.0;
+    const step = 1.0;
+    // _weight is kilograms; the dial works in whatever unit is on screen.
     final display = _isKg ? _weight : _weight / 0.453592;
-    final itemCount = ((maxW - minW) / step).round();
+    // Inclusive range: without the + 1 the stated maximum (200 kg / 440 lb)
+    // was unreachable and the last item read 199.
+    final itemCount = ((maxW - minW) / step).round() + 1;
     final currentIndex = ((display - minW) / step).round().clamp(
       0,
       itemCount - 1,
@@ -828,8 +832,12 @@ class _OnboardingScreenState extends State<OnboardingScreen>
               isDark: isDark,
               onSelected: (index) {
                 HapticFeedback.mediumImpact();
-                final val = minW + index * step;
-                setState(() => _weight = val);
+                final shown = minW + index * step;
+                // Store kilograms: the unit toggle then only changes what is
+                // displayed, so BMI and the saved profile stay correct.
+                setState(
+                  () => _weight = _isKg ? shown : shown * 0.453592,
+                );
               },
               labelBuilder: (index) {
                 final val = minW + index * step;
@@ -845,9 +853,11 @@ class _OnboardingScreenState extends State<OnboardingScreen>
   Widget _buildHeightDial(Color textColor, Color subText, bool isDark) {
     final minH = _isCm ? 100.0 : 48.0;
     final maxH = _isCm ? 220.0 : 84.0;
-    final step = _isCm ? 1.0 : 1.0;
+    const step = 1.0;
+    // _height is centimetres; the dial works in whatever unit is on screen.
     final display = _isCm ? _height : _height / 2.54;
-    final itemCount = ((maxH - minH) / step).round();
+    // Inclusive range: 220 cm / 84 in used to be unreachable.
+    final itemCount = ((maxH - minH) / step).round() + 1;
     final currentIndex = ((display - minH) / step).round().clamp(
       0,
       itemCount - 1,
@@ -903,8 +913,11 @@ class _OnboardingScreenState extends State<OnboardingScreen>
               isDark: isDark,
               onSelected: (index) {
                 HapticFeedback.mediumImpact();
-                final val = minH + index * step;
-                setState(() => _height = val);
+                final shown = minH + index * step;
+                // Store centimetres; only the label converts.
+                setState(
+                  () => _height = _isCm ? shown : shown * 2.54,
+                );
               },
               labelBuilder: (index) {
                 final val = minH + index * step;
