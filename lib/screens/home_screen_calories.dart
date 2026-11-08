@@ -3,6 +3,25 @@ part of 'home_screen.dart';
 // Split out of home_screen.dart. Same library, so these builders keep access to
 // the screen's private state without threading parameters through.
 extension _HomeCalories on _HomeScreenState {
+  /// Crossing today's calorie goal banks the day for the calorie-goal
+  /// streak and fires the confetti. The celebration is deduped per day in
+  /// prefs — deleting meals below the goal and re-crossing it the same day
+  /// must not replay the confetti — while the streak banking stays
+  /// idempotent (days are banked dates, like habit completions).
+  Future<void> _celebrateGoalMet() async {
+    final newStreak = await MealStreakService.noteGoalHitToday();
+    if (mounted && newStreak != _calorieStreak) {
+      _rebuild(() => _calorieStreak = newStreak);
+    }
+    final now = DateTime.now();
+    final day = dateKey(now);
+    final prefs = await SharedPreferences.getInstance();
+    if (prefs.getString('goal_celebrated_day') == day) return;
+    await prefs.setString('goal_celebrated_day', day);
+    if (!mounted) return;
+    ConfettiCelebration.show(context);
+  }
+
   // ─── HERO CALORIE CARD (Habitly Hero style) ────────────────
   Widget _buildCalorieRing(BuildContext context, bool isDark) {
     final profile = DietPlanService.instance.profile;
@@ -11,11 +30,11 @@ extension _HomeCalories on _HomeScreenState {
     final progress = (consumed / targetCal).clamp(0.0, 1.0);
 
     // 🎉 Detect: calorie goal just met → confetti celebration!
-    final goalMet = consumed >= targetCal;
-    if (goalMet && !_previousGoalMet && targetCal > 0) {
+    final goalMet = consumed >= targetCal && targetCal > 0;
+    if (goalMet && !_previousGoalMet) {
       _previousGoalMet = true;
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) ConfettiCelebration.show(context);
+        if (mounted) unawaited(_celebrateGoalMet());
       });
     } else if (!goalMet) {
       _previousGoalMet = false;
@@ -116,12 +135,14 @@ extension _HomeCalories on _HomeScreenState {
                 ),
                 const SizedBox(width: 8),
                 // The flame is an achievement, not decoration: it appears
-                // only once today's calorie goal is met. Until then the card
-                // states what is still to go — a habit streak sitting next to
-                // a half-filled ring read as a win on a day not finished.
+                // only once today's calorie goal is met, and it counts the
+                // CALORIE-GOAL streak — consecutive banked days the goal was
+                // met, computed like a habit's daily streak — not the habit
+                // streak, which sits next to a different goal. Until then
+                // the card states what is still to go.
                 goalMet
                     ? StreakFlame(
-                        streak: HabitStore.instance.totalStreakPower,
+                        streak: _calorieStreak,
                         fontSize: 15,
                       )
                     : Text(

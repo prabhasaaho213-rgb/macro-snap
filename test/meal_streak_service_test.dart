@@ -1,77 +1,85 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:macro_snap/models/habit.dart';
 import 'package:macro_snap/services/meal_streak_service.dart';
 
-/// Pins the pure streak math behind MealStreakService: continuation on
-/// consecutive days, reset on a gap, and the **Zenkai Boost** — coming back
-/// after breaking a 3+ day streak.
+/// Pins the pure streak math behind MealStreakService: the calorie-goal
+/// streak works like a habit's daily streak — every day the goal is met is
+/// banked as a date marker, the current streak is the run of consecutive
+/// banked days ending today (or yesterday while today is still pending),
+/// and the best streak is the longest run on record.
 void main() {
-  final today = DateTime(2026, 8, 10);
-  String d(int month, int day) => '2026-$month-$day';
+  DateTime day(int y, int m, int d) => DateTime(y, m, d);
+  String dateKeyOf(int y, int m, int d) => dateKey(day(y, m, d));
 
-  group('computeStreakUpdate', () {
-    test('same-day check does not change the streak', () {
-      final r = MealStreakService.computeStreakUpdate(
-        lastDate: d(8, 10),
-        current: 5,
-        today: today,
+  group('computeCurrentStreakFor', () {
+    test('a banked today is counted, then the run continues backwards', () {
+      final streak = MealStreakService.computeCurrentStreakFor(
+        hitDates: [
+          for (var i = 0; i < 5; i++) dateKeyOf(2026, 8, 10 - i),
+        ],
+        today: day(2026, 8, 10),
       );
-      expect(r.newStreak, 5);
-      expect(r.brokenStreak, 0);
-      expect(r.zenkai, isFalse);
+      expect(streak, 5);
     });
 
-    test('consecutive day continues the streak', () {
-      final r = MealStreakService.computeStreakUpdate(
-        lastDate: d(8, 9),
-        current: 5,
-        today: today,
+    test('today not banked yet: counts from yesterday (goal still pending)', () {
+      final streak = MealStreakService.computeCurrentStreakFor(
+        hitDates: [
+          dateKeyOf(2026, 8, 8),
+          dateKeyOf(2026, 8, 9),
+          dateKeyOf(2026, 8, 5),
+        ],
+        today: day(2026, 8, 10),
       );
-      expect(r.newStreak, 6);
-      expect(r.zenkai, isFalse);
+      expect(streak, 2);
     });
 
-    test('first-ever log starts a streak without a boost', () {
-      final r = MealStreakService.computeStreakUpdate(
-        lastDate: '',
-        current: 0,
-        today: today,
+    test('fresh start, nothing banked, today not met: streak is 0', () {
+      final streak = MealStreakService.computeCurrentStreakFor(
+        hitDates: const [],
+        today: day(2026, 8, 10),
       );
-      expect(r.newStreak, 1);
-      expect(r.brokenStreak, 0);
-      expect(r.zenkai, isFalse);
+      expect(streak, 0);
     });
 
-    test('short broken streak (1-2 days) is not a Zenkai Boost', () {
-      final r = MealStreakService.computeStreakUpdate(
-        lastDate: d(8, 7),
-        current: 2,
-        today: today,
+    test('a missed day breaks the run — like a habit completion missing', () {
+      final streak = MealStreakService.computeCurrentStreakFor(
+        hitDates: [
+          dateKeyOf(2026, 8, 1),
+          dateKeyOf(2026, 8, 2),
+          // 3rd missed
+          dateKeyOf(2026, 8, 4),
+          dateKeyOf(2026, 8, 5),
+        ],
+        today: day(2026, 8, 5),
       );
-      expect(r.newStreak, 1);
-      expect(r.brokenStreak, 0);
-      expect(r.zenkai, isFalse);
+      expect(streak, 2);
+    });
+  });
+
+  group('computeBestStreakFor', () {
+    test('longest run wins, even if it is not the current one', () {
+      final best = MealStreakService.computeBestStreakFor(
+        hitDates: [
+          dateKeyOf(2026, 7, 1),
+          dateKeyOf(2026, 7, 2),
+          dateKeyOf(2026, 7, 3),
+          dateKeyOf(2026, 7, 4),
+          dateKeyOf(2026, 7, 5),
+          // a separate 3-day run later
+          dateKeyOf(2026, 8, 1),
+          dateKeyOf(2026, 8, 2),
+          dateKeyOf(2026, 8, 3),
+        ],
+      );
+      expect(best, 5);
     });
 
-    test('breaking a 3+ day streak and coming back triggers Zenkai Boost', () {
-      final r = MealStreakService.computeStreakUpdate(
-        lastDate: d(8, 7),
-        current: 12,
-        today: today,
+    test('empty history has no best', () {
+      expect(
+        MealStreakService.computeBestStreakFor(hitDates: const []),
+        0,
       );
-      expect(r.newStreak, 1);
-      expect(r.brokenStreak, 12);
-      expect(r.zenkai, isTrue);
-    });
-
-    test('a two-day gap after a long streak is still a Zenkai Boost', () {
-      final r = MealStreakService.computeStreakUpdate(
-        lastDate: d(8, 5),
-        current: 30,
-        today: today,
-      );
-      expect(r.newStreak, 1);
-      expect(r.brokenStreak, 30);
-      expect(r.zenkai, isTrue);
     });
   });
 }

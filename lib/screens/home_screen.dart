@@ -7,12 +7,13 @@ import '../core/theme.dart';
 import '../navigation/route_observer.dart';
 import '../services/meal_store.dart';
 import '../models/meal_record.dart';
+import '../models/habit.dart';
 import '../services/scan_gate.dart';
+import '../services/meal_streak_service.dart';
 import '../services/subscription_service.dart';
 import '../models/diet_profile.dart';
 import '../models/bmi.dart';
 import '../services/weight_store.dart';
-import '../services/habit_store.dart';
 
 import '../widgets/animations.dart';
 import '../widgets/bmi_gauge.dart';
@@ -51,6 +52,11 @@ class _HomeScreenState extends State<HomeScreen>
   String _name = '';
   int _scansLeft = 3;
   bool _previousGoalMet = false; // Track to detect transition to goal-met
+
+  /// The calorie-goal streak (consecutive banked days the goal was met),
+  /// loaded with the rest of Home so the flame on the calorie card reads
+  /// it synchronously. Updated when a new day is banked.
+  int _calorieStreak = 0;
 
   /// How many meals were logged today the last time Home painted. Used to
   /// spot the 0 → 1 transition that is a user's first log of the day.
@@ -192,6 +198,15 @@ class _HomeScreenState extends State<HomeScreen>
     // screen that was already showing one.
     _todayMealsSeen = MealStore.instance.todayMeals.length;
     await DietPlanService.instance.load();
+    // Baseline for the goal-met celebration: if the goal was already met
+    // when the app opened, this must not read as a "goal just reached"
+    // transition — that once-true state used to fire the confetti on every
+    // open after the data came in (first build saw 0 kcal, the setState
+    // after load then crossed the threshold with no user action).
+    final targetCal = DietPlanService.instance.profile?.targetCalories ?? 2000;
+    _previousGoalMet =
+        targetCal > 0 && MealStore.instance.todayCalories >= targetCal;
+    _calorieStreak = await MealStreakService.getCurrent();
     await SubscriptionService.instance.load();
     final prefs = await SharedPreferences.getInstance();
     final name = prefs.getString('name') ?? '';
