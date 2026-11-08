@@ -85,6 +85,16 @@ class _DietPlanScreenState extends State<DietPlanScreen> {
     if (w == null || h == null || a == null || w <= 0 || h <= 0 || a <= 0) {
       return; // a half-typed form is not a profile
     }
+    // The same 18.5 floor _calculate() enforces with a dialog, applied
+    // silently here because dispose() cannot wait on one: a deficit is never
+    // saved for somebody below the healthy BMI range, whichever button they
+    // used to leave the screen.
+    final bmi = BmiCalculator.value(weightKg: w, heightCm: h);
+    if (_goal == Goal.loseWeight &&
+        bmi != null &&
+        bmi < DietProfile.underweightBmi) {
+      _goal = Goal.maintain;
+    }
     final saved = _profile;
     if (saved != null &&
         saved.weightKg == w &&
@@ -333,31 +343,33 @@ class _DietPlanScreenState extends State<DietPlanScreen> {
     }
   }
 
-  void _reset() {
-    DietPlanService.instance.save(
-      DietProfile(
-        weightKg: 70,
-        heightCm: 170,
-        age: 25,
-        gender: Gender.male,
-        goal: Goal.maintain,
-        activity: ActivityLevel.moderate,
-        diet: DietPreference.vegetarian,
-      ),
-    );
-    _weightCtrl.text = '70';
-    _heightCtrl.text = '170';
-    _ageCtrl.text = '25';
+  /// Empties the editor WITHOUT touching the saved profile.
+  ///
+  /// This used to save a fabricated 70 kg / 170 cm / 25-year-old male profile
+  /// over the real one, from an unlabelled icon a few pixels from the back
+  /// button — one mis-tap permanently lost the numbers onboarding collected.
+  /// Clearing the form is all this action can honestly do; the stored plan is
+  /// only replaced by a real [_calculate] with real numbers.
+  void _clearForm() {
+    _weightCtrl.clear();
+    _heightCtrl.clear();
+    _ageCtrl.clear();
     setState(() {
       _gender = Gender.male;
       _goal = Goal.maintain;
-      _activity = ActivityLevel.moderate;
+      _activity = ActivityLevel.sedentary;
       _diet = DietPreference.vegetarian;
       _profile = null;
       _avatar = '😎';
       _aiPlan = null;
       _aiError = '';
     });
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Form cleared — your saved plan is unchanged'),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
   }
 
   @override
@@ -375,7 +387,11 @@ class _DietPlanScreenState extends State<DietPlanScreen> {
         ),
         title: const Text('Diet Plan'),
         actions: [
-          IconButton(icon: const Icon(Icons.refresh), onPressed: _reset),
+          IconButton(
+            icon: const Icon(Icons.clear_all_rounded),
+            tooltip: 'Clear form',
+            onPressed: _clearForm,
+          ),
         ],
       ),
       body: SingleChildScrollView(
@@ -974,8 +990,14 @@ class _DietPlanScreenState extends State<DietPlanScreen> {
     final p = _profile!;
     final cal = MealStore.instance.todayCalories;
     final protein = MealStore.instance.todayProtein;
-    final ratio = (cal / p.targetCalories).clamp(0.0, 1.0);
-    final protRatio = (protein / p.targetProtein).clamp(0.0, 1.0);
+    // A profile written by an older build can carry a 0 target; dividing by
+    // it hands NaN to AnimatedProgressBar and breaks the paint.
+    final ratio = p.targetCalories <= 0
+        ? 0.0
+        : (cal / p.targetCalories).clamp(0.0, 1.0);
+    final protRatio = p.targetProtein <= 0
+        ? 0.0
+        : (protein / p.targetProtein).clamp(0.0, 1.0);
     return GlassCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
