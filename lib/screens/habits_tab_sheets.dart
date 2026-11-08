@@ -105,8 +105,21 @@ extension _HabitsSheets on _HabitsTabState {
               title: 'Reset Streak',
               subtitle: 'Clear all progress, keep the habit',
               isDark: isDark,
-              onTap: () {
+              onTap: () async {
                 Navigator.pop(ctx);
+                if (!await _confirmHabitAction(
+                  title: 'Reset streak?',
+                  body:
+                      'Every completed and skipped day for "${h.name}" is '
+                      'cleared. The habit itself stays.',
+                  confirmLabel: 'Reset',
+                  destructive: false,
+                )) {
+                  return;
+                }
+                // The confirm awaits a dialog; guard the very context used
+                // below (this method takes one, so `mounted` alone is not it).
+                if (!context.mounted) return;
                 h.completedDates.clear();
                 h.skippedDates.clear();
                 // Completion-state change only — the reminder schedule is
@@ -136,6 +149,16 @@ extension _HabitsSheets on _HabitsTabState {
               isDark: isDark,
               onTap: () async {
                 Navigator.pop(ctx);
+                if (!await _confirmHabitAction(
+                  title: 'Delete habit?',
+                  body:
+                      '"${h.name}" and its ${h.currentStreak()}-day history '
+                      'are removed permanently.',
+                  confirmLabel: 'Delete',
+                  destructive: true,
+                )) {
+                  return;
+                }
                 await store.remove(h);
               },
             ),
@@ -146,6 +169,42 @@ extension _HabitsSheets on _HabitsTabState {
   }
 
   // ─── DAY DETAIL BOTTOM SHEET ────────────────────────────
+  /// Confirmation for the two irreversible habit actions.
+  ///
+  /// Both used to fire straight from one tap in the action sheet, so a
+  /// mis-tap on "Delete Habit" removed months of history with no undo.
+  Future<bool> _confirmHabitAction({
+    required String title,
+    required String body,
+    required String confirmLabel,
+    required bool destructive,
+  }) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Text(title),
+        content: Text(body),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: destructive
+                ? FilledButton.styleFrom(
+                    backgroundColor: MacroSnapTheme.neonPink,
+                  )
+                : null,
+            child: Text(confirmLabel),
+          ),
+        ],
+      ),
+    );
+    return confirmed == true;
+  }
+
   void _showDayDetail(DateTime date, int count, List<String> habitNames) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final now = DateTime.now();
@@ -217,7 +276,7 @@ extension _HabitsSheets on _HabitsTabState {
                         ),
                       ),
                       Text(
-                        '$count/${habitNames.length} habits completed',
+                        '$count/${store.habits.length} habits completed',
                         style: TextStyle(
                           fontSize: 13,
                           fontWeight: FontWeight.w600,
@@ -399,6 +458,7 @@ extension _HabitsSheets on _HabitsTabState {
     var reminderEnabled = existing?.reminderEnabled ?? false;
     var reminderHour = existing?.reminderHour ?? 20;
     var reminderMinute = existing?.reminderMinute ?? 0;
+    String? nameError;
 
     await showModalBottomSheet(
       context: context,
@@ -427,8 +487,14 @@ extension _HabitsSheets on _HabitsTabState {
                 TextField(
                   controller: nameCtrl,
                   autofocus: !isEdit,
+                  onChanged: (_) {
+                    if (nameError != null) {
+                      setModalState(() => nameError = null);
+                    }
+                  },
                   decoration: InputDecoration(
                     hintText: 'What do you want to build?',
+                    errorText: nameError,
                     filled: true,
                     fillColor: Theme.of(
                       context,
@@ -695,10 +761,16 @@ extension _HabitsSheets on _HabitsTabState {
                       foregroundColor: Colors.black,
                     ),
                     onPressed: () async {
-                      if (nameCtrl.text.trim().isEmpty) return;
+                      final name = nameCtrl.text.trim();
+                      if (name.isEmpty) {
+                        setModalState(
+                          () => nameError = 'Give your mission a name',
+                        );
+                        return;
+                      }
                       if (isEdit) {
                         existing
-                          ..name = nameCtrl.text.trim()
+                          ..name = name
                           ..emoji = emoji
                           ..colorValue = color
                           ..frequency = frequency
@@ -710,7 +782,7 @@ extension _HabitsSheets on _HabitsTabState {
                       } else {
                         final habit = Habit(
                           id: DateTime.now().microsecondsSinceEpoch.toString(),
-                          name: nameCtrl.text.trim(),
+                          name: name,
                           emoji: emoji,
                           colorValue: color,
                           frequency: frequency,
