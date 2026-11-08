@@ -98,22 +98,51 @@ class _ResultScreenState extends State<ResultScreen>
     final existing = widget.existingMeal;
     if (existing != null) {
       // View mode: render the logged meal's stored nutrition directly —
-      // nothing to analyze and no scan counted.
+      // nothing to analyze and no scan counted. When the meal was logged
+      // from a scan, the scan's per-item breakdown was stored with it, so
+      // one dish is rebuilt per item: the same item names, gram weights and
+      // per-dish cards the scan screen showed. Older records (and manual or
+      // barcode entries, which never had a breakdown) fall back to the
+      // single aggregate dish.
+      final items = existing.items;
+      final totalGrams =
+          existing.servingGrams ??
+          (items.any((i) => i.grams > 0)
+              ? items.fold<int>(0, (s, i) => s + i.grams.round())
+              : 100);
       _result = NutritionResult(
-        dishes: [
-          DishItem(
-            name: existing.name,
-            portionDescription: existing.serving,
-            caloriesPer100g: existing.calories,
-            proteinPer100g: existing.protein,
-            carbsPer100g: existing.carbs,
-            fatsPer100g: existing.fats,
-            fiberPer100g: existing.fiber,
-          ),
-        ],
+        dishes: items.isNotEmpty
+            ? [
+                for (final item in items)
+                  DishItem(
+                    name: item.name,
+                    portionDescription: item.serving,
+                    caloriesPer100g: item.calories,
+                    proteinPer100g: item.protein,
+                    carbsPer100g: item.carbs,
+                    fatsPer100g: item.fats,
+                    fiberPer100g: item.fiber,
+                    grams: item.grams,
+                    ingredients: [
+                      for (final ing in item.ingredients)
+                        DishIngredient(name: ing.name, grams: ing.grams),
+                    ],
+                  ),
+              ]
+            : [
+                DishItem(
+                  name: existing.name,
+                  portionDescription: existing.serving,
+                  caloriesPer100g: existing.calories,
+                  proteinPer100g: existing.protein,
+                  carbsPer100g: existing.carbs,
+                  fatsPer100g: existing.fats,
+                  fiberPer100g: existing.fiber,
+                ),
+              ],
         description: existing.serving,
         confidence: 1.0,
-        grams: 100,
+        grams: items.isNotEmpty ? totalGrams.clamp(5, 3000).toInt() : 100,
       );
       _isAnalyzing = false;
       _animController.forward();

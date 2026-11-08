@@ -275,6 +275,31 @@ extension _ResultResults on _ResultScreenState {
                                 fats: r.fats,
                                 fiber: r.fiber,
                                 serving: r.description,
+                                // The scan's per-item breakdown rides on
+                                // the record, so reopening this meal later
+                                // shows item names, gram weights and the
+                                // per-dish cards exactly as the scan did.
+                                items: [
+                                  for (final d in r.dishes)
+                                    MealItem(
+                                      name: d.name,
+                                      serving: d.portionDescription,
+                                      grams: d.grams,
+                                      calories: d.caloriesPer100g,
+                                      protein: d.proteinPer100g,
+                                      carbs: d.carbsPer100g,
+                                      fats: d.fatsPer100g,
+                                      fiber: d.fiberPer100g,
+                                      ingredients: [
+                                        for (final i in d.ingredients)
+                                          MealIngredient(
+                                            name: i.name,
+                                            grams: i.grams,
+                                          ),
+                                      ],
+                                    ),
+                                ],
+                                servingGrams: r.grams,
                                 tastiness: _cardTastiness?.id,
                                 imagePath: keptImage,
                               ),
