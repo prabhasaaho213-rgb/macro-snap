@@ -36,7 +36,7 @@ class UpdatesScreen extends StatefulWidget {
   /// found.
   /// `test/release_version_test.dart` fails when this drifts from the
   /// version in `pubspec.yaml`, so a release bump cannot forget it.
-  static const String latestVersion = '1.5.12';
+  static const String latestVersion = '1.5.13';
 
   /// SharedPreferences key holding the latest version the user has seen.
   static const String seenVersionKey = 'updates_seen_version';
@@ -49,8 +49,20 @@ class _UpdatesScreenState extends State<UpdatesScreen> {
   static const List<_UpdateEntry> _changelog = [
     _UpdateEntry(
       version: UpdatesScreen.latestVersion,
-      date: 'Latest',
+      date: '2026-11-08',
       isLatest: true,
+      notes: [
+        'Deleting an account now leaves every other account on the same phone untouched — habits, water, weight history and badges included',
+        'Choosing pounds or inches in onboarding now saves the weight and height you picked instead of converting them twice',
+        'Diet Plan: the clear button empties the form and leaves your saved plan alone, and a deficit is never saved below a healthy BMI',
+        'Habits: Delete and Reset Streak ask before wiping your history, and an account that lapsed from Pro keeps syncing',
+        'Barcode scanning still works without a camera — type the label numbers or the grams you actually ate',
+        'Recent Foods tags show the right empty message, and the paywall no longer lists meal history the app does not have',
+      ],
+    ),
+    _UpdateEntry(
+      version: '1.5.12',
+      date: '2026-11-01',
       notes: [
         'Home and Habits finally sit on one grid: the same 24dp side margin, the same 20dp card padding, 16sp card titles and 12dp between cards',
         'The streak flame appears on the calorie card only once you have hit your calorie goal — before that the card tells you what is left',
