@@ -182,6 +182,25 @@ class MealStreakService {
     return current >= best && current > 0;
   }
 
+  /// Forgets the streak entirely — memory and storage.
+  ///
+  /// The banked days are stored globally (not per account), so without this a
+  /// deleted account's streak would be served to the next account on this
+  /// device.
+  static Future<void> clear() async {
+    _hitDates = [];
+    _loaded = true; // empty and loaded: nothing on disk is left to re-read
+    _loadFuture = null;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove(_keyDates);
+      await prefs.remove(_keyLegacyStreak);
+      await prefs.remove(_keyLegacyDate);
+    } catch (_) {
+      // A storage failure must not block the wipe.
+    }
+  }
+
   /// Test hook: forget everything loaded so the next call re-reads prefs.
   @visibleForTesting
   static void resetForTest() {

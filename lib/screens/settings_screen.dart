@@ -1,11 +1,13 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 import 'package:flutter/material.dart';
 
 // Keep the explicit relative import for the login screen; onboarding is
 // imported further down (see below the widget imports).
 
 import '../services/auth_http.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_sign_in/google_sign_in.dart';
@@ -16,7 +18,10 @@ import '../models/diet_profile.dart';
 import '../widgets/glass_card.dart';
 import '../widgets/animations.dart';
 import '../services/badge_service.dart';
+import '../services/account_partition.dart';
+import '../services/meal_streak_service.dart';
 import '../services/meal_store.dart';
+import '../services/weight_store.dart';
 import '../services/meal_sync_service.dart';
 import '../services/habit_store.dart';
 import '../services/rate_us_service.dart';
@@ -67,8 +72,87 @@ Future<bool?> confirmAccountDeletion(
   );
 }
 
-/// Wipes every local store + prefs for the active account, signs out of
-/// Firebase/Google, and returns to the login screen.
+/// Removes the ACTIVE account's local data — and nothing else.
+///
+/// This used to be `prefs.clear()`, which wiped the whole device. Habits,
+/// water, weight history, recent foods and badges are stored per account as
+/// `<base>_<suffix>` (see [AccountPartition]), so deleting one account also
+/// erased every other account's data on the same phone. The two file-backed
+/// stores (meals, diet profile) get the same treatment, and the in-memory
+/// singletons are reloaded so no deleted account survives in memory.
+Future<void> _wipeAccountData(SharedPreferences prefs) async {
+  final suffix = AccountPartition.suffix(
+    AccountPartition.activeFromPrefs(prefs),
+  );
+
+  // The trophy case first, while `phone` still resolves to this account's
+  // key — clearing it after the session keys would target the guest slot.
+  await BadgeService.instance.clear();
+
+  await AccountPartition.removeAccountData(prefs, suffix: suffix);
+
+  // The two stores that live in files rather than prefs.
+  try {
+    final dir = await getApplicationDocumentsDirectory();
+    for (final base in const ['meals', 'diet_profile']) {
+      final file = File(
+        '${dir.path}/${AccountPartition.key(base, suffix)}.json',
+      );
+      if (await file.exists()) await file.delete();
+    }
+  } catch (e, st) {
+    logError('_wipeAccountData(files)', e, st);
+  }
+
+  for (final key in _sessionPrefKeys) {
+    await prefs.remove(key);
+  }
+  for (final key in prefs
+      .getKeys()
+      .where((k) => k.startsWith('nav_ab'))
+      .toList()) {
+    await prefs.remove(key);
+  }
+
+  // The calorie-goal streak is stored globally, so it would otherwise be
+  // inherited by the next account on this device.
+  await MealStreakService.clear();
+
+  // Drop the in-memory copies too: the singletons would otherwise serve the
+  // deleted account's data to whoever signs in next.
+  await MealStore.instance.reload();
+  await HabitStore.instance.reload();
+  await WeightStore.instance.reload();
+  await DietPlanService.instance.load();
+}
+
+/// Keys that belong to whoever is signed in, not to a storage partition.
+const List<String> _sessionPrefKeys = [
+  'phone',
+  'email',
+  'photo_url',
+  'name',
+  'nickname',
+  'last_sync',
+  'onboarding_v2_done',
+  'subscription_offered',
+  'subscribed',
+  'subscribed_at',
+  'pro_until',
+  'trial_ends_at',
+  'updates_seen_version',
+  'scan_count',
+  'scan_day',
+  'server_scan_used',
+  'server_scan_limit',
+  'server_scan_day',
+  'server_scan_reset',
+  'first_log_celebrated_day',
+  'goal_celebrated_day',
+];
+
+/// Wipes the active account's local data, signs out of Firebase/Google,
+/// and returns to the login screen.
 Future<void> wipeLocalAndSignOut(BuildContext context) async {
   try {
     // Firebase Auth has no instance-level deleteUser(); the correct API is
@@ -88,18 +172,15 @@ Future<void> wipeLocalAndSignOut(BuildContext context) async {
   } catch (e) {
     debugPrint('Error: $e');
   }
-  // Clear ALL local preferences (this device's partition + globals).
+  // Clear THIS account's local data — not the whole device. This used to be
+  // `prefs.clear()`, which also erased every other account's habits, water,
+  // weight history and badges on the same phone. See [_wipeAccountData].
   try {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.clear();
+    await _wipeAccountData(prefs);
   } catch (e) {
     debugPrint('Error: $e');
   }
-  // Clearing prefs wipes the trophy case on disk, but BadgeService is a
-  // singleton holding the awards in memory — without this the next account
-  // would open Profile and see the deleted user's badges, then save them
-  // under its own key.
-  await BadgeService.instance.clear();
   if (context.mounted) {
     Navigator.of(context).pushAndRemoveUntil(
       MaterialPageRoute(builder: (_) => const PhoneLoginScreen()),

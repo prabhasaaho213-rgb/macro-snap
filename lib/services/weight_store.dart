@@ -221,6 +221,18 @@ class WeightStore extends ChangeNotifier {
     );
   }
 
+  /// Re-reads for the newly active account.
+  ///
+  /// Login, logout and account deletion all change the partition underneath
+  /// this singleton; without a reload its in-memory history would still
+  /// belong to the previous account.
+  Future<void> reload() async {
+    _entries = [];
+    _loaded = false;
+    _prefs = null;
+    await load();
+  }
+
   /// Test hook: forgets everything loaded so the next [load] re-reads prefs.
   @visibleForTesting
   void resetForTest() {
