@@ -109,6 +109,10 @@ class _BmiScreenState extends State<BmiScreen> {
   Future<void> _saveToProfile() async {
     final profile = _profile;
     if (profile == null) return;
+    // Only a real weight change belongs on the timeline. Recording on every
+    // save meant correcting your HEIGHT counted as a weigh-in — and on a
+    // fresh install could earn the "First Weigh-In" badge for it.
+    final weightChanged = profile.weightKg != _weightKg;
     await DietPlanService.instance.save(
       DietProfile(
         weightKg: _weightKg,
@@ -123,7 +127,7 @@ class _BmiScreenState extends State<BmiScreen> {
     );
     // Also land on the timeline: the profile holds "current", this holds
     // "over time" — the two together are what the trend line draws.
-    await WeightStore.instance.record(_weightKg);
+    if (weightChanged) await WeightStore.instance.record(_weightKg);
     if (!mounted) return;
     setState(() => _dirty = false);
     ScaffoldMessenger.of(context).showSnackBar(

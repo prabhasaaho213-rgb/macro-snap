@@ -223,12 +223,19 @@ class _RecentFoodsScreenState extends State<RecentFoodsScreen> {
                       color: MacroSnapTheme.textTertiary(context),
                     ),
                   ),
-                  const Spacer(),
-                  Text(
-                    'Tap to log · Long-press to favorite · Swipe to delete',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: MacroSnapTheme.textQuaternary(context),
+                  const SizedBox(width: 8),
+                  // Ellipsize rather than overflow: the hint is long and this
+                  // row has to survive a 2x system font on a narrow phone.
+                  Expanded(
+                    child: Text(
+                      'Tap to log · Long-press to favorite · Swipe to delete',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      textAlign: TextAlign.end,
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: MacroSnapTheme.textQuaternary(context),
+                      ),
                     ),
                   ),
                 ],
@@ -257,6 +264,24 @@ class _RecentFoodsScreenState extends State<RecentFoodsScreen> {
   }
 
   Widget _buildEmptyState(bool isDark) {
+    // The chip row is a filter too. With a tag (or Favorites) active and
+    // nothing matching, "No recent foods yet — scan a food" was wrong: the
+    // saved foods are still there, this view is just empty.
+    final String title;
+    final String body;
+    if (_searchQuery.isNotEmpty) {
+      title = 'No foods match your search';
+      body = 'Try a different search term';
+    } else if (_activeTag == '★') {
+      title = 'No favorites yet';
+      body = 'Long-press a food to star it\nand it will show up here';
+    } else if (_activeTag != null) {
+      title = 'Nothing tagged $_activeTag yet';
+      body = 'Foods are tagged automatically when you log them';
+    } else {
+      title = 'No recent foods yet';
+      body = 'Scan a food and it will appear here\nfor quick re-add';
+    }
     return Center(
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -276,9 +301,7 @@ class _RecentFoodsScreenState extends State<RecentFoodsScreen> {
           ),
           const SizedBox(height: 16),
           Text(
-            _searchQuery.isEmpty
-                ? 'No recent foods yet'
-                : 'No foods match your search',
+            title,
             style: TextStyle(
               fontSize: 16,
               fontWeight: FontWeight.w700,
@@ -287,9 +310,7 @@ class _RecentFoodsScreenState extends State<RecentFoodsScreen> {
           ),
           const SizedBox(height: 8),
           Text(
-            _searchQuery.isEmpty
-                ? 'Scan a food and it will appear here\nfor quick re-add'
-                : 'Try a different search term',
+            body,
             textAlign: TextAlign.center,
             style: TextStyle(
               fontSize: 14,
