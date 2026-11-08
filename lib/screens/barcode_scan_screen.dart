@@ -60,11 +60,16 @@ class _BarcodeScanScreenState extends State<BarcodeScanScreen> {
     super.dispose();
   }
 
-  /// Parsed portion, clamped to something a single meal can plausibly be.
-  int get _grams {
-    final typed = int.tryParse(_gramsCtrl.text.trim()) ?? 100;
-    return typed.clamp(1, 2000);
+  /// The portion as typed, or null when it is empty or out of range.
+  int? get _gramsOrNull {
+    final typed = int.tryParse(_gramsCtrl.text.trim());
+    if (typed == null || typed < 1 || typed > 2000) return null;
+    return typed;
   }
+
+  /// Live-preview fallback only. Logging goes through [_gramsOrNull], so an
+  /// empty box can no longer silently log 100 g.
+  int get _grams => _gramsOrNull ?? 100;
 
   double get _ratio => _grams / 100.0;
 
@@ -122,7 +127,17 @@ class _BarcodeScanScreenState extends State<BarcodeScanScreen> {
   Future<void> _log() async {
     final food = _found;
     if (food == null) return;
-    MealStore.instance.add(mealFromBarcode(food, _grams));
+    final grams = _gramsOrNull;
+    if (grams == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Enter how many grams you ate (1–2000)'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+    MealStore.instance.add(mealFromBarcode(food, grams));
     if (mounted) Navigator.pop(context);
   }
 
@@ -146,7 +161,31 @@ class _BarcodeScanScreenState extends State<BarcodeScanScreen> {
   Widget _buildScanner(bool isDark) {
     return Stack(
       children: [
-        MobileScanner(onDetect: _onDetect),
+        MobileScanner(
+          onDetect: _onDetect,
+          // A refused camera used to be a silent black rectangle: no message,
+          // and manual entry was reachable only AFTER a failed scan, so there
+          // was no way into the screen at all.
+          errorBuilder: (context, error, child) => _buildCameraError(),
+        ),
+        Positioned(
+          bottom: 28,
+          left: 20,
+          right: 20,
+          child: OutlinedButton.icon(
+            onPressed: _enterManually,
+            icon: const Icon(Icons.keyboard_rounded, size: 18),
+            label: const Text('Enter it manually'),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: Colors.white,
+              side: BorderSide(color: Colors.white.withValues(alpha: 0.45)),
+              padding: const EdgeInsets.symmetric(vertical: 14),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
+            ),
+          ),
+        ),
         Center(
           child: Container(
             width: 250,
@@ -192,7 +231,7 @@ class _BarcodeScanScreenState extends State<BarcodeScanScreen> {
             ),
           ),
         Positioned(
-          bottom: 80,
+          bottom: 96,
           left: 0,
           right: 0,
           child: Text(
@@ -213,6 +252,59 @@ class _BarcodeScanScreenState extends State<BarcodeScanScreen> {
         ),
       ],
     );
+  }
+
+  /// Shown when the camera is missing, denied or crashes.
+  ///
+  /// The button above still works, so this is an explanation rather than a
+  /// dead end.
+  Widget _buildCameraError() {
+    return const Center(
+      child: Padding(
+        padding: EdgeInsets.all(28),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.no_photography_rounded, size: 44, color: Colors.white),
+            SizedBox(height: 14),
+            Text(
+              'The camera is not available',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 17,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            SizedBox(height: 8),
+            Text(
+              'Allow camera access in Settings to scan a barcode, or use the '
+              'button below to type the label numbers instead.',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: Colors.white70, fontSize: 13, height: 1.4),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Manual entry without a scan, for a refused camera or a label with no
+  /// readable barcode.
+  Future<void> _enterManually() async {
+    setState(() => _scanning = false);
+    final manual = await Navigator.push<BarcodeFood>(
+      context,
+      habitFlowRoute<BarcodeFood>(
+        const ManualBarcodeEntryScreen(barcode: ''),
+      ),
+    );
+    if (!mounted) return;
+    setState(() {
+      _found = manual;
+      // Cancel means "back to scanning", not a dead end.
+      _scanning = manual == null;
+    });
   }
 
   Widget _buildResult(bool isDark) {
@@ -392,7 +484,9 @@ class _BarcodeScanScreenState extends State<BarcodeScanScreen> {
         ),
         const SizedBox(height: 6),
         Text(
-          'Label values are per 100 g — the numbers below are for $_grams g',
+          _gramsOrNull == null
+              ? 'Enter the amount you ate — label values are per 100 g'
+              : 'Label values are per 100 g — the numbers below are for $_grams g',
           style: TextStyle(
             fontSize: 11.5,
             color: MacroSnapTheme.textTertiary(context),
