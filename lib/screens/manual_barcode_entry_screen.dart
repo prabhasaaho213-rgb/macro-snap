@@ -51,7 +51,9 @@ class _ManualBarcodeEntryScreenState extends State<ManualBarcodeEntryScreen> {
       barcode: widget.barcode,
       name: _nameCtrl.text.trim(),
       brand: 'Manual Entry',
-      caloriesPer100g: int.tryParse(_calCtrl.text.trim()) ?? 0,
+      // The field allows decimals and the validator accepts them, so parsing
+// this as an int turned "380.5" into 0 kcal with no warning.
+caloriesPer100g: (double.tryParse(_calCtrl.text.trim()) ?? 0).round(),
       proteinPer100g: double.tryParse(_proteinCtrl.text.trim()) ?? 0,
       carbsPer100g: double.tryParse(_carbsCtrl.text.trim()) ?? 0,
       fatsPer100g: double.tryParse(_fatsCtrl.text.trim()) ?? 0,

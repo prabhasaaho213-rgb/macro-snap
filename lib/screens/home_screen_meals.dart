@@ -341,7 +341,17 @@ extension _HomeMeals on _HomeScreenState {
                     final removed = m;
                     // Not awaited: the card must leave immediately, and a slow
                     // disk write should never hold the UI (or the snackbar).
-                    unawaited(MealStore.instance.remove(m.id));
+                    unawaited(
+                      MealStore.instance.remove(m.id).catchError((
+                        Object e,
+                        StackTrace st,
+                      ) {
+                        // The card leaves optimistically, so a failed
+                        // write only showed up later as the meal
+                        // reappearing with no explanation.
+                        logError('MealList.remove(${m.id})', e, st);
+                      }),
+                    );
                     _refresh();
                     if (!mounted) return;
                     ScaffoldMessenger.of(context).showSnackBar(

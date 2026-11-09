@@ -41,6 +41,28 @@ class _ConsistencyMapState extends State<ConsistencyMap> {
     return _shownMonth.year == now.year && _shownMonth.month == now.month;
   }
 
+  /// The oldest month worth showing: one before the first recorded
+  /// completion, or a year back when nothing has been completed yet.
+  ///
+  /// The back arrow used to have no floor at all — one tap at a time you
+  /// could walk the calendar into 1900 and never find the way home.
+  DateTime get _earliestMonth {
+    DateTime? earliest;
+    for (final h in widget.habits) {
+      for (final key in h.completedDates) {
+        final d = DateTime.tryParse(key);
+        if (d != null && (earliest == null || d.isBefore(earliest))) {
+          earliest = d;
+        }
+      }
+    }
+    final now = DateTime.now();
+    final anchor = earliest ?? DateTime(now.year, now.month - 12);
+    return DateTime(anchor.year, anchor.month - 1);
+  }
+
+  bool get _isEarliestMonth => !_shownMonth.isAfter(_earliestMonth);
+
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -93,7 +115,7 @@ class _ConsistencyMapState extends State<ConsistencyMap> {
             _navButton(
               icon: Icons.chevron_left_rounded,
               tooltip: 'Previous month',
-              onTap: () => _shiftMonth(-1),
+              onTap: _isEarliestMonth ? null : () => _shiftMonth(-1),
             ),
             Text(
               '${_monthName(shownMonth)} $shownYear',
@@ -168,8 +190,11 @@ class _ConsistencyMapState extends State<ConsistencyMap> {
                         right: colIndex == 6 ? 0 : cellGap,
                       ),
                       child: Tooltip(
-                        message:
-                            '${date.day}/${date.month}/${date.year}: $count/${widget.habits.length} habits',
+                        message: widget.habits.isEmpty
+                            ? '${date.day}/${date.month}/${date.year}: no habits yet'
+                            : '${date.day}/${date.month}/${date.year}: $count/'
+                                  '${widget.habits.length} '
+                                  'habit${widget.habits.length == 1 ? '' : 's'}',
                         child: GestureDetector(
                           onTap: isFuture
                               ? null

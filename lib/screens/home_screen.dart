@@ -31,6 +31,7 @@ import 'bmi_screen.dart';
 import 'barcode_scan_screen.dart';
 import 'result_screen.dart';
 import '../widgets/macro_bar.dart';
+import '../services/crash_reporting.dart';
 
 part 'home_screen_bmi.dart';
 part 'home_screen_header.dart';

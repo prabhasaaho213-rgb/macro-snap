@@ -346,6 +346,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
       await MealStore.instance.reload();
       await HabitStore.instance.reload();
       await BadgeService.instance.reload();
+      // Those three reloads hit the network; the screen can be popped while
+      // they run, so re-check before touching State.
+      if (!mounted) return;
+      // Those three reloads hit the network; the screen can be popped
+      // while they run, so re-check before touching State.
+      if (!mounted) return;
       setState(() => _phone = phone);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

@@ -36,7 +36,7 @@ class UpdatesScreen extends StatefulWidget {
   /// found.
   /// `test/release_version_test.dart` fails when this drifts from the
   /// version in `pubspec.yaml`, so a release bump cannot forget it.
-  static const String latestVersion = '1.5.13';
+  static const String latestVersion = '1.5.14';
 
   /// SharedPreferences key holding the latest version the user has seen.
   static const String seenVersionKey = 'updates_seen_version';
@@ -49,8 +49,21 @@ class _UpdatesScreenState extends State<UpdatesScreen> {
   static const List<_UpdateEntry> _changelog = [
     _UpdateEntry(
       version: UpdatesScreen.latestVersion,
-      date: '2026-11-08',
+      date: '2026-11-09',
       isLatest: true,
+      notes: [
+        'Habit reminders fire at the exact minute you chose; if Android refuses exact alarms, the reminder still arrives a little late instead of never',
+        'Pro now shows the date it ends when the grant has one - a referral month or the days left after a cancel read as a date, not a plain Subscribed tick',
+        'Upgrading a guest account, logging in from the paywall or answering the notification prompt no longer crashes if you leave the screen while it works',
+        'Running out of free scans no longer offers TRY AGAIN, which could never succeed - manual entry carries you until tomorrow',
+        'Connection errors say the server could not be reached instead of telling you to check your WiFi and start the backend',
+        'Barcode calories with a decimal are rounded instead of logged as zero, and editing one macro now scales every dish on the plate',
+        'A corrupt saved meal no longer hides the rest of your history, the heatmap stops at your first month, and Refer a Friend applies a code once',
+      ],
+    ),
+    _UpdateEntry(
+      version: UpdatesScreen.latestVersion,
+      date: '2026-11-08',
       notes: [
         'Deleting an account now leaves every other account on the same phone untouched — habits, water, weight history and badges included',
         'Choosing pounds or inches in onboarding now saves the weight and height you picked instead of converting them twice',

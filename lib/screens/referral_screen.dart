@@ -95,6 +95,9 @@ class _ReferralScreenState extends State<ReferralScreen> {
   }
 
   Future<void> _apply() async {
+    // One code per account. The server rejects a second one, so a tap
+    // after a success used to spend a round trip proving it.
+    if (_applyResult == 'success') return;
     final code = _codeCtrl.text.trim().toUpperCase();
     if (code.isEmpty) return;
     setState(() {
@@ -122,6 +125,7 @@ class _ReferralScreenState extends State<ReferralScreen> {
         _applyResult = 'success';
         _successUntil = until;
         _applying = false;
+        _codeCtrl.clear();
       });
     } catch (e) {
       if (!mounted) return;
@@ -288,7 +292,9 @@ class _ReferralScreenState extends State<ReferralScreen> {
               const SizedBox(width: 12),
               GradientButton(
                 label: 'Apply',
-                onPressed: _applying ? null : _apply,
+                onPressed: (_applying || _applyResult == 'success')
+                    ? null
+                    : _apply,
                 width: 100,
               ),
             ],
@@ -313,7 +319,11 @@ class _ReferralScreenState extends State<ReferralScreen> {
                     Expanded(
                       child: Text(
                         _successUntil == null
-                            ? '30 days of Pro activated!'
+                            // A paying account already has Pro and the
+                            // server reports no end date for it, so
+                            // "30 days" promised a window that may not
+                            // exist.
+                            ? 'Code applied — your Pro is active.'
                             : 'Pro is active until '
                                   '${_formatDate(_successUntil!)}',
                         style: TextStyle(

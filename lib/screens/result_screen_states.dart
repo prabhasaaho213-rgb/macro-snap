@@ -148,7 +148,6 @@ extension _ResultStates on _ResultScreenState {
   }
 
   Widget _buildError(bool isDark) {
-    final isNoUrl = _error == 'no_url';
     final isScanLimit = _error?.toLowerCase().contains('free scans') == true;
     return Center(
       child: Padding(
@@ -157,25 +156,15 @@ extension _ResultStates on _ResultScreenState {
           mainAxisSize: MainAxisSize.min,
           children: [
             Icon(
-              isNoUrl
-                  ? Icons.cloud_off_rounded
-                  : isScanLimit
-                  ? Icons.lock_rounded
-                  : Icons.help_outline_rounded,
+              isScanLimit ? Icons.lock_rounded : Icons.help_outline_rounded,
               size: 56,
-              color: isNoUrl
-                  ? MacroSnapTheme.macroProtein
-                  : isScanLimit
+              color: isScanLimit
                   ? MacroSnapTheme.neonPink
                   : MacroSnapTheme.neonOrange,
             ),
             const SizedBox(height: 12),
             Text(
-              isNoUrl
-                  ? 'Server Not Set'
-                  : isScanLimit
-                  ? 'Free Scans Used Today'
-                  : 'Could Not Identify',
+              isScanLimit ? 'Free Scans Used Today' : 'Could Not Identify',
               style: TextStyle(
                 fontSize: 20,
                 fontWeight: FontWeight.w700,
@@ -187,9 +176,7 @@ extension _ResultStates on _ResultScreenState {
               constraints: const BoxConstraints(maxHeight: 160),
               child: SingleChildScrollView(
                 child: Text(
-                  isNoUrl
-                      ? 'Enter your server URL in Settings to enable AI food analysis.'
-                      : _error ?? 'Something went wrong. Please try again.',
+                  _error ?? 'Something went wrong. Please try again.',
                   textAlign: TextAlign.center,
                   style: TextStyle(
                     fontSize: 14,
@@ -201,14 +188,11 @@ extension _ResultStates on _ResultScreenState {
               ),
             ),
             const SizedBox(height: 24),
-            // Action buttons
-            if (isNoUrl)
-              GradientButton(
-                label: 'Go Back',
-                onPressed: () => Navigator.pop(context),
-              )
-            else ...[
-              // Retry button
+            // A scan-limit refusal is not retryable: the next attempt hits the
+            // same server-side allowance and fails identically, so TRY AGAIN
+            // is hidden and manual entry stays the way out. Every other
+            // failure is transient and keeps its retry.
+            if (!isScanLimit) ...[
               SizedBox(
                 width: double.infinity,
                 height: 50,
@@ -236,23 +220,23 @@ extension _ResultStates on _ResultScreenState {
                 ),
               ),
               const SizedBox(height: 12),
-              // Manual entry option
-              TextButton.icon(
-                onPressed: () {
-                  _rebuild(() {
-                    _error = null;
-                    _result = NutritionResult(
-                      dishes: [],
-                      description: '',
-                      confidence: 1.0,
-                    );
-                  });
-                  _showManualEntryDialog(isDark);
-                },
-                icon: const Icon(Icons.edit_rounded, size: 18),
-                label: const Text('Enter Food Manually'),
-              ),
             ],
+            // Manual entry option
+            TextButton.icon(
+              onPressed: () {
+                _rebuild(() {
+                  _error = null;
+                  _result = NutritionResult(
+                    dishes: [],
+                    description: '',
+                    confidence: 1.0,
+                  );
+                });
+                _showManualEntryDialog(isDark);
+              },
+              icon: const Icon(Icons.edit_rounded, size: 18),
+              label: const Text('Enter Food Manually'),
+            ),
           ],
         ),
       ),

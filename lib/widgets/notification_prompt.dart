@@ -95,14 +95,14 @@ class _NotificationPromptDialogState extends State<_NotificationPromptDialog> {
     try {
       result = await widget.request();
     } catch (_) {
-      setState(() => _needsSettings = true);
+      if (mounted) setState(() => _needsSettings = true);
       return;
     }
     if (result.isGranted) {
       if (mounted) Navigator.of(context).pop();
     } else {
       // Denied again → point the user at the system settings.
-      setState(() => _needsSettings = true);
+      if (mounted) setState(() => _needsSettings = true);
     }
   }
 

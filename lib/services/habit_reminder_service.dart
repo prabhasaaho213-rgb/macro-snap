@@ -9,6 +9,7 @@ import '../models/habit.dart';
 import 'account_partition.dart';
 import 'notification_branding.dart';
 import 'crash_reporting.dart';
+import 'notification_scheduler.dart';
 
 class HabitReminderService {
   /// Public action ids referenced by [NotificationService] so the handler
@@ -54,16 +55,14 @@ class HabitReminderService {
     FlutterLocalNotificationsPlugin notifications,
   ) async {
     final details = await _details();
-    await notifications.zonedSchedule(
-      notificationId(h),
-      'Time for ${h.name} ${h.emoji}',
-      'Tap to mark this habit done and keep your streak going.',
-      when,
-      details,
-      androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
+    await scheduleZoned(
+      plugin: notifications,
+      id: notificationId(h),
+      title: 'Time for ${h.name} ${h.emoji}',
+      body: 'Tap to mark this habit done and keep your streak going.',
+      when: when,
+      details: details,
       matchDateTimeComponents: DateTimeComponents.time,
-      uiLocalNotificationDateInterpretation:
-          UILocalNotificationDateInterpretation.absoluteTime,
       payload: h.id,
     );
   }
@@ -96,15 +95,13 @@ class HabitReminderService {
   ) async {
     final when = tz.TZDateTime.now(tz.local).add(const Duration(minutes: 10));
     final details = await _details();
-    await notifications.zonedSchedule(
-      snoozeId(h),
-      'Time for ${h.name} ${h.emoji}',
-      'Tap to mark this habit done and keep your streak going.',
-      when,
-      details,
-      androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
-      uiLocalNotificationDateInterpretation:
-          UILocalNotificationDateInterpretation.absoluteTime,
+    await scheduleZoned(
+      plugin: notifications,
+      id: snoozeId(h),
+      title: 'Time for ${h.name} ${h.emoji}',
+      body: 'Tap to mark this habit done and keep your streak going.',
+      when: when,
+      details: details,
       payload: h.id,
     );
   }

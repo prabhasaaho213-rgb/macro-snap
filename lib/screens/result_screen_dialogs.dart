@@ -307,25 +307,47 @@ extension _ResultDialogs on _ResultScreenState {
                   // Override the computed values by modifying dishes
                   if (r.dishes.isNotEmpty) {
                     final ratio = (r.grams > 0 ? r.grams : 100) / 100.0;
-                    final d = r.dishes.first;
-                    final adjustedDish = DishItem(
-                      name: d.name,
-                      portionDescription: d.portionDescription,
-                      caloriesPer100g: ((cal / ratio) / r.dishes.length)
-                          .round(),
-                      proteinPer100g: (pro / ratio) / r.dishes.length,
-                      carbsPer100g: (carb / ratio) / r.dishes.length,
-                      fatsPer100g: (fat / ratio) / r.dishes.length,
-                      fiberPer100g: d.fiberPer100g,
-                      sugarPer100g: d.sugarPer100g,
-                      suitableFor: d.suitableFor,
+                    final count = r.dishes.length;
+                    double totalOf(double Function(DishItem d) pick) =>
+                        r.dishes.fold(0.0, (sum, d) => sum + pick(d) * ratio);
+                    final calTotal = totalOf(
+                      (d) => d.caloriesPer100g.toDouble(),
                     );
-                    final adjustedDishes = [
-                      adjustedDish,
-                      ...r.dishes.sublist(1),
-                    ];
+                    final proTotal = totalOf((d) => d.proteinPer100g);
+                    final carbTotal = totalOf((d) => d.carbsPer100g);
+                    final fatTotal = totalOf((d) => d.fatsPer100g);
+                    // Scale EVERY dish so the plate totals what the user
+                    // typed. The old code divided the edit by the dish
+                    // count and wrote it into dishes.first alone, leaving
+                    // the other dishes untouched — on a 3-item photo the
+                    // edited totals never matched the numbers on screen.
+                    final calScale = calTotal > 0 ? cal / calTotal : 0.0;
+                    final proScale = proTotal > 0 ? pro / proTotal : 0.0;
+                    final carbScale = carbTotal > 0 ? carb / carbTotal : 0.0;
+                    final fatScale = fatTotal > 0 ? fat / fatTotal : 0.0;
                     _result = NutritionResult(
-                      dishes: adjustedDishes,
+                      dishes: [
+                        for (final d in r.dishes)
+                          DishItem(
+                            name: d.name,
+                            portionDescription: d.portionDescription,
+                            caloriesPer100g: calTotal > 0
+                                ? (d.caloriesPer100g * calScale).round()
+                                : (cal / count / ratio).round(),
+                            proteinPer100g: proTotal > 0
+                                ? d.proteinPer100g * proScale
+                                : pro / count / ratio,
+                            carbsPer100g: carbTotal > 0
+                                ? d.carbsPer100g * carbScale
+                                : carb / count / ratio,
+                            fatsPer100g: fatTotal > 0
+                                ? d.fatsPer100g * fatScale
+                                : fat / count / ratio,
+                            fiberPer100g: d.fiberPer100g,
+                            sugarPer100g: d.sugarPer100g,
+                            suitableFor: d.suitableFor,
+                          ),
+                      ],
                       description: '${r.description} (edited)',
                       confidence: r.confidence,
                       grams: r.grams,

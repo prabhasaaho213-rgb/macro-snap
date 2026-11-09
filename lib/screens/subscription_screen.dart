@@ -30,6 +30,11 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
   bool _checking = true;
   String? _subscribedDate;
 
+  /// End of a windowed Pro grant: a referral reward, or the days left
+  /// after a cancelled subscription. Null for a renewing subscription and
+  /// the admin's lifetime grant — neither has an end date to show.
+  String? _proUntil;
+
   /// Whether this account still has the ₹1 intro month on offer. Set from
   /// the server (`intro_eligible`) — the paywall never promises ₹1 to an
   /// account whose checkout would charge ₹49 from day one.
@@ -50,18 +55,33 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
     super.dispose();
   }
 
+  /// "25 Nov 2026" for a windowed Pro grant. Null when Pro has no end date.
+  String? get _proEndLabel {
+    final raw = _proUntil;
+    if (raw == null || raw.isEmpty) return null;
+    final d = DateTime.tryParse(raw)?.toLocal();
+    if (d == null) return null;
+    const months = [
+      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+    ];
+    return '${d.day} ${months[d.month - 1]} ${d.year}';
+  }
+
   Future<void> _loadState() async {
     await SubscriptionService.instance.load();
     final prefs = await SharedPreferences.getInstance();
     final phone = prefs.getString('phone');
     final subscribed = SubscriptionService.instance.isSubscribed;
     final date = SubscriptionService.instance.subscribedAt;
+    final proUntil = SubscriptionService.instance.proUntil;
     final isAdmin = await SubscriptionService.instance.isAdmin();
     if (mounted) {
       setState(() {
         _phone = phone;
         _subscribed = subscribed;
         _subscribedDate = date;
+        _proUntil = proUntil;
         _isAdmin = isAdmin;
       });
     }
@@ -109,6 +129,7 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
     setState(() {
       _subscribed = true;
       _subscribedDate = now;
+      _proUntil = SubscriptionService.instance.proUntil;
     });
     if (announce) await _showSuccess();
   }
@@ -129,6 +150,7 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
       setState(() {
         _subscribed = SubscriptionService.instance.isSubscribed;
         _subscribedDate = SubscriptionService.instance.subscribedAt;
+        _proUntil = SubscriptionService.instance.proUntil;
       });
     }
   }
@@ -158,6 +180,7 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
       setState(() {
         _subscribed = SubscriptionService.instance.isSubscribed;
         _subscribedDate = SubscriptionService.instance.subscribedAt;
+        _proUntil = SubscriptionService.instance.proUntil;
       });
     }
   }
@@ -215,7 +238,7 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
       context,
       MaterialPageRoute(builder: (_) => const PhoneLoginScreen()),
     );
-    if (phone != null) setState(() => _phone = phone);
+    if (phone != null && mounted) setState(() => _phone = phone);
   }
 
   @override
@@ -593,7 +616,11 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
                       ),
                     ),
                     child: Text(
-                      _isAdmin ? 'Lifetime Pro \u2713' : 'Subscribed \u2713',
+                      _isAdmin
+                          ? 'Lifetime Pro \u2713'
+                          : _proEndLabel == null
+                          ? 'Subscribed \u2713'
+                          : 'Pro until $_proEndLabel',
                       style: TextStyle(
                         color: MacroSnapTheme.textSecondary(context),
                         fontSize: 16,

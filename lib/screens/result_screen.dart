@@ -180,7 +180,11 @@ class _ResultScreenState extends State<ResultScreen>
     if (!GeminiService.hasServerUrl) {
       if (mounted) {
         setState(() {
-          _error = 'no_url';
+          // Build misconfiguration, not a user error: say so plainly instead of
+          // pointing at a Settings field that does not exist.
+          _error =
+              "Analysis isn't available in this build.\n"
+              'Please update MacroSnap from the Play Store.';
           _isAnalyzing = false;
         });
       }
@@ -317,7 +321,7 @@ class _ResultScreenState extends State<ResultScreen>
       return 'Analysis timed out.\n\nTips for better results:\n• Take a clearer photo\n• Ensure good lighting\n• Get closer to the food';
     }
     if (msg.contains('cannot reach') || msg.contains('connection')) {
-      return 'Cannot connect to server.\n\nMake sure:\n• You\'re on the same WiFi\n• The backend is running';
+      return 'Cannot reach the server.\n\nCheck your internet connection and try again.';
     }
     if (msg.contains('image') || msg.contains('file')) {
       return 'Could not read the image.\n\nTry:\n• Taking a new photo\n• Checking camera permissions';

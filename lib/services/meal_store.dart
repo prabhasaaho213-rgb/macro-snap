@@ -76,13 +76,24 @@ class MealStore {
           if (data is List) {
             // Parse per record: a single corrupt entry is skipped instead of
             // aborting the loop (which used to reset the whole history).
-            _meals = data
+            final parsed = data
                 .whereType<Map>()
                 .map(
                   (e) => MealRecord.tryFromJson(Map<String, dynamic>.from(e)),
                 )
-                .whereType<MealRecord>()
                 .toList();
+            _meals = parsed.whereType<MealRecord>().toList();
+            // A skipped record used to vanish without a trace: the meal
+            // was simply missing next launch and nothing explained it.
+            // Report the count so a bad writer becomes visible.
+            final skipped = parsed.length - _meals.length;
+            if (skipped > 0) {
+              logError(
+                'MealStore.load: skipped $skipped unreadable meal record(s)',
+                StateError('unreadable meal record'),
+                StackTrace.current,
+              );
+            }
           }
         }
       }

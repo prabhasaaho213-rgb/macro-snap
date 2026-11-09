@@ -9,6 +9,7 @@ import 'habit_reminder_service.dart';
 import 'meal_store.dart';
 import 'notification_branding.dart';
 import 'reminder_copy.dart';
+import 'notification_scheduler.dart';
 
 /// Declarative description of one repeating reminder. Everything a reminder
 /// needs — id, channel, importance, cadence, subscriber gating and copy —
@@ -223,19 +224,17 @@ class ReminderRegistry {
       priority: spec.priority,
     );
 
-    await _plugin.zonedSchedule(
-      spec.id,
-      copy.title,
-      copy.body,
-      when,
-      NotificationDetails(
+    await scheduleZoned(
+      plugin: _plugin,
+      id: spec.id,
+      title: copy.title,
+      body: copy.body,
+      when: when,
+      details: NotificationDetails(
         android: details,
         iOS: const DarwinNotificationDetails(),
       ),
-      androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
       matchDateTimeComponents: spec.match,
-      uiLocalNotificationDateInterpretation:
-          UILocalNotificationDateInterpretation.absoluteTime,
     );
   }
 
@@ -417,19 +416,17 @@ class ReminderRegistry {
       importance: spec.importance,
       priority: spec.priority,
     );
-    await _plugin.zonedSchedule(
-      id,
-      copy.title,
-      copy.body,
-      tomorrow,
-      NotificationDetails(
+    await scheduleZoned(
+      plugin: _plugin,
+      id: id,
+      title: copy.title,
+      body: copy.body,
+      when: tomorrow,
+      details: NotificationDetails(
         android: details,
         iOS: const DarwinNotificationDetails(),
       ),
-      androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
       matchDateTimeComponents: DateTimeComponents.time,
-      uiLocalNotificationDateInterpretation:
-          UILocalNotificationDateInterpretation.absoluteTime,
     );
   }
 
