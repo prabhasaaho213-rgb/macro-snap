@@ -436,9 +436,9 @@ void main() {
     expect(plan, hasLength(7));
     expect(plan.join('\n'), contains('#4 Meal Reminders'));
     expect(plan.join('\n'), contains('#5 Weekly Summary (subscriber only)'));
-    expect(plan.join('\n'), contains('#6 Meal Reminders'));
-    expect(plan.join('\n'), contains('#2 Expiry Reminder (subscriber only)'));
-    expect(plan.join('\n'), contains('#3 Expiry Reminder (subscriber only)'));
+    expect(plan.join('\n'), contains('#6 Streak Reminders'));
+    expect(plan.join('\n'), contains('#2 Expiry Reminder (subscriber only) (one-off)'));
+    expect(plan.join('\n'), contains('#3 Expiry Reminder (subscriber only) (one-off)'));
     expect(ReminderRegistry.subscriberGatedIds, <int>{2, 3, 5});
   });
 

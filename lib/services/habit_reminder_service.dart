@@ -83,6 +83,13 @@ class HabitReminderService {
       h.reminderMinute,
     );
     if (when.isBefore(now)) when = when.add(const Duration(days: 1));
+    // "Mark done" clears today's alarm, but a cold launch/resume re-arm
+    // runs applyHabitPlan and would schedule today again. Skip to tomorrow
+    // when the habit is already completed for today.
+    final todayKey = dateKey(DateTime.now());
+    if (h.completedDates.contains(todayKey) && !_isTomorrow(when, now)) {
+      when = when.add(const Duration(days: 1));
+    }
 
     await _scheduleDailyAt(h, when, notifications);
   }
@@ -142,6 +149,10 @@ class HabitReminderService {
       h.reminderMinute,
     );
     await _scheduleDailyAt(h, tomorrow, notifications);
+  }
+  static bool _isTomorrow(tz.TZDateTime when, tz.TZDateTime now) {
+    final t = tz.TZDateTime(tz.local, now.year, now.month, now.day + 1);
+    return when.year == t.year && when.month == t.month && when.day == t.day;
   }
 }
 

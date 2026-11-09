@@ -118,9 +118,9 @@ class ReminderRegistry {
     // Streak reminder (id 6) — always.
     ReminderSpec(
       id: streakId,
-      channelId: 'macro_snap_reminder',
-      channelName: 'Meal Reminders',
-      channelDescription: 'Daily reminders to log meals',
+      channelId: 'macro_snap_streak',
+      channelName: 'Streak Reminders',
+      channelDescription: 'Daily reminders to keep your streak alive',
       importance: Importance.high,
       priority: Priority.high,
       match: DateTimeComponents.time,
@@ -151,7 +151,7 @@ class ReminderRegistry {
       channelDescription: 'Subscription expiry reminders',
       importance: Importance.defaultImportance,
       priority: Priority.defaultPriority,
-      match: DateTimeComponents.time,
+      match: null, // one-off: never recur after the date passes
       subscriberOnly: true,
       next: (sub) => ReminderCopy.daysAfter(sub, 27),
       copy: (_) async => (
@@ -167,7 +167,7 @@ class ReminderRegistry {
       channelDescription: 'Subscription expiry reminders',
       importance: Importance.high,
       priority: Priority.high,
-      match: DateTimeComponents.time,
+      match: null, // one-off: never recur after the date passes
       subscriberOnly: true,
       next: (sub) => ReminderCopy.daysAfter(sub, 30),
       copy: (_) async => (
@@ -192,7 +192,13 @@ class ReminderRegistry {
     String? subscribedDate,
   ) async {
     final nullableWhen = spec.next(subscribedDate);
-    if (nullableWhen == null) return;
+    if (nullableWhen == null) {
+      // The date has passed (or the input is invalid): cancel anything
+      // still armed so a one-off expiry/expired alarm can never fire
+      // again after its moment, and a stale recurring alarm goes quiet.
+      await _plugin.cancel(spec.id);
+      return;
+    }
     // Non-nullable copy: the suppression block below reassigns the schedule
     // time, which would otherwise demote a `var when` back to TZDateTime? and
     // break the zonedSchedule call.
@@ -240,17 +246,26 @@ class ReminderRegistry {
 
   /// Schedules the built-in (non-habit) reminders that apply to the current
   /// subscription state.
-  Future<void> _scheduleBuiltIns(String? subscribedDate) async {
+  Future<void> _scheduleBuiltIns(String? subscribedDate, {bool paidSubscription = false, String? proUntil}) async {
     // Lifetime subscribers (admin) never get expiry reminders — the
     // '1900-01-01T00:00:00.000' marker means the subscription never expires.
     final isLifetime =
         subscribedDate != null && subscribedDate.startsWith('1900');
+    // A paid (autopay/owning) subscription renews server-side and keeps
+    // its original activation timestamp, so day-27/30 reminders derived
+    // from subscribedAt are wrong for a renewing user. Skip them unless
+    // there is an explicit windowed end date (e.g. a referral grant).
+    final skipExpiryForPaid = paidSubscription && (proUntil == null || proUntil.isEmpty);
     for (final spec in _reminders) {
       if (spec.subscriberOnly &&
           (subscribedDate == null || subscribedDate.isEmpty)) {
         continue;
       }
       // Skip expiry/expired reminders for lifetime subscribers.
+      if (skipExpiryForPaid && (spec.id == expiryReminderId || spec.id == expiredId)) {
+        await _safe(() => _plugin.cancel(spec.id));
+        continue;
+      }
       if (isLifetime && (spec.id == expiryReminderId || spec.id == expiredId)) {
         continue;
       }
@@ -262,6 +277,7 @@ class ReminderRegistry {
   /// anything it armed that is no longer wanted (orphan sweep). Without this,
   /// a habit that leaves the list wholesale — account switch (reload → new
   /// habit set), cloud replace — would keep its alarm firing forever.
+  static const _keyArmedHabits = 'reminder_armed_habit_ids';
   final Set<int> _armedHabitIds = <int>{};
 
   /// Reconciles habit reminders with the current habit list — the SINGLE
@@ -274,6 +290,7 @@ class ReminderRegistry {
   ///    no longer in the list — so a removed habit or an account switch that
   ///    replaces the whole set can never leave a stale alarm behind.
   Future<void> applyHabitPlan(List<Habit> habits) async {
+    await _loadArmedHabitIds();
     final desired = <int>{
       for (final h in habits)
         if (h.reminderEnabled) HabitReminderService.notificationId(h),
@@ -304,6 +321,7 @@ class ReminderRegistry {
         _armedHabitIds.add(HabitReminderService.notificationId(h));
       }
     }
+    await _saveArmedHabitIds();
   }
 
   /// THE one entry point for "what should be armed right now": every
@@ -321,18 +339,20 @@ class ReminderRegistry {
   Future<void> sync({
     required List<Habit> habits,
     String? subscribedDate,
+    bool paidSubscription = false,
+    String? proUntil,
   }) async {
     final subscribed = subscribedDate != null && subscribedDate.isNotEmpty;
     final isLifetime = subscribed && subscribedDate.startsWith('1900');
     if (subscribed) {
-      await _scheduleBuiltIns(subscribedDate);
+      await _scheduleBuiltIns(subscribedDate, paidSubscription: paidSubscription, proUntil: proUntil);
     } else {
       // A FREE user must never carry subscriber-only alarms (admin-strip on
       // a shared device, cancelled subscription, etc.).
       for (final id in _subscriberGatedIds) {
         await _safe(() => _plugin.cancel(id));
       }
-      await _scheduleBuiltIns(null);
+      await _scheduleBuiltIns(null, paidSubscription: false, proUntil: null);
     }
     // Lifetime subscribers never get expiry reminders — cancel any stale ones.
     if (isLifetime) {
@@ -426,7 +446,7 @@ class ReminderRegistry {
         android: details,
         iOS: const DarwinNotificationDetails(),
       ),
-      matchDateTimeComponents: DateTimeComponents.time,
+      matchDateTimeComponents: spec.match,
     );
   }
 
@@ -485,8 +505,35 @@ class ReminderRegistry {
     for (final spec in _reminders)
       '#${spec.id} ${spec.channelName} '
           '${spec.subscriberOnly ? '(subscriber only)' : '(always)'} '
-          '${spec.match == DateTimeComponents.dayOfWeekAndTime ? '(weekly)' : '(daily)'}',
+          '${spec.match == DateTimeComponents.dayOfWeekAndTime ? '(weekly)' : spec.match == null ? '(one-off)' : '(daily)'}',
   ];
+
+  Future<void> _loadArmedHabitIds() async {
+    if (_armedHabitIdsLoaded) return;
+    _armedHabitIdsLoaded = true;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getStringList(_keyArmedHabits);
+      if (raw != null) {
+        for (final s in raw) {
+          final id = int.tryParse(s);
+          if (id != null) _armedHabitIds.add(id);
+        }
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _saveArmedHabitIds() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setStringList(
+        _keyArmedHabits,
+        _armedHabitIds.map((e) => e.toString()).toList(),
+      );
+    } catch (_) {}
+  }
+
+  bool _armedHabitIdsLoaded = false;
 
   Future<void> _safe(Future<void> Function() fn) async {
     try {

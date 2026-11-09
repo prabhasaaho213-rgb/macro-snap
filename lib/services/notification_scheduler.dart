@@ -4,6 +4,7 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:timezone/timezone.dart' as tz;
 
 import 'crash_reporting.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 /// Schedules a zoned notification, preferring Android's exact alarm mode and
 /// falling back to the old inexact mode when the platform refuses.
@@ -55,20 +56,38 @@ Future<void> scheduleZoned({
 /// mid-schedule would throw a system dialog over whatever the user was doing.
 /// Best-effort: a missing plugin, an old Android, or a refusal all leave the
 /// inexact path working.
+/// Asks for the exact-alarm permission once per install when the platform
+/// says it is missing.
+///
+/// Called from notification setup, where the app is already on screen — asking
+/// mid-schedule would throw a system dialog over whatever the user was doing.
+/// Persisted to prefs so Android 12+ does not reopen the "Alarms & reminders"
+/// settings screen on every cold launch. Best-effort: a missing plugin, an
+/// old Android, or a refusal all leave the inexact path working.
 Future<void> requestExactAlarmPermissionOnce(
   FlutterLocalNotificationsPlugin plugin,
 ) async {
   if (_askedForExactAlarm) return;
   _askedForExactAlarm = true;
+  const askedKey = 'exact_alarm_permission_asked';
   try {
+    final prefs = await SharedPreferences.getInstance();
+    if (prefs.getBool(askedKey) == true) return;
     final android = plugin
         .resolvePlatformSpecificImplementation<
           AndroidFlutterLocalNotificationsPlugin
         >();
     if (android == null) return;
     final allowed = await android.canScheduleExactNotifications();
-    if (allowed == true) return;
+    if (allowed == true) {
+      await prefs.setBool(askedKey, true);
+      return;
+    }
     await android.requestExactAlarmsPermission();
+    // Mark asked regardless of outcome: opening the screen once per install
+    // is the prompt; nagging on every launch is not. The scheduler still
+    // falls back to inexact if the user never grants it.
+    await prefs.setBool(askedKey, true);
   } catch (e, st) {
     logError('requestExactAlarmPermissionOnce', e, st);
   }

@@ -211,6 +211,8 @@ class NotificationService with WidgetsBindingObserver {
       await _registry.sync(
         habits: HabitStore.instance.habits,
         subscribedDate: SubscriptionService.instance.subscribedAt,
+        paidSubscription: SubscriptionService.instance.isPaid,
+        proUntil: SubscriptionService.instance.proUntil,
       );
     } catch (e) {
       debugPrint('❌ applySubscriptionState failed: $e');
@@ -447,7 +449,7 @@ class NotificationService with WidgetsBindingObserver {
     List<Habit> habits, {
     String? subscribedDate,
   }) async {
-    await _registry.sync(habits: habits, subscribedDate: subscribedDate);
+    await _registry.sync(habits: habits, subscribedDate: subscribedDate, paidSubscription: SubscriptionService.instance.isPaid, proUntil: SubscriptionService.instance.proUntil);
   }
 
   /// Best-effort diagnostic: how many alarms the OS actually holds right

@@ -138,6 +138,9 @@ and rebuild; the build writes a release-clean one (no dev-only plugins).
 
 - A real payment has not been tested on a release build. R8 keep rules for
   Razorpay exist, but only a paid checkout on a real phone proves them.
-- Reminders use inexact alarms, so they can arrive late while the phone is in
-  battery saver.
+- Reminders prefer exact alarms (`SCHEDULE_EXACT_ALARM`) and fall back to
+  inexact when the permission is unavailable. On Android 12+, the app asks once
+  per install from notification setup; a refused permission still delivers
+  reminders on the platform's best-effort schedule. Play policy for exact alarms
+  on a nutrition app should be confirmed before relying on this in production.
 - `firestore.rules` must be deployed; editing the file alone changes nothing.
