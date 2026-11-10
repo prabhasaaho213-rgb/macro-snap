@@ -241,6 +241,9 @@ extension _HomeMeals on _HomeScreenState {
           context,
           habitFlowRoute(ResultScreen(imagePath: '', existingMeal: m)),
         ),
+        // Long-press edits in place. The bolt button offers the same action,
+        // but a press-and-hold on the meal itself is where people reach for it.
+        onLongPress: () => _editMeal(m),
         child: Container(
           padding: const EdgeInsets.all(16),
           decoration: MacroSnapTheme.habitlyCard(context),
@@ -302,7 +305,11 @@ extension _HomeMeals on _HomeScreenState {
               // Check button (Habitly style)
               GestureDetector(
                 onTap: () async {
-                  final confirmed = await showDialog<bool>(
+                  // Both things you can do to a logged meal live behind this
+                  // button: correct it, or remove it. Edit exists because a
+                  // wrong AI estimate used to be uncorrectable — the only fix
+                  // was delete-and-rescan, which spends a scan.
+                  final choice = await showDialog<String>(
                     context: context,
                     builder: (ctx) => AlertDialog(
                       backgroundColor: isDark
@@ -311,18 +318,30 @@ extension _HomeMeals on _HomeScreenState {
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(28),
                       ),
-                      title: const Text(
-                        'Delete Meal',
-                        style: TextStyle(fontWeight: FontWeight.w800),
+                      title: Text(
+                        m.name,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(fontWeight: FontWeight.w800),
                       ),
-                      content: Text('Remove "${m.name}" from your log?'),
+                      content: Text(
+                        '${m.calories} kcal'
+                        '${m.serving.isEmpty ? '' : ' · ${m.serving}'}',
+                        style: TextStyle(
+                          color: MacroSnapTheme.textSecondary(context),
+                        ),
+                      ),
                       actions: [
                         TextButton(
-                          onPressed: () => Navigator.pop(ctx, false),
+                          onPressed: () => Navigator.pop(ctx),
                           child: const Text('Cancel'),
                         ),
+                        TextButton(
+                          onPressed: () => Navigator.pop(ctx, 'edit'),
+                          child: const Text('Edit'),
+                        ),
                         FilledButton(
-                          onPressed: () => Navigator.pop(ctx, true),
+                          onPressed: () => Navigator.pop(ctx, 'delete'),
                           style: FilledButton.styleFrom(
                             backgroundColor: MacroSnapTheme.neonPink,
                             foregroundColor: Colors.black,
@@ -335,7 +354,11 @@ extension _HomeMeals on _HomeScreenState {
                       ],
                     ),
                   );
-                  if (confirmed == true) {
+                  if (choice == 'edit') {
+                    await _editMeal(m);
+                    return;
+                  }
+                  if (choice == 'delete') {
                     // Keep the record so the delete can be taken back: a
                     // mis-tapped meal used to be gone for good.
                     final removed = m;
@@ -385,6 +408,24 @@ extension _HomeMeals on _HomeScreenState {
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  /// Opens the edit sheet and stores the corrected record.
+  ///
+  /// The store repaints the card and re-uploads the meal, queuing the write if
+  /// the network is down, so a correction can never be lost.
+  Future<void> _editMeal(MealRecord meal) async {
+    final edited = await showEditMealSheet(context, meal);
+    if (edited == null || !mounted) return;
+    await MealStore.instance.update(edited);
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Updated ${edited.name}'),
+        behavior: SnackBarBehavior.floating,
+        duration: const Duration(seconds: 2),
       ),
     );
   }

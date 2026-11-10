@@ -4,15 +4,15 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:macro_snap/models/meal_record.dart';
 import 'package:macro_snap/services/meal_sync_service.dart';
 
-/// Guards the two write-side limits that used to break cloud backup:
+/// Guards the payload limits that used to break cloud backup:
 ///
-///   1. `syncAllMeals` put every delete and every set into ONE batch, and
-///      Firestore caps a batch at 500 operations — a long history failed the
-///      whole backup with "Bulk meal sync failed".
-///   2. `firestore.rules` rejects a meal whose name is over 80 BYTES, whose
+///   1. `firestore.rules` rejects a meal whose name is over 80 BYTES, whose
 ///      calories are outside 0..10000, or whose macros are outside 0..1000.
-///      One bad meal (the name comes from the AI scan) failed on its own, and
-///      inside a bulk batch took every other operation down with it.
+///      One bad meal (the name comes from the AI scan) failed on its own and
+///      then sat in the retry queue forever.
+///   2. The restore read is bounded, so a long history cannot turn every cold
+///      start into a full re-download — while a truncated page must report
+///      itself as incomplete so it is never mistaken for the whole account.
 ///
 /// These tests pin the clamping against the same numbers the rules use, so a
 /// change to either side without the other shows up here.
@@ -39,10 +39,10 @@ void main() {
     serving: serving,
   );
 
-  group('batch size', () {
-    test('stays under the 500-operation Firestore limit', () {
-      expect(MealSyncService.maxBatchOperations, lessThan(500));
-      expect(MealSyncService.maxBatchOperations, greaterThan(0));
+  group('restore page size', () {
+    test('is bounded and larger than a normal year of logging', () {
+      expect(MealSyncService.restorePageSize, greaterThan(0));
+      expect(MealSyncService.restorePageSize, lessThanOrEqualTo(1000));
     });
   });
 

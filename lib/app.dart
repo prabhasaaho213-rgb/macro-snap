@@ -19,15 +19,26 @@ import 'widgets/startup_splash.dart';
 /// splash is not.
 const Duration kStartupTimeout = Duration(seconds: 12);
 
-/// How long the logo intro is allowed to run on every launch.
+/// How long the logo intro is allowed to run on the first launch of a build.
 ///
-/// The intro is a 1.6 s Lottie and startup work now finishes in a couple of
-/// hundred milliseconds on a warm start, so reducing the intro to the first
-/// launch of a version made every other open skip the animation entirely —
-/// the user saw the splash blink and disappear. The floor applies on every
-/// launch now: startup may finish in 200 ms, but the splash holds until the
-/// 1.6 s Lottie has finished playing, then the screen swaps.
+/// The intro is a 1.6 s Lottie, and on a cold start startup work finishes in a
+/// couple of hundred milliseconds, so the splash holds until the animation has
+/// actually played instead of blinking past.
 const Duration kSplashMinimum = Duration(milliseconds: 1800);
+
+/// The floor on every launch AFTER the first one of this build.
+///
+/// Holding the full 1.8 s animation on every single open made the app feel
+/// slow — people open a food logger several times a day, and paying nearly two
+/// seconds each time to watch the same logo is a cost with no information in
+/// it. The intro now plays once per version (the launch that has something new
+/// to show), and later launches swap to the app as soon as startup is done,
+/// with just enough of a floor that the hand-off is not a single flickering
+/// frame.
+const Duration kSplashShort = Duration(milliseconds: 300);
+
+/// Prefs key marking that the full intro has already played once.
+const String kSplashIntroVersionKey = 'splash_full_intro_played';
 
 class MacroSnapApp extends StatefulWidget {
   /// Startup work that must finish before the first real screen is built
@@ -88,16 +99,34 @@ class _MacroSnapAppState extends State<MacroSnapApp> {
     setState(() => _booting = false);
   }
 
-  /// Resolves after [kSplashMinimum] on every launch.
+  /// Resolves after [kSplashMinimum] on the first launch of a version, and
+  /// [kSplashShort] on every launch afterwards.
   ///
-  /// This used to apply only on the first launch of a version, so the
-  /// animation the user already saw was cut short on every later open — the
-  /// splash was torn down the moment startup resolved. Holding for the intro
-  /// on every launch is what the user actually wants to see; startup work
-  /// keeps running behind the splash the whole time, so the only cost is the
-  /// wait itself.
+  /// Startup work keeps running behind the splash the whole time, so the floor
+  /// is pure wait — which is why it is not paid on every open.
   Future<void> _introFloorForLaunch() async {
-    await Future<void>.delayed(kSplashMinimum);
+    await Future<void>.delayed(
+      await _shouldPlayFullIntro() ? kSplashMinimum : kSplashShort,
+    );
+  }
+
+  /// True on the first launch after install, false on every launch after it.
+  ///
+  /// Deliberately a plain prefs flag rather than the installed version number:
+  /// reading the version means a plugin call in the first-frame path, and a
+  /// plugin that never answers (which is exactly what a stripped build or a
+  /// test harness can produce) would hold the splash forever. A prefs failure
+  /// counts as "show it" — an extra animation is harmless, a permanently
+  /// skipped one is not.
+  Future<bool> _shouldPlayFullIntro() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      if (prefs.getBool(kSplashIntroVersionKey) ?? false) return false;
+      await prefs.setBool(kSplashIntroVersionKey, true);
+      return true;
+    } catch (_) {
+      return true;
+    }
   }
 
   /// Holds the splash until the logo intro has had room to play.

@@ -10,6 +10,7 @@ import 'badge_service.dart';
 import 'meal_image_store.dart';
 import 'meal_photo_sync.dart';
 import 'meal_sync_service.dart';
+import 'pending_sync_queue.dart';
 import 'crash_reporting.dart';
 
 class MealStore {
@@ -29,13 +30,13 @@ class MealStore {
   bool _loaded = false;
 
   /// The account whose local partition is loaded. Null until [load] runs
-  /// (guests and unknown states use the legacy `meals.json` file).
+  /// (a signed-out or unknown state uses the legacy `meals.json` file).
   String? _activeAccount;
   String get _suffix => AccountPartition.suffix(_activeAccount ?? '');
 
-  /// Local file for the active account's partition: `meals.json` for guests,
-  /// `meals_{suffix}.json` for signed-in accounts — one device holds many
-  /// accounts without any data leaking between them.
+  /// Local file for the active account's partition: `meals.json` when nobody
+  /// is signed in, `meals_{suffix}.json` for signed-in accounts — one device
+  /// holds many accounts without any data leaking between them.
   String get _fileName => '${AccountPartition.key('meals', _suffix)}.json';
 
   List<MealRecord> get todayMeals =>
@@ -51,20 +52,34 @@ class MealStore {
 
   Future<void> load() async {
     if (_loaded) return;
-    _activeAccount = AccountPartition.activeFromPrefs(
-      await SharedPreferences.getInstance(),
-    );
+    final prefs = await SharedPreferences.getInstance();
+    _activeAccount = AccountPartition.activeFromPrefs(prefs);
     try {
       final dir = await getApplicationDocumentsDirectory();
       final file = File('${dir.path}/$_fileName');
       if (!await file.exists() && _suffix.isNotEmpty) {
-        // One-shot migration: attribute the legacy pre-partitioning file to
-        // this account (a signed-in user updating the app keeps their meals;
-        // the move deletes the legacy file so a later different account can
-        // never inherit it).
-        final legacy = File('${dir.path}/meals.json');
-        if (await legacy.exists()) {
-          await legacy.rename(file.path);
+        // Migration chain, newest first: a signed-in user updating the app
+        // keeps their meals no matter which naming scheme wrote them.
+        //   1. `meals_<sanitised>.json` — the suffix used before the collision
+        //      fix (two accounts could share it).
+        //   2. `meals.json` — pre-partitioning, and the signed-out partition,
+        //      which becomes an account's as soon as one signs in.
+        // Renaming (not copying) means a later different account can never
+        // inherit the file.
+        final legacySuffix = AccountPartition.legacySuffix(
+          _activeAccount ?? '',
+        );
+        final candidates = <String>[
+          if (legacySuffix.isNotEmpty && legacySuffix != _suffix)
+            '${AccountPartition.key("meals", legacySuffix)}.json',
+          'meals.json',
+        ];
+        for (final name in candidates) {
+          final legacy = File('${dir.path}/$name');
+          if (await legacy.exists()) {
+            await legacy.rename(file.path);
+            break;
+          }
         }
       }
       if (await file.exists()) {
@@ -112,8 +127,10 @@ class MealStore {
     // after the startup splash hit its safety timeout — never reached the UI,
     // which then showed zeros for the rest of the session.
     changeNotifier.value++;
-    // Cloud restore merges missing meals in the background so a slow or
-    // sleeping backend never blocks the app from opening.
+    // Replay any write a previous session could not upload, then merge the
+    // cloud. Both run in the background so a slow or sleeping backend never
+    // blocks the app from opening.
+    unawaited(PendingSyncQueue.instance.drain());
     unawaited(_syncFromCloud());
   }
 
@@ -151,12 +168,18 @@ class MealStore {
 
   Future<void> _doSyncFromCloud() async {
     try {
-      final cloudMeals = await MealSyncService.fetchMeals();
-      if (cloudMeals.isEmpty) return;
+      // Flush anything a previous session could not upload BEFORE reading the
+      // cloud back. Otherwise this read would look complete while missing meals
+      // that are still sitting in the retry queue.
+      await PendingSyncQueue.instance.drain();
+
+      final cloud = await MealSyncService.fetchMealsDetailed();
+      if (!cloud.ok) return; // Offline: local data is primary, change nothing.
+
       final localIds = _meals.map((m) => m.id).toSet();
       bool added = false;
       final mergedIds = <String>[];
-      for (final meal in cloudMeals) {
+      for (final meal in cloud.meals) {
         if (!localIds.contains(meal.id)) {
           _meals.add(meal);
           mergedIds.add(meal.id);
@@ -166,10 +189,47 @@ class MealStore {
       if (added) {
         await _save();
         await _restoreCloudPhotos(mergedIds);
+        changeNotifier.value++;
+      }
+
+      if (cloud.complete) {
+        await _applyRemoteDeletions(cloud.meals);
       }
     } catch (e, st) {
       logError('MealStore._doSyncFromCloud', e, st);
     } // Silently fail — local data is primary
+  }
+
+  /// Applies deletions made on ANOTHER device.
+  ///
+  /// The merge above only ever added cloud meals, so a meal deleted on a
+  /// second phone came straight back on this one and stayed for good — nothing
+  /// in the app could tell the difference between "deleted elsewhere" and
+  /// "never uploaded", which is why the sweep did not exist.
+  ///
+  /// [PendingSyncQueue.isSynced] is the distinction: an id this device has
+  /// confirmed in the cloud, that is no longer in the cloud, and that has no
+  /// queued write was deleted remotely. Meals logged before that bookkeeping
+  /// existed are never eligible, so this can never remove history it does not
+  /// understand.
+  Future<void> _applyRemoteDeletions(List<MealRecord> cloudMeals) async {
+    final cloudIds = cloudMeals.map((m) => m.id).toSet();
+    final pending = await PendingSyncQueue.instance.ids();
+    final deleted = <MealRecord>[];
+    for (final meal in List<MealRecord>.from(_meals)) {
+      if (cloudIds.contains(meal.id)) continue;
+      if (pending.contains(meal.id)) continue;
+      if (!await PendingSyncQueue.instance.isSynced(meal.id)) continue;
+      deleted.add(meal);
+    }
+    if (deleted.isEmpty) return;
+    for (final meal in deleted) {
+      _meals.removeWhere((m) => m.id == meal.id);
+      unawaited(MealImageStore.instance.remove(meal.imagePath));
+      await PendingSyncQueue.instance.forget(meal.id);
+    }
+    await _save();
+    changeNotifier.value++;
   }
 
   /// Brings cloud-backed photos down for meals this device had never seen.
@@ -206,8 +266,8 @@ class MealStore {
     // Achievements are a side effect of logging, never a gate on it: the meal
     // is already stored and on screen by the time this runs.
     unawaited(BadgeService.instance.noteMealLogged(_meals.length));
-    // Async sync to cloud (fire-and-forget)
-    MealSyncService.syncMeal(meal);
+    // Async sync to cloud, with a durable retry on failure (see _push).
+    unawaited(_push(meal));
     // Photo backup rides on the log (fire-and-forget, Pro + toggle gated):
     // uploading here is what makes "Keep forever (Pro)" survive a phone
     // change, not only longer local retention.
@@ -224,11 +284,51 @@ class MealStore {
     // The photo goes with the meal: with no record left, a kept picture is
     // just a photo of someone's food sitting on their phone for a day.
     unawaited(MealImageStore.instance.remove(imagePath));
-    // Async remove from cloud (fire-and-forget)
-    MealSyncService.removeMeal(id);
+    // Remove from the cloud, queued durably if that fails right now.
+    unawaited(_pushDelete(id));
     // The cloud copy goes with the meal too — the same "a kept picture is
     // just someone's food on a server" rule as the local one.
     unawaited(MealPhotoSyncService.removeForMeal(id));
+  }
+
+  /// Replaces the stored record with the same id (an edited meal) and pushes
+  /// the change to the cloud.
+  ///
+  /// A logged meal used to be read-only: the only way to fix a wrong AI
+  /// estimate was to delete it and scan again, spending another of the three
+  /// daily scans. This is the store half of the Edit action; the UI edits a
+  /// copy through [MealRecord.copyWith] and hands the result here.
+  Future<void> update(MealRecord meal) async {
+    final index = _meals.indexWhere((m) => m.id == meal.id);
+    if (index < 0) return;
+    _meals[index] = meal;
+    changeNotifier.value++;
+    await _save();
+    unawaited(_push(meal));
+  }
+
+  /// Uploads one meal, remembering the outcome: a confirmed write makes the id
+  /// eligible for remote-deletion reconciliation, a failed one goes back into
+  /// the retry queue instead of vanishing.
+  Future<void> _push(MealRecord meal) async {
+    final ok = await MealSyncService.syncMeal(meal);
+    final queue = PendingSyncQueue.instance;
+    if (ok) {
+      await queue.markSynced(meal.id);
+    } else {
+      await queue.enqueueUpsert(meal.id);
+    }
+  }
+
+  /// Deletes one meal in the cloud, queued when the request fails.
+  Future<void> _pushDelete(String id) async {
+    final ok = await MealSyncService.removeMeal(id);
+    final queue = PendingSyncQueue.instance;
+    if (ok) {
+      await queue.forget(id);
+    } else {
+      await queue.enqueueDelete(id);
+    }
   }
 
   /// Deletes every meal photo past its 24-hour life and strips the dead path

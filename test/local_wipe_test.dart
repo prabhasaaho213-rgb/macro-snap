@@ -11,32 +11,43 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   test('deleting one account leaves the other account alone', () async {
+    final alice = AccountPartition.suffix('alice@example.com');
+    final bob = AccountPartition.suffix('bob@example.com');
     SharedPreferences.setMockInitialValues({
       'phone': 'alice@example.com',
-      'habits_alice_example_com': '[{"id":"a"}]',
-      'water_log_alice_example_com': '{"2026-11-08":3}',
-      'badges_alice_example_com': '{"firstBite":"2026-11-01"}',
-      'habits_bob_example_com': '[{"id":"b"}]',
-      'water_log_bob_example_com': '{"2026-11-08":1}',
-      'weight_log_bob_example_com': '[]',
+      AccountPartition.key('habits', alice): '[{"id":"a"}]',
+      AccountPartition.key('water_log', alice): '{"2026-11-08":3}',
+      AccountPartition.key('badges', alice): '{"firstBite":"2026-11-01"}',
+      AccountPartition.key('habits', bob): '[{"id":"b"}]',
+      AccountPartition.key('water_log', bob): '{"2026-11-08":1}',
+      AccountPartition.key('weight_log', bob): '[]',
       'guru_chat': '[]',
     });
     final prefs = await SharedPreferences.getInstance();
     final suffix = AccountPartition.suffix(
       AccountPartition.activeFromPrefs(prefs),
     );
-    expect(suffix, 'alice_example_com');
+    expect(suffix, startsWith('alice_example_com_'));
 
     await AccountPartition.removeAccountData(prefs, suffix: suffix);
 
-    expect(prefs.getString('habits_alice_example_com'), isNull);
-    expect(prefs.getString('water_log_alice_example_com'), isNull);
-    expect(prefs.getString('badges_alice_example_com'), isNull);
+    expect(
+      prefs.getString(AccountPartition.key('habits', suffix)),
+      isNull,
+    );
+    expect(
+      prefs.getString(AccountPartition.key('water_log', suffix)),
+      isNull,
+    );
+    expect(prefs.getString(AccountPartition.key('badges', suffix)), isNull);
 
     // The other account on this device is untouched...
-    expect(prefs.getString('habits_bob_example_com'), '[{"id":"b"}]');
-    expect(prefs.getString('water_log_bob_example_com'), '{"2026-11-08":1}');
-    expect(prefs.getString('weight_log_bob_example_com'), '[]');
+    expect(prefs.getString(AccountPartition.key('habits', bob)), '[{"id":"b"}]');
+    expect(
+      prefs.getString(AccountPartition.key('water_log', bob)),
+      '{"2026-11-08":1}',
+    );
+    expect(prefs.getString(AccountPartition.key('weight_log', bob)), '[]');
     // ...and so is the guest's unprefixed key.
     expect(prefs.getString('guru_chat'), '[]');
   });

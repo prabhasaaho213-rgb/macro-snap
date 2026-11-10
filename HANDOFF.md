@@ -1,6 +1,6 @@
 # MacroSnap — project handoff
 
-Last updated: 30 Oct 2026 · version `1.5.9+110`
+Last updated: 10 Nov 2026 · version `1.5.16+119`
 
 This file used to contain machine-specific paths, a personal email address and
 the filename of a service-account key. All of that has been removed: nothing
@@ -134,13 +134,52 @@ registers the dev-only `integration_test` plugin, and the next
 `package dev.flutter.plugins.integration_test does not exist`. Delete the file
 and rebuild; the build writes a release-clean one (no dev-only plugins).
 
+## Sign-in is required
+
+There is no guest / anonymous entry point: the login screen offers Google
+sign-in only, and the app's data is always attached to an account. Do not add
+`signInAnonymously` or a "continue without an account" button — the product
+decision is that using MacroSnap requires an account.
+
+The `guest_*` / empty-`phone` handling that remains throughout `lib/services`
+is NOT a guest mode; it is how the app represents "no account is currently
+active" (a signed-out device, or the moment before auth state restores). Those
+paths keep the unprefixed legacy partition and skip cloud calls silently.
+
+## Local partition suffixes
+
+Every per-account store is keyed `<base>_<suffix>`, where the suffix is
+`<sanitised id>_<6-char FNV hash>` (`AccountPartition.suffix`). The hash was
+added because sanitising alone collided: `a.b@x.com` and `a_b@x.com` both became
+`a_b_x_com` and shared one partition. The pre-hash suffix is still available as
+`legacySuffix` and is used only by `AccountPartition.ensureCurrent`, which runs
+at bootstrap and after sign-in to move an existing install's data forward
+(prefs keys, and `meals.json` / `meals_<old suffix>.json` via MealStore's
+migration chain). It only ever copies when the destination is missing, and it
+cannot migrate other accounts — it has no way to reverse a sanitised suffix
+back into an email, and must not guess.
+
+## Cloud retry queue
+
+`pending_sync_queue.dart` records meal ids whose Firestore write failed and
+replays them at launch and on every resume, so a meal logged offline is not
+silently phone-only. It also records which ids were confirmed in the cloud
+(`synced_meal_ids`), which is what lets `MealStore` apply a deletion made on
+another device without ever pruning history it has not confirmed. Both key sets
+are per account and are on the account-deletion wipe list.
+
 ## Known gaps
 
 - A real payment has not been tested on a release build. R8 keep rules for
   Razorpay exist, but only a paid checkout on a real phone proves them.
-- Reminders prefer exact alarms (`SCHEDULE_EXACT_ALARM`) and fall back to
-  inexact when the permission is unavailable. On Android 12+, the app asks once
-  per install from notification setup; a refused permission still delivers
-  reminders on the platform's best-effort schedule. Play policy for exact alarms
-  on a nutrition app should be confirmed before relying on this in production.
+- Reminders are scheduled INEXACTLY (`AndroidScheduleMode.inexactAllowWhileIdle`).
+  `SCHEDULE_EXACT_ALARM` was removed deliberately: Google Play restricts exact
+  alarms to alarm-clock/calendar apps, and shipping it on a nutrition app risks
+  a rejected update. Reminders can therefore arrive a few minutes late (more in
+  deep battery savers). Do not re-add the permission without deciding to accept
+  that review risk.
 - `firestore.rules` must be deployed; editing the file alone changes nothing.
+  The `analytics/{uid}` rule now also bounds the nested `navAb` map.
+- The privacy policy (repo `PRIVACY_POLICY.md` and `docs/index.html`) discloses
+  local photo retention and the Pro cloud photo backup. If either feature
+  changes, update BOTH files and the Play Data Safety form.

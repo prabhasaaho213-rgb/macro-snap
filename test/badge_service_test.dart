@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:macro_snap/models/app_badge.dart';
+import 'package:macro_snap/services/account_partition.dart';
 import 'package:macro_snap/services/badge_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -80,9 +81,13 @@ void main() {
   });
 
   test('two accounts on one phone have separate boards', () async {
+    final aliceKey = AccountPartition.key(
+      'badges',
+      AccountPartition.suffix('alice@example.com'),
+    );
     SharedPreferences.setMockInitialValues({
       'phone': 'alice@example.com',
-      'badges_alice_example_com': '{"first_bite":"2026-10-20T10:00:00.000"}',
+      aliceKey: '{"first_bite":"2026-10-20T10:00:00.000"}',
     });
     BadgeService.instance.resetForTest();
     await BadgeService.instance.load();
@@ -91,7 +96,7 @@ void main() {
     // Bob signs in: his partition starts empty.
     SharedPreferences.setMockInitialValues({
       'phone': 'bob@example.com',
-      'badges_alice_example_com': '{"first_bite":"2026-10-20T10:00:00.000"}',
+      aliceKey: '{"first_bite":"2026-10-20T10:00:00.000"}',
     });
     BadgeService.instance.resetForTest();
     await BadgeService.instance.load();

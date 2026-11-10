@@ -66,18 +66,14 @@ void main() {
     expect(SyncStatusService.instance.backendUnreachable, false);
   });
 
-  test(
-    'syncAllMeals and backupAll complete without throwing as guest',
-    () async {
-      await MealSyncService.syncAllMeals([meal]);
-      final backedUp = await MealSyncService.backupAll(
-        meals: [meal],
-        habitsJson: const [],
-        waterLog: const {},
-        waterGoal: 8,
-      );
-      expect(backedUp, false);
-      expect(SyncStatusService.instance.backendUnreachable, false);
-    },
-  );
+  test('a guest restore read reports itself as unavailable, not empty', () async {
+    // The restart path must never read "guest" as "this account has no meals":
+    // that answer is what the remote-deletion sweep acts on. ok=false keeps it
+    // out of any destructive decision.
+    final cloud = await MealSyncService.fetchMealsDetailed();
+    expect(cloud.ok, false);
+    expect(cloud.complete, false);
+    expect(cloud.meals, isEmpty);
+    expect(SyncStatusService.instance.backendUnreachable, false);
+  });
 }

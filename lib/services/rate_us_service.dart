@@ -5,6 +5,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../core/theme.dart';
 import '../widgets/gradient_button.dart';
 import 'crash_reporting.dart';
+import 'meal_store.dart';
 
 /// Redirects users to the MacroSnap Play Store listing to leave a rating,
 /// and shows a polite, once-in-a-while rate prompt (inspired by Spotify,
@@ -21,6 +22,9 @@ class RateUsService {
   /// Minimum launches before the first prompt appears (gives the user time
   /// to actually experience the app first).
   static const int _minLaunchesBeforePrompt = 3;
+
+  /// Meals logged before the prompt is even considered.
+  static const int _minMealsBeforePrompt = 5;
 
   /// How many launches to wait after each "Later" before asking again.
   static const int _launchesPerReminder = 5;
@@ -93,6 +97,12 @@ class RateUsService {
           _minLaunchesBeforePrompt + (reminders * _launchesPerReminder);
       if (launches < needed) return;
 
+      // Launches alone are the wrong test: a brand-new user who opened the app
+      // three times and logged nothing has no opinion worth asking for, and
+      // asking then is how a five-star prompt turns into a one-star review.
+      // Require real use — meals actually logged — before the ask.
+      if (MealStore.instance.allMeals.length < _minMealsBeforePrompt) return;
+
       // Wait a moment so the prompt never overlaps the first screen build.
       await Future.delayed(const Duration(milliseconds: 900));
       if (!context.mounted) return;
@@ -120,107 +130,6 @@ class RateUsService {
     } catch (e, st) {
       logError('RateUsService.prefsMarkRated', e, st);
     }
-  }
-
-  /// One-shot "Rate us" button shown to brand-new users right after their
-  /// first login. Tapping it opens the Play Store rating page directly.
-  /// Shown only once per install, then never again.
-  static const String _newUserShownKey = 'rate_new_user_shown';
-
-  static Future<void> showNewUserRatingButton(BuildContext context) async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      // Someone who already rated (or opted out) is never asked again — even
-      // on a fresh install, where this async first-login dialog would show.
-      if (prefs.getBool(_ratedKey) ?? false) return;
-      if (prefs.getBool(_dismissedKey) ?? false) return;
-      if (prefs.getBool(_newUserShownKey) ?? false) return;
-      await prefs.setBool(_newUserShownKey, true);
-      if (!context.mounted) return;
-      await _showNewUserDialog(context);
-    } catch (_) {
-      // Best-effort — never break login over the rating prompt.
-    }
-  }
-
-  static Future<void> _showNewUserDialog(BuildContext context) async {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    await showDialog<void>(
-      context: context,
-      barrierDismissible: true,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: isDark ? MacroSnapTheme.cardDark : Colors.white,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
-        contentPadding: const EdgeInsets.fromLTRB(24, 28, 24, 20),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // Stars row
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: List.generate(5, (i) {
-                return Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 2),
-                  child: Icon(
-                    Icons.star_rounded,
-                    size: 32,
-                    color: MacroSnapTheme.neonYellow.withValues(
-                      alpha: 1 - (i * 0.08),
-                    ),
-                  ),
-                );
-              }),
-            ),
-            const SizedBox(height: 16),
-            Text(
-              'Enjoying MacroSnap?',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.w900,
-                letterSpacing: -0.3,
-                color: isDark ? Colors.white : const Color(0xFF1A1A1A),
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'If you love it, a quick rating on the Play Store helps '
-              'more people discover the app. Thanks for your support!',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 13,
-                height: 1.4,
-                color: MacroSnapTheme.textSecondary(context),
-              ),
-            ),
-            const SizedBox(height: 24),
-            SizedBox(
-              width: double.infinity,
-              height: 50,
-              child: GradientButton(
-                label: 'Rate us on Play Store ⭐',
-                onPressed: () async {
-                  Navigator.of(ctx).pop();
-                  await rateNowFromSettings();
-                },
-                height: 50,
-              ),
-            ),
-            const SizedBox(height: 8),
-            TextButton(
-              onPressed: () => Navigator.of(ctx).pop(),
-              child: Text(
-                'Later',
-                style: TextStyle(
-                  fontSize: 13,
-                  color: MacroSnapTheme.textTertiary(context),
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
   }
 
   /// The prompt dialog: "Enjoying MacroSnap? Rate us 5 stars!"

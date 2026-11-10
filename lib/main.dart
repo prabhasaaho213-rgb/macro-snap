@@ -23,6 +23,8 @@ import 'services/meal_sync_service.dart';
 import 'services/crash_reporting.dart';
 import 'services/badge_service.dart';
 import 'services/meal_streak_service.dart';
+import 'services/pending_sync_queue.dart';
+import 'services/account_partition.dart';
 
 Future<void> main() async {
   // ── Global crash safety net ────────────────────────────────────────
@@ -141,6 +143,17 @@ Future<void> _bootstrap() async {
   );
 
   // ── Phase 2: local data ──────────────────────────────────────────
+  // Move the active account's stored data onto its current partition suffix
+  // BEFORE any store reads it: this is what carries an existing install
+  // through the collision fix, and onboarding's pre-login data into the
+  // account that has since signed in.
+  await _guardStartup(
+    () async => AccountPartition.ensureCurrent(
+      await SharedPreferences.getInstance(),
+    ),
+    'AccountPartition.ensureCurrent',
+  );
+
   // Each of these is an independent prefs/file read, so they run together
   // instead of one after another. Local data is what the first real screen
   // draws; cloud restore stays in the background.
@@ -157,6 +170,15 @@ Future<void> _bootstrap() async {
     _guardStartup(() => HabitStore.instance.load(), 'HabitStore.load'),
     _guardStartup(() => WeightStore.instance.load(), 'WeightStore.load'),
   ]);
+
+  // Cloud writes that failed in an earlier session are replayed from here on:
+  // the queue needs the loaded history to do it, and it re-arms itself on
+  // every resume so a phone that comes back onto WiFi catches up on its own.
+  PendingSyncQueue.instance.mealSource = () => MealStore.instance.allMeals;
+  PendingSyncQueue.instance.start();
+  unawaited(
+    _guard(PendingSyncQueue.instance.drain, 'PendingSyncQueue.drain'),
+  );
 
   // Achievements shipped after these users had already been logging, so their
   // history holds milestones the badge store has no record of. Re-apply them

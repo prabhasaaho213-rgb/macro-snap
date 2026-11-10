@@ -21,6 +21,34 @@ import 'sync_status_service.dart';
 /// Guests (no Firebase Auth account) have no cloud storage and are skipped
 /// silently — exactly like the old flow skipped `guest_*` identifiers. A
 /// guest skip is NOT a failure, so it never raises the sync banner.
+/// The outcome of one restore read: the meals it brought back, and whether the
+/// answer can be trusted as the account's COMPLETE cloud history.
+///
+/// A failed or partial read is not an error to the caller — the local copy is
+/// still the primary one — but it must never be treated as "the cloud has
+/// nothing else", because that is what a deletion sweep would act on.
+@immutable
+class CloudMeals {
+  final List<MealRecord> meals;
+
+  /// The read succeeded (as opposed to failing offline).
+  final bool ok;
+
+  /// [meals] is the whole account, not a truncated page.
+  final bool complete;
+
+  const CloudMeals({
+    required this.meals,
+    required this.ok,
+    required this.complete,
+  });
+
+  const CloudMeals.unavailable()
+    : meals = const [],
+      ok = false,
+      complete = false;
+}
+
 class MealSyncService {
   static FirebaseFirestore get _db => FirebaseFirestore.instance;
 
@@ -29,11 +57,17 @@ class MealSyncService {
 
   static bool _isGuestUid(String? uid) => uid == null || uid.isEmpty;
 
-  /// The most writes one batch is allowed to carry.
+  /// The most meal documents one restore reads.
   ///
-  /// Firestore's hard limit is 500 operations per batch; 400 leaves headroom
-  /// and keeps each commit well under the 10 MiB request size.
-  static const int maxBatchOperations = 400;
+  /// The restore query used to be unbounded: a year of logging is ~700 docs
+  /// fetched on EVERY cold start, on mobile data, whether or not anything had
+  /// changed. 600 covers two meals a day for ten months — the entire history of
+  /// any realistic account — and a fetch that comes back below this number is
+  /// known to be COMPLETE, which is what lets [MealStore] safely apply remote
+  /// deletions. Above it the merge still works; only that reconciliation is
+  /// skipped, so an oversized history can never have meals pruned by a partial
+  /// read.
+  static const int restorePageSize = 600;
 
   // ─── Payload ceiling, mirrored from firestore.rules ─────────────────────
   //
@@ -147,18 +181,26 @@ class MealSyncService {
     }
   }
 
-  /// Fetch all meals for the signed-in user from Firestore.
+  /// Fetch the signed-in user's meals, reporting whether the read succeeded and
+  /// whether it was complete (see [restorePageSize]).
   ///
   /// Normalizes both app-written docs (ISO-string `date`, explicit `id`) and
   /// backend/backfill-written docs (Timestamp `date`, no `id` field) so old
   /// cloud data reads cleanly after the migration.
-  static Future<List<MealRecord>> fetchMeals() async {
+  static Future<List<MealRecord>> fetchMeals() async =>
+      (await fetchMealsDetailed()).meals;
+
+  /// [fetchMeals] with the completeness signal the reconcile needs.
+  static Future<CloudMeals> fetchMealsDetailed() async {
     final uid = await _uid();
-    if (_isGuestUid(uid)) return [];
+    // A guest is not a failure: there is no cloud to read, and the caller must
+    // not treat the empty answer as "the account has no meals".
+    if (_isGuestUid(uid)) return const CloudMeals.unavailable();
     try {
       final snap = await _db
           .collection('meals')
           .where('uid', isEqualTo: uid)
+          .limit(restorePageSize)
           .get()
           .timeout(const Duration(seconds: 15));
       // Parse each doc on its own: one malformed cloud document used to throw
@@ -175,11 +217,17 @@ class MealSyncService {
       }
       meals.sort((a, b) => b.date.compareTo(a.date));
       SyncStatusService.instance.reportSuccess();
-      return meals;
+      return CloudMeals(
+        meals: meals,
+        ok: true,
+        // A page that came back full MIGHT have been truncated, so only a
+        // short page proves the read covered the account.
+        complete: snap.docs.length < restorePageSize,
+      );
     } catch (e) {
       debugPrint('MealSyncService.fetchMeals failed: $e');
       SyncStatusService.instance.reportFailure('Meal restore failed');
-      return [];
+      return const CloudMeals.unavailable();
     }
   }
 
@@ -208,52 +256,6 @@ class MealSyncService {
     return MealRecord.fromJson(normalized);
   }
 
-  /// Bulk sync all local meals to Firestore (SYNC ALL DATA button).
-  ///
-  /// Batch-replace semantics, matching the old backend `/meals/sync` (which
-  /// deleted all then re-inserted): cloud meals that no longer exist locally
-  /// are deleted too, so a meal deleted on this device never resurrects on
-  /// reinstall.
-  static Future<void> syncAllMeals(List<MealRecord> meals) async {
-    final uid = await _uid();
-    if (_isGuestUid(uid)) return;
-    try {
-      final db = _db;
-      final col = db.collection('meals');
-      final owner = uid!; // promoted: _isGuestUid only rejects null/empty
-      final existing = await col.where('uid', isEqualTo: owner).get();
-      final localIds = meals.map((m) => m.id).toSet();
-
-      // Collect the operations first, then commit them in fixed-size chunks.
-      // One batch could previously carry every delete and every set at once —
-      // a long history hit Firestore's 500-operation limit and the release
-      // build failed the ENTIRE backup with "Bulk meal sync failed".
-      final writes = <void Function(WriteBatch batch)>[];
-      for (final doc in existing.docs) {
-        if (!localIds.contains(doc.id)) {
-          writes.add((batch) => batch.delete(doc.reference));
-        }
-      }
-      for (final meal in meals) {
-        final data = mealDoc(meal, owner);
-        final ref = col.doc(meal.id);
-        writes.add((batch) => batch.set(ref, data, SetOptions(merge: true)));
-      }
-
-      for (var start = 0; start < writes.length; start += maxBatchOperations) {
-        final end = (start + maxBatchOperations).clamp(0, writes.length);
-        final batch = db.batch();
-        for (var i = start; i < end; i++) {
-          writes[i](batch);
-        }
-        await batch.commit();
-      }
-      SyncStatusService.instance.reportSuccess();
-    } catch (e) {
-      debugPrint('MealSyncService.syncAllMeals failed: $e');
-      SyncStatusService.instance.reportFailure('Bulk meal sync failed');
-    }
-  }
 
   // ═══════════════════════════════════════════════════════════════
   // HABITS & WATER
@@ -440,42 +442,4 @@ class MealSyncService {
     }
   }
 
-  // ═══════════════════════════════════════════════════════════════
-  // FULL BACKUP / RESTORE
-  // ═══════════════════════════════════════════════════════════════
-
-  /// Backup ALL data (meals + habits + water + diet profile + recent foods +
-  /// user preferences) to Firestore. Returns true if ALL syncs succeeded.
-  static Future<bool> backupAll({
-    required List<MealRecord> meals,
-    required List<Map<String, dynamic>> habitsJson,
-    required Map<String, int> waterLog,
-    required int waterGoal,
-    List<Map<String, dynamic>>? recentFoodsJson,
-    Map<String, dynamic>? preferences,
-  }) async {
-    bool allOk = true;
-
-    for (final meal in meals) {
-      if (!await syncMeal(meal)) allOk = false;
-    }
-
-    if (!await syncHabits(
-      habitsJson: habitsJson,
-      waterLog: waterLog,
-      waterGoal: waterGoal,
-    )) {
-      allOk = false;
-    }
-
-    if (recentFoodsJson != null) {
-      if (!await syncRecentFoods(recentFoodsJson)) allOk = false;
-    }
-
-    if (preferences != null) {
-      if (!await syncPreferences(preferences)) allOk = false;
-    }
-
-    return allOk;
-  }
 }

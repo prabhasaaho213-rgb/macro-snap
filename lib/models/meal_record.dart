@@ -153,6 +153,38 @@ class MealRecord {
     this.imagePath,
   });
 
+  /// An edited copy: the fields a person can correct after logging.
+  ///
+  /// Only the values the Edit sheet exposes are overridable; the id, date, the
+  /// scan's item breakdown and the photo path carry over untouched, so an edit
+  /// can never detach a meal from its history or its picture.
+  MealRecord copyWith({
+    String? name,
+    String? category,
+    int? calories,
+    double? protein,
+    double? carbs,
+    double? fats,
+    double? fiber,
+    String? serving,
+    String? tastiness,
+  }) => MealRecord(
+    id: id,
+    date: date,
+    name: name ?? this.name,
+    category: category ?? this.category,
+    calories: calories ?? this.calories,
+    protein: protein ?? this.protein,
+    carbs: carbs ?? this.carbs,
+    fats: fats ?? this.fats,
+    fiber: fiber ?? this.fiber,
+    serving: serving ?? this.serving,
+    tastiness: tastiness ?? this.tastiness,
+    items: items,
+    servingGrams: servingGrams,
+    imagePath: imagePath,
+  );
+
   /// A copy of this record with a different (or cleared) photo path. Used by
   /// the store when the file behind [imagePath] has aged out.
   MealRecord withImagePath(String? path) => MealRecord(

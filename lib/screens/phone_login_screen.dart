@@ -15,8 +15,9 @@ import '../services/gemini_service.dart';
 import '../services/badge_service.dart';
 import '../services/meal_store.dart';
 import '../services/habit_store.dart';
-import '../services/rate_us_service.dart';
 import '../services/subscription_service.dart';
+import '../services/account_partition.dart';
+import '../services/pending_sync_queue.dart';
 import '../widgets/nickname_prompt.dart';
 import 'main_shell.dart';
 import '../services/crash_reporting.dart';
@@ -131,6 +132,10 @@ class _PhoneLoginScreenState extends State<PhoneLoginScreen>
 
       await prefs.setString('phone', email);
       await prefs.setString('email', email);
+      // The partition suffix just changed (a switch of account, or the old
+      // collision-prone suffix → the current one). Move the local data NOW,
+      // before anything reloads from it.
+      await AccountPartition.ensureCurrent(prefs);
       // A saved nickname must NEVER be overwritten by the Google display
       // name — the greeting keeps the user's chosen nickname forever.
       await NicknameStore.persistLoginName(prefs, name);
@@ -139,8 +144,7 @@ class _PhoneLoginScreenState extends State<PhoneLoginScreen>
       // Brand-new users (no nickname anywhere) pick one once (limited to 15
       // characters). Skipping never blocks login — they get asked again on
       // a future login until they set one. A restored server nickname marks
-      // a returning user, so isNewUser stays false for them.
-      final isNewUser = NicknameStore.shouldAskNickname(prefs);
+      // a returning user, so they are never asked.
       if (NicknameStore.shouldAskNickname(prefs)) {
         final chosen = mounted ? await showNicknamePrompt(context) : null;
         if (chosen != null && chosen.trim().isNotEmpty && mounted) {
@@ -160,12 +164,6 @@ class _PhoneLoginScreenState extends State<PhoneLoginScreen>
         logError('PhoneLoginScreen._signInWithGoogle (register)', e, st);
       }
 
-      // Brand-new users get a one-shot Play Store rating button right after
-      // their first login. Shown before navigating so the context is valid.
-      if (isNewUser && mounted) {
-        await RateUsService.showNewUserRatingButton(context);
-      }
-
       if (mounted) {
         if (Navigator.of(context).canPop()) {
           Navigator.pop(context, email);
@@ -182,6 +180,8 @@ class _PhoneLoginScreenState extends State<PhoneLoginScreen>
       // where the one-time ₹1 first month is granted — this call is what
       // existing users get right after updating + logging in.
       unawaited(SubscriptionService.instance.verifyServerSubscription());
+      // Anything this account logged offline can upload now that it is active.
+      unawaited(PendingSyncQueue.instance.drain());
       unawaited(MealStore.instance.reload());
       // Badges are partitioned per account too — without this the previous
       // account's trophy case stays on screen after a switch.

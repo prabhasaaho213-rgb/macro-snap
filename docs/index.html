@@ -64,7 +64,7 @@
 <body>
     <div class="container">
         <h1>Privacy Policy</h1>
-        <p class="date">Last updated: October 14, 2026</p>
+        <p class="date">Last updated: November 10, 2026</p>
 
         <p>MacroSnap ("we", "our", or "us") is committed to protecting your privacy. This Privacy Policy explains how we collect, use, and safeguard your information when you use our mobile application.</p>
 
@@ -72,7 +72,8 @@
 
         <div class="card">
             <strong>Photos & Images</strong>
-            <p>When you use the food scanning or barcode features, we capture photos of your food. These images are sent to Google Gemini AI for analysis and are not stored on our servers after processing.</p>
+            <p>A photo you take or pick while logging a meal is sent through our backend to Google Gemini AI for analysis — we keep the analysis result, not the photo. A copy of a logged meal's photo is then kept on your device only, for the window you choose in Settings → Meal Photos: 24 hours (the default), 7 days, 30 days, or Forever (Pro).</p>
+            <p><strong>Optional cloud photo backup (Pro, off by default):</strong> if you turn on Settings → Sync Meal Photos, photos of meals you log are also stored in Cloud Firestore so they can reappear on a new phone. Turn it off at any time; deleting a meal deletes its cloud photo, and deleting your account deletes all of them. We never use your photos for advertising or model training.</p>
         </div>
 
         <div class="card">
@@ -111,13 +112,13 @@
             <li><strong>Local Storage:</strong> A copy of your meals, habits, preferences and settings is kept on your device so the app works offline</li>
             <li><strong>Cloud Sync:</strong> When you sign in, your data is saved automatically and continuously to Cloud Firestore (Firebase), keyed to your account, so it restores on any device you sign into</li>
             <li><strong>Firebase:</strong> Authentication is handled by Firebase (Google)</li>
-            <li><strong>Photos & scans:</strong> Food images are sent to Google Gemini AI for analysis and are not retained</li>
+            <li><strong>Photos & scans:</strong> Food images are sent to Google Gemini AI for analysis and are not retained by us; a copy of a logged meal's photo is kept on your device for the window you choose, and optionally in Cloud Firestore if you enable Pro photo backup</li>
         </ul>
 
         <h2>4. Third-Party Services</h2>
         <p>We use the following third-party services:</p>
         <ul>
-            <li><strong>Google Firebase</strong> – Authentication and cloud data storage</li>
+            <li><strong>Google Firebase</strong> – Authentication, cloud data storage and Crashlytics crash reports (technical data only, release builds, retained 90 days)</li>
             <li><strong>Google Gemini AI</strong> – Food recognition, diet plans and Guru, the nutrition assistant</li>
             <li><strong>Razorpay</strong> – Subscription payments (UPI, cards and other supported methods)</li>
         </ul>

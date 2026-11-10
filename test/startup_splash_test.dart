@@ -71,29 +71,29 @@ void main() {
     expect(find.byType(StartupSplash), findsNothing);
   });
 
-  testWidgets('the intro plays on EVERY launch, not just the first per build', (
+  testWidgets('a return launch opens promptly instead of replaying the intro', (
     tester,
   ) async {
-    // This used to be gated behind a once-per-version flag, so a user who
-    // opened the app again never saw the logo animation — the splash was
-    // torn down the moment startup resolved. The floor must hold on every
-    // single launch and finish with the interface swap, so we assert this here.
+    // The intro is worth its 1.8 s once per version (there is something new to
+    // look at). On the twentieth open of the day it is pure waiting, so a
+    // launch after the first swaps to the app almost immediately.
+    SharedPreferences.setMockInitialValues({kSplashIntroVersionKey: true});
+
     final gate = Completer<void>();
     await tester.pumpWidget(MacroSnapApp(startup: gate.future));
     await tester.pump();
 
     gate.complete();
     await tester.pump();
-    await tester.pump(const Duration(milliseconds: 100));
-
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 60));
     expect(
       find.byType(StartupSplash),
       findsOneWidget,
-      reason: 'the entry animation is not cut off on a repeat launch either',
+      reason: 'the hand-off still gets a frame, not a flicker',
     );
 
-    // Then the floor ends, exactly like a first launch would.
-    await tester.pump(kSplashMinimum);
+    await tester.pump(kSplashShort);
     await tester.pump(const Duration(milliseconds: 100));
     expect(find.byType(StartupSplash), findsNothing);
   });

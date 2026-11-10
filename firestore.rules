@@ -196,8 +196,17 @@ service cloud.firestore {
     // The size cap belongs on the write, where a payload actually exists.
     match /analytics/{uid} {
       allow read: if signedIn() && isOwner(uid);
+      // The top-level key count is bounded, but `size()` only counts those
+      // keys — a single nested map could still carry thousands of entries. The
+      // nav counters live at navAb.selects, so that one map is bounded too.
       allow write: if signedIn() && isOwner(uid)
-        && request.resource.data.size() <= 10;
+        && request.resource.data.size() <= 10
+        && (!('navAb' in request.resource.data)
+          || (request.resource.data.navAb is map
+            && request.resource.data.navAb.size() <= 5
+            && (!('selects' in request.resource.data.navAb)
+              || (request.resource.data.navAb.selects is map
+                && request.resource.data.navAb.selects.size() <= 10))));
     }
 
     // ─── referrals/{code} — referral-code index ─────────────────────────

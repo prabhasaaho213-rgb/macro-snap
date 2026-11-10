@@ -18,7 +18,6 @@ import 'notification_branding.dart';
 import 'reminder_registry.dart';
 import 'subscription_service.dart';
 import 'crash_reporting.dart';
-import 'notification_scheduler.dart';
 
 /// Where a built-in (non-habit) notification tap should take the user.
 enum NotificationTapDestination { home, subscription, none }
@@ -104,11 +103,11 @@ class NotificationService with WidgetsBindingObserver {
             handleHabitReminderActionBackground,
       );
 
-      // Exact reminders need a permission the user can revoke. Ask here,
-      // where the app is already on screen and idle — not from inside a
-      // schedule call, which would throw the dialog over whatever the user
-      // was doing. The scheduler falls back to inexact if it is refused.
-      unawaited(requestExactAlarmPermissionOnce(_plugin));
+      // No exact-alarm permission is requested any more: `SCHEDULE_EXACT_ALARM`
+      // is restricted on Google Play to alarm/calendar apps, so reminders are
+      // scheduled inexactly (see notification_scheduler.dart). That also means
+      // notification setup no longer sends anyone to Android's "Alarms &
+      // reminders" settings screen. Nothing here depends on the answer.
       _initialized = true;
 
       // Reminder-policy listeners, wired once here so every UI/service state

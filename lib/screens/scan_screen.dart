@@ -19,6 +19,7 @@ import 'recent_foods_screen.dart';
 import 'settings_screen.dart';
 import 'result_screen.dart';
 import 'subscription_screen.dart';
+import '../services/crash_reporting.dart';
 
 class ScanScreen extends StatefulWidget {
   const ScanScreen({super.key});
@@ -381,11 +382,19 @@ class _ScanScreenState extends State<ScanScreen> with WidgetsBindingObserver {
       if (mounted) {
         _showPreview(tempFile.path);
       }
-    } catch (e) {
+    } catch (e, st) {
+      // The raw exception used to be shown here, which is the one place in the
+      // app that leaks internals to the user (a camera plugin message reads as
+      // a bug report, not an explanation). The detail goes to Crashlytics and
+      // the user gets something they can act on.
+      logError('ScanScreen._capture', e, st);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Capture failed: $e'),
+            content: const Text(
+              'Could not take the photo. Try again, or pick one from your '
+              'gallery.',
+            ),
             backgroundColor: MacroSnapTheme.neonPink,
           ),
         );

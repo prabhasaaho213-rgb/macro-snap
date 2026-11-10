@@ -36,7 +36,7 @@ class UpdatesScreen extends StatefulWidget {
   /// found.
   /// `test/release_version_test.dart` fails when this drifts from the
   /// version in `pubspec.yaml`, so a release bump cannot forget it.
-  static const String latestVersion = '1.5.14';
+  static const String latestVersion = '1.5.16';
 
   /// SharedPreferences key holding the latest version the user has seen.
   static const String seenVersionKey = 'updates_seen_version';
@@ -49,12 +49,25 @@ class _UpdatesScreenState extends State<UpdatesScreen> {
   static const List<_UpdateEntry> _changelog = [
     _UpdateEntry(
       version: UpdatesScreen.latestVersion,
-      date: '2026-11-09',
+      date: '2026-11-10',
       isLatest: true,
+      notes: [
+        'Meals you log offline upload by themselves once the connection is back, and a meal deleted on another phone no longer comes back here',
+        'Long-press a meal to edit its name, calories, macros or time instead of deleting it and scanning again',
+        'Reminders may arrive a few minutes late, but updates are no longer held up by Android exact-alarm rules',
+        'The intro animation plays once after install instead of every time you open the app',
+        'The rating prompt waits until you have logged five meals and opened the app three times',
+        'A failed scan says what to try next instead of showing a raw error',
+        'Two accounts with similar emails on one phone no longer see each other\'s history',
+      ],
+    ),
+    _UpdateEntry(
+      version: '1.5.15',
+      date: '2026-11-09',
       notes: [
         'Habit reminders fire at the exact minute you chose; if Android refuses exact alarms, the reminder still arrives a little late instead of never',
         'Pro now shows the date it ends when the grant has one - a referral month or the days left after a cancel read as a date, not a plain Subscribed tick',
-        'Upgrading a guest account, logging in from the paywall or answering the notification prompt no longer crashes if you leave the screen while it works',
+        'Logging in from the paywall or answering the notification prompt no longer crashes if you leave the screen while it works',
         'Running out of free scans no longer offers TRY AGAIN, which could never succeed - manual entry carries you until tomorrow',
         'Connection errors say the server could not be reached instead of telling you to check your WiFi and start the backend',
         'Barcode calories with a decimal are rounded instead of logged as zero, and editing one macro now scales every dish on the plate',
@@ -62,7 +75,7 @@ class _UpdatesScreenState extends State<UpdatesScreen> {
       ],
     ),
     _UpdateEntry(
-      version: UpdatesScreen.latestVersion,
+      version: '1.5.13',
       date: '2026-11-08',
       notes: [
         'Deleting an account now leaves every other account on the same phone untouched — habits, water, weight history and badges included',

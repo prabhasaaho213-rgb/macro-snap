@@ -67,36 +67,31 @@ void main() {
     payload: 'h1',
   );
 
-  test('arms the reminder with an exact alarm when the platform allows it', () async {
+  test('arms the reminder inexactly — no exact-alarm permission is used', () async {
+    // `SCHEDULE_EXACT_ALARM` is restricted on Google Play to alarm/calendar
+    // apps, so the app must never ask the platform for an exact alarm: the
+    // attempt itself is what a policy review finds in the build.
     await scheduleOnce();
 
-    expect(_schedules, hasLength(1), reason: 'one schedule, no retry');
+    expect(_schedules, hasLength(1), reason: 'one schedule, no exact attempt');
     expect(
       _schedules.single.toLowerCase(),
-      contains('exact'),
-      reason: 'reminders must fire at the minute the user picked',
+      contains('inexact'),
+      reason: 'reminders are inexact by design',
+    );
+    expect(
+      _schedules.single.toLowerCase(),
+      isNot(contains('schedulemode: exactallowwhileidle')),
+      reason: 'an exact alarm must never be requested',
     );
   });
 
-  test('falls back to an inexact alarm when exact is refused', () async {
+  test('a refused schedule surfaces instead of silently vanishing', () async {
     _refusals = 1;
 
-    await scheduleOnce();
-
-    expect(
-      _schedules,
-      hasLength(2),
-      reason: 'a refused exact alarm must be retried, not dropped',
-    );
-    expect(
-      _schedules.first.toLowerCase(),
-      contains('exact'),
-      reason: 'exact is attempted first',
-    );
-    expect(
-      _schedules.last.toLowerCase(),
-      contains('inexact'),
-      reason: 'the reminder still arms, with best-effort timing',
-    );
+    // There is no fallback mode any more, so the failure must reach the
+    // caller's guard (which logs it) rather than being swallowed here.
+    await expectLater(scheduleOnce(), throwsA(isA<PlatformException>()));
+    expect(_schedules, hasLength(1));
   });
 }

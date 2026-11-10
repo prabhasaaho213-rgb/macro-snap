@@ -23,12 +23,13 @@
     <!-- Required by flutter_local_notifications for scheduled reminders: -->
     <!-- re-schedule after reboot/update and vibrate when they fire. -->
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>
-    <!-- Exact reminders: without this, scheduled notifications are
-         inexactAllowWhileIdle and can drift by minutes (much more in
-         Doze), so a 9:00 habit reminder could arrive at 9:20. The user
-         can revoke this on Android 12+; scheduleZoned() falls back to
-         the inexact mode when they do, so reminders never stop firing. -->
-    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM"/>
+    <!-- SCHEDULE_EXACT_ALARM is deliberately NOT requested. Google Play
+         restricts it to apps whose core function is an alarm clock or a
+         calendar, and a meal reminder does not qualify: shipping it risks
+         review rejection or a policy strike on every update. Reminders are
+         scheduled inexactly instead (AndroidScheduleMode.inexactAllowWhileIdle,
+         see notification_scheduler.dart), which is allowed for any app and
+         still delivers on the platform's best-effort schedule. -->
     <uses-permission android:name="android.permission.VIBRATE"/>
     <!-- allowBackup=false: preferences hold the local Pro flag, and an Android
          cloud backup would restore it onto a different device during setup. -->
