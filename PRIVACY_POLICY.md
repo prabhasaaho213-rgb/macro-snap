@@ -6,7 +6,7 @@
 MacroSnap collects only the data needed to run the app:
 
 - **Account information** — the email address of the Google account you sign in with, and the display name you choose, used to identify your account via Firebase Authentication. Google sign-in is the only sign-in method; there is no guest or phone-number account.
-- **Meal, habit and diet data** — meals, nutrition targets, habit trackers, water logs and diet preferences. Stored on your device and **saved to the cloud automatically** (Cloud Firestore) whenever you are signed in, so your data survives reinstalls and device changes.
+- **Meal, habit and diet data** — meals, nutrition targets, habit trackers, streak days, water logs and diet preferences. Stored on your device and **saved to the cloud automatically** (Cloud Firestore) whenever you are signed in, so your data survives reinstalls and device changes.
 - **AI assistant messages** — messages you send to Guru, the in-app nutrition assistant, are forwarded to Google Gemini AI to generate a reply. Along with the last few messages, a summary of your own logged data (today's meals and macro totals, nutrition targets, habit progress, water intake and your display name) is included so Guru can answer questions about your day. Your phone number and email are never sent.
 - **Subscription status** — handled by Razorpay; we store only your subscription status and start date. No card, UPI or banking details are ever stored on our servers.
 - **App usage counters** — anonymous interaction counts (for example, how often each tab is opened) stored against your account, used only to decide which interface layout works better. They contain no content and no location.
