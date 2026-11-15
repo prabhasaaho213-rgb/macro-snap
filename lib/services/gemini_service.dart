@@ -247,6 +247,22 @@ class GeminiService {
   static String get serverUrl => _serverUrl;
   static bool get hasServerUrl => _serverUrl.isNotEmpty;
 
+  /// The response body as a JSON map, or null when it is not one.
+  ///
+  /// Error responses are not always JSON: Cloudflare/Vercel gateways answer
+  /// 502/504 with an HTML page, and a serverless timeout returns the platform's
+  /// own text. Casting `jsonDecode(...)` to a Map there throws a
+  /// FormatException, which reached the user as "unexpected response" even
+  /// though the real story was "the server is unavailable".
+  static Map<String, dynamic>? _jsonBody(String body) {
+    try {
+      final decoded = jsonDecode(body);
+      return decoded is Map<String, dynamic> ? decoded : null;
+    } catch (_) {
+      return null;
+    }
+  }
+
   /// Integration-test hook: when set, [analyzeFoodImage] returns this mock
   /// instead of calling the backend. Used by integration_test/flow_test.dart
   /// so on-device flows run without a live server.
@@ -279,24 +295,39 @@ class GeminiService {
         filePath: imagePath,
       ).timeout(const Duration(seconds: 30));
 
+      // Status first, body second. A gateway 502/504 and a Vercel function
+      // timeout both answer with HTML, so decoding before looking at the code
+      // turned "the server is down" into a FormatException the user saw as
+      // "unexpected response". Nothing here decodes a body it has not
+      // type-checked.
       if (response.statusCode == 403) {
-        final body = jsonDecode(response.body) as Map<String, dynamic>;
-        if (body['error'] == 'scan_limit_reached') {
+        final body = _jsonBody(response.body);
+        if (body?['error'] == 'scan_limit_reached') {
           throw Exception('Scan limit reached. Subscribe for unlimited scans.');
         }
-        throw Exception(
-          body['error'] as String? ?? 'Server error (${response.statusCode})',
-        );
+        throw Exception(body?['error'] as String? ?? 'Server error (403)');
       }
 
       if (response.statusCode == 401) {
         throw Exception('Please sign in again to use AI scans.');
       }
 
-      if (response.statusCode != 200) {
-        final body = jsonDecode(response.body) as Map<String, dynamic>;
+      if (response.statusCode == 429) {
+        // Rate limiting is temporary and the user's action is different from
+        // "check your connection": just wait.
+        throw Exception('Too many scans at once. Wait a minute and try again.');
+      }
+
+      if (response.statusCode >= 500) {
         throw Exception(
-          body['error'] as String? ?? 'Server error (${response.statusCode})',
+          'The scan service is down right now. Try again in a few minutes.',
+        );
+      }
+
+      if (response.statusCode != 200) {
+        final body = _jsonBody(response.body);
+        throw Exception(
+          body?['error'] as String? ?? 'Server error (${response.statusCode})',
         );
       }
 

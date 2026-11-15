@@ -380,6 +380,7 @@ class _DietPlanScreenState extends State<DietPlanScreen> {
     return Scaffold(
       appBar: AppBar(
         leading: IconButton(
+          tooltip: 'Back',
           icon: Icon(
             Icons.arrow_back_ios_new_rounded,
             color: isDark ? Colors.white : const Color(0xFF1A1A1A),

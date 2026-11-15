@@ -138,11 +138,14 @@ class _ConfettiCelebrationState extends State<ConfettiCelebration>
         final t = _controller.value;
         return Stack(
           children: [
-            // Semi-transparent backdrop
+            // Semi-transparent backdrop. It only absorbs taps, so it must not
+            // be announced as a button by TalkBack.
             Positioned.fill(
-              child: GestureDetector(
-                onTap: () {}, // Absorb taps
-                child: Container(color: Colors.black.withValues(alpha: 0.05)),
+              child: ExcludeSemantics(
+                child: GestureDetector(
+                  onTap: () {}, // Absorb taps
+                  child: Container(color: Colors.black.withValues(alpha: 0.05)),
+                ),
               ),
             ),
             // Particles

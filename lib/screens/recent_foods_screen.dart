@@ -169,6 +169,7 @@ class _RecentFoodsScreenState extends State<RecentFoodsScreen> {
                 prefixIcon: const Icon(Icons.search_rounded, size: 20),
                 suffixIcon: _searchQuery.isNotEmpty
                     ? IconButton(
+                        tooltip: 'Clear search',
                         onPressed: () {
                           _searchController.clear();
                           setState(() => _searchQuery = '');

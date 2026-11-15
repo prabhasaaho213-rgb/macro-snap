@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -70,9 +71,10 @@ class NicknameStore {
 /// Enforced [kNicknameMaxLength]-character limit so a nickname can never
 /// overflow the home greeting or other UI that displays it.
 Future<String?> showNicknamePrompt(BuildContext context) async {
-  // The controller lives for the life of the one-shot modal — it must not be
-  // disposed when `showDialog` resolves, because the dialog's exit animation
-  // still rebuilds the TextField and would touch a disposed controller.
+  // The controller must not be disposed the instant `showDialog` resolves: the
+  // dialog's exit animation still rebuilds the TextField, which would touch a
+  // disposed controller. It is disposed once that animation is over (see
+  // below), so the one-shot modal does not leak one either.
   final controller = TextEditingController();
   final chosen = await showDialog<String>(
     context: context,
@@ -120,6 +122,14 @@ Future<String?> showNicknamePrompt(BuildContext context) async {
           child: const Text('Save'),
         ),
       ],
+    ),
+  );
+  // 400 ms is comfortably past the route's exit transition (~150–200 ms), so
+  // the TextField has stopped rebuilding by the time the controller goes.
+  unawaited(
+    Future<void>.delayed(
+      const Duration(milliseconds: 400),
+      controller.dispose,
     ),
   );
   return chosen?.trim().isEmpty ?? true ? null : chosen!.trim();

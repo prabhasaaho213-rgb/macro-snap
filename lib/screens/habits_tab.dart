@@ -142,24 +142,28 @@ class _HabitsTabState extends State<HabitsTab> {
                   ),
                   Row(
                     children: [
-                      GestureDetector(
-                        onTap: () => Navigator.push(
-                          context,
-                          habitFlowRoute(const SettingsScreen()),
-                        ),
-                        child: Container(
-                          width: 38,
-                          height: 38,
-                          decoration: BoxDecoration(
-                            color: isDark
-                                ? Colors.white10
-                                : Colors.black.withValues(alpha: 0.04),
-                            borderRadius: BorderRadius.circular(12),
+                      Semantics(
+                        button: true,
+                        label: 'Settings',
+                        child: GestureDetector(
+                          onTap: () => Navigator.push(
+                            context,
+                            habitFlowRoute(const SettingsScreen()),
                           ),
-                          child: Icon(
-                            Icons.settings_rounded,
-                            color: MacroSnapTheme.textTertiary(context),
-                            size: 20,
+                          child: Container(
+                            width: 38,
+                            height: 38,
+                            decoration: BoxDecoration(
+                              color: isDark
+                                  ? Colors.white10
+                                  : Colors.black.withValues(alpha: 0.04),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Icon(
+                              Icons.settings_rounded,
+                              color: MacroSnapTheme.textTertiary(context),
+                              size: 20,
+                            ),
                           ),
                         ),
                       ),

@@ -189,6 +189,32 @@ Future<void> wipeLocalAndSignOut(BuildContext context) async {
   }
 }
 
+/// What to tell the user when account deletion did not answer 200.
+///
+/// [status] is 0 when the request never got a reply at all. Everything else is
+/// a real HTTP status, and they are not interchangeable: a 500 is the server's
+/// problem, a 401 means the session is gone, and only "no reply" is the case
+/// where "check your connection" is true.
+String _deleteFailureMessage(int status) {
+  if (status == 0) {
+    return 'Could not reach the server to delete your account. '
+        'Check your connection and try again.';
+  }
+  if (status == 401 || status == 403) {
+    return 'Your sign-in expired, so nothing was deleted. '
+        'Sign in again and retry.';
+  }
+  if (status == 429) {
+    return 'Too many attempts. Wait a minute and try again.';
+  }
+  if (status >= 500) {
+    return 'The server could not complete the deletion (HTTP $status). '
+        'Nothing was deleted — try again in a few minutes.';
+  }
+  return 'Deletion was refused (HTTP $status) and nothing was deleted. '
+      'Email macrosnap7@gmail.com if this keeps happening.';
+}
+
 /// In-app self-service account deletion.
 ///
 /// 1. Shows a confirmation dialog explaining this is permanent.
@@ -242,7 +268,8 @@ Future<void> deleteAccountFlow(
     ),
   );
 
-  var serverOk = false;
+  // 0 means "no reply at all"; anything else is the status the server chose.
+  var serverStatus = 0;
   try {
     // The token identifies the account being deleted — nothing else is sent.
     final uri = Uri.parse('${GeminiService.serverUrl}/account/delete');
@@ -251,7 +278,7 @@ Future<void> deleteAccountFlow(
       headers: {'Content-Type': 'application/json'},
       body: jsonEncode(const <String, dynamic>{}),
     ).timeout(const Duration(seconds: 20));
-    serverOk = res.statusCode == 200;
+    serverStatus = res.statusCode;
   } catch (e, st) {
     logError('deleteAccountFlow.server', e, st);
   }
@@ -259,17 +286,23 @@ Future<void> deleteAccountFlow(
   if (!context.mounted) return;
   Navigator.of(context).pop(); // dismiss progress dialog
 
-  if (!serverOk || !context.mounted) {
-    // Backend unreachable — do NOT wipe locally, so the user can retry or
-    // still use the app. Tell them it failed.
+  if (serverStatus != 200 || !context.mounted) {
+    // Nothing was deleted — not the cloud account, not this device's copy — so
+    // the user can retry or keep using the app.
+    //
+    // A non-200 reply used to be reported ONLY to the local log and shown as
+    // "check your connection", which is wrong for every status except "no
+    // reply" and invisible to Crashlytics. Report it and say what happened.
+    if (serverStatus != 0) {
+      logError(
+        'deleteAccountFlow.server',
+        StateError('account deletion answered HTTP $serverStatus'),
+        StackTrace.current,
+      );
+    }
     if (context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'Could not reach the server to delete your account. '
-            'Please check your connection and try again.',
-          ),
-        ),
+        SnackBar(content: Text(_deleteFailureMessage(serverStatus))),
       );
     }
     return;

@@ -639,7 +639,11 @@ extension _HabitsSheets on _HabitsTabState {
                             0xFF00B8D4,
                           ]
                           .map(
-                            (value) => GestureDetector(
+                            (value) => Semantics(
+                              button: true,
+                              selected: color == value,
+                              label: 'Habit colour',
+                              child: GestureDetector(
                               onTap: () => setModalState(() => color = value),
                               child: Container(
                                 width: 34,
@@ -656,6 +660,7 @@ extension _HabitsSheets on _HabitsTabState {
                                     width: 3,
                                   ),
                                 ),
+                              ),
                               ),
                             ),
                           )

@@ -457,18 +457,22 @@ extension _ResultResults on _ResultScreenState {
               ),
             ),
             const Spacer(),
-            GestureDetector(
-              onTap: () => _setGrams(_grams >= 50 ? _grams - 25 : 25),
-              child: Container(
-                padding: const EdgeInsets.all(6),
-                decoration: BoxDecoration(
-                  color: MacroSnapTheme.neonGreen.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: const Icon(
-                  Icons.remove_rounded,
-                  size: 18,
-                  color: MacroSnapTheme.neonGreen,
+            Semantics(
+              button: true,
+              label: 'Decrease serving size',
+              child: GestureDetector(
+                onTap: () => _setGrams(_grams >= 50 ? _grams - 25 : 25),
+                child: Container(
+                  padding: const EdgeInsets.all(6),
+                  decoration: BoxDecoration(
+                    color: MacroSnapTheme.neonGreen.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Icon(
+                    Icons.remove_rounded,
+                    size: 18,
+                    color: MacroSnapTheme.neonGreen,
+                  ),
                 ),
               ),
             ),
@@ -491,18 +495,22 @@ extension _ResultResults on _ResultScreenState {
               ),
             ),
             const SizedBox(width: 12),
-            GestureDetector(
-              onTap: () => _setGrams(_grams <= 975 ? _grams + 25 : 1000),
-              child: Container(
-                padding: const EdgeInsets.all(6),
-                decoration: BoxDecoration(
-                  color: MacroSnapTheme.neonGreen.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: const Icon(
-                  Icons.add_rounded,
-                  size: 18,
-                  color: MacroSnapTheme.neonGreen,
+            Semantics(
+              button: true,
+              label: 'Increase serving size',
+              child: GestureDetector(
+                onTap: () => _setGrams(_grams <= 975 ? _grams + 25 : 1000),
+                child: Container(
+                  padding: const EdgeInsets.all(6),
+                  decoration: BoxDecoration(
+                    color: MacroSnapTheme.neonGreen.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Icon(
+                    Icons.add_rounded,
+                    size: 18,
+                    color: MacroSnapTheme.neonGreen,
+                  ),
                 ),
               ),
             ),

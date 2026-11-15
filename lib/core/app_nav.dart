@@ -5,6 +5,14 @@ import '../screens/subscription_screen.dart';
 /// non-widget code can navigate when no BuildContext is available.
 final GlobalKey<NavigatorState> appNavigatorKey = GlobalKey<NavigatorState>();
 
+/// Global messenger key, so non-widget code can tell the user that something
+/// went wrong on the screen they are looking at. Used by the uncaught-error
+/// handler in `main.dart`: a release build swallows async errors to stay
+/// alive, which used to leave the app visibly running with a broken feature
+/// and nothing said about it.
+final GlobalKey<ScaffoldMessengerState> appMessengerKey =
+    GlobalKey<ScaffoldMessengerState>();
+
 /// Shared index of the active tab in [MainShell]:
 /// 0 = Home, 1 = Scan, 2 = Habits, 3 = Updates.
 /// Notification taps set this so the shell switches to the Habits tab;

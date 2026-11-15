@@ -10,6 +10,7 @@ import '../services/gemini_service.dart';
 import '../services/meal_image_store.dart';
 import '../services/meal_store.dart';
 import '../services/recent_food_service.dart';
+import '../services/scan_error_copy.dart';
 import '../services/scan_gate.dart';
 import '../widgets/animations.dart';
 import '../widgets/calorie_reveal.dart';
@@ -316,19 +317,11 @@ class _ResultScreenState extends State<ResultScreen>
   }
 
   /// Convert raw error messages to user-friendly guidance.
-  String _friendlyErrorMessage(String raw) {
-    final msg = raw.replaceFirst('Exception: ', '').toLowerCase();
-    if (msg.contains('timeout') || msg.contains('timed out')) {
-      return 'Analysis timed out.\n\nTips for better results:\n• Take a clearer photo\n• Ensure good lighting\n• Get closer to the food';
-    }
-    if (msg.contains('cannot reach') || msg.contains('connection')) {
-      return 'Cannot reach the server.\n\nCheck your internet connection and try again.';
-    }
-    if (msg.contains('image') || msg.contains('file')) {
-      return 'Could not read the image.\n\nTry:\n• Taking a new photo\n• Checking camera permissions';
-    }
-    return 'Could not identify the food.\n\nTips:\n• Take a clearer photo\n• Ensure food is well-lit\n• Get closer to the dish\n• Avoid blurry images';
-  }
+  ///
+  /// The mapping lives in `services/scan_error_copy.dart` so it can be tested
+  /// directly: this used to hand a slow scan the "cannot reach the server"
+  /// advice, because the timeout copy itself mentions the connection.
+  String _friendlyErrorMessage(String raw) => scanErrorCopy(raw);
 
   /// Whether to show the low-confidence warning banner.
   bool _showLowConfidenceWarning = false;
@@ -452,6 +445,7 @@ class _ResultScreenState extends State<ResultScreen>
     return Scaffold(
       appBar: AppBar(
         leading: IconButton(
+          tooltip: 'Close',
           icon: Icon(
             Icons.close_rounded,
             color: isDark ? Colors.white : const Color(0xFF1A1A1A),

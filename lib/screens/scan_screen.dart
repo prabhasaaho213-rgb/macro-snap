@@ -89,28 +89,37 @@ class _ScanScreenState extends State<ScanScreen> with WidgetsBindingObserver {
   Widget _roundCameraButton({
     required IconData icon,
     required VoidCallback onTap,
+    /// What TalkBack reads: the icon alone names nothing, and this button has
+    /// no visible text to fall back on.
+    required String label,
     bool active = false,
   }) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        width: 52,
-        height: 52,
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          color: active
-              ? MacroSnapTheme.neonGreen.withValues(alpha: 0.9)
-              : Colors.white.withValues(alpha: 0.15),
-          border: Border.all(
+    return Semantics(
+      button: true,
+      label: label,
+      child: GestureDetector(
+        onTap: onTap,
+        child: Container(
+          width: 52,
+          height: 52,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
             color: active
-                ? MacroSnapTheme.neonGreen
-                : Colors.white.withValues(alpha: 0.22),
+                ? MacroSnapTheme.neonGreen.withValues(alpha: 0.9)
+                : Colors.white.withValues(alpha: 0.15),
+            border: Border.all(
+              color: active
+                  ? MacroSnapTheme.neonGreen
+                  : Colors.white.withValues(alpha: 0.22),
+            ),
           ),
-        ),
-        child: Icon(
-          icon,
-          color: active ? Colors.black : Colors.white.withValues(alpha: 0.85),
-          size: 22,
+          child: Icon(
+            icon,
+            color: active
+                ? Colors.black
+                : Colors.white.withValues(alpha: 0.85),
+            size: 22,
+          ),
         ),
       ),
     );
@@ -532,6 +541,7 @@ class _ScanScreenState extends State<ScanScreen> with WidgetsBindingObserver {
           backgroundColor: Colors.transparent,
           elevation: 0,
           leading: IconButton(
+            tooltip: 'Close scanner',
             icon: const Icon(
               Icons.close_rounded,
               color: Colors.white,
@@ -658,9 +668,12 @@ class _ScanScreenState extends State<ScanScreen> with WidgetsBindingObserver {
           // ─── Captured Image Preview (Hero source) ─────────
           if (_capturedImagePath != null)
             Positioned.fill(
-              child: GestureDetector(
-                onTap: () {
-                  _previewTimer?.cancel();
+              child: Semantics(
+                button: true,
+                label: 'Use this photo',
+                child: GestureDetector(
+                  onTap: () {
+                    _previewTimer?.cancel();
                   if (mounted) {
                     final path = _capturedImagePath!;
                     setState(() => _capturedImagePath = null);
@@ -744,6 +757,7 @@ class _ScanScreenState extends State<ScanScreen> with WidgetsBindingObserver {
                     ),
                   ],
                 ),
+                ),
               ),
             ),
 
@@ -784,6 +798,7 @@ class _ScanScreenState extends State<ScanScreen> with WidgetsBindingObserver {
                       Row(
                         children: [
                           IconButton(
+                            tooltip: 'Close',
                             icon: const Icon(
                               Icons.close_rounded,
                               color: Colors.white,
@@ -840,22 +855,26 @@ class _ScanScreenState extends State<ScanScreen> with WidgetsBindingObserver {
                           ),
                           const SizedBox(width: 4),
                           // Settings button
-                          GestureDetector(
-                            onTap: () => Navigator.push(
-                              context,
-                              habitFlowRoute(const SettingsScreen()),
-                            ),
-                            child: Container(
-                              width: 38,
-                              height: 38,
-                              decoration: BoxDecoration(
-                                color: Colors.white.withValues(alpha: 0.12),
-                                borderRadius: BorderRadius.circular(12),
+                          Semantics(
+                            button: true,
+                            label: 'Settings',
+                            child: GestureDetector(
+                              onTap: () => Navigator.push(
+                                context,
+                                habitFlowRoute(const SettingsScreen()),
                               ),
-                              child: const Icon(
-                                Icons.settings_rounded,
-                                color: Colors.white60,
-                                size: 20,
+                              child: Container(
+                                width: 38,
+                                height: 38,
+                                decoration: BoxDecoration(
+                                  color: Colors.white.withValues(alpha: 0.12),
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: const Icon(
+                                  Icons.settings_rounded,
+                                  color: Colors.white60,
+                                  size: 20,
+                                ),
                               ),
                             ),
                           ),
@@ -918,15 +937,19 @@ class _ScanScreenState extends State<ScanScreen> with WidgetsBindingObserver {
                         icon: _torchOn
                             ? Icons.flash_on_rounded
                             : Icons.flash_off_rounded,
+                        label: _torchOn ? 'Turn flash off' : 'Turn flash on',
                         active: _torchOn,
                         onTap: _toggleTorch,
                       ),
                       // Capture button
-                      GestureDetector(
-                        onTap: _capture,
-                        child: Container(
-                          width: 78,
-                          height: 78,
+                      Semantics(
+                        button: true,
+                        label: 'Take photo',
+                        child: GestureDetector(
+                          onTap: _capture,
+                          child: Container(
+                            width: 78,
+                            height: 78,
                           decoration: BoxDecoration(
                             shape: BoxShape.circle,
                             color: Colors.white.withValues(alpha: 0.18),
@@ -935,18 +958,19 @@ class _ScanScreenState extends State<ScanScreen> with WidgetsBindingObserver {
                               width: 3,
                             ),
                           ),
-                          child: Center(
-                            child: Container(
-                              width: 56,
-                              height: 56,
-                              decoration: BoxDecoration(
-                                shape: BoxShape.circle,
-                                color: Colors.white.withValues(alpha: 0.92),
-                              ),
-                              child: const Icon(
-                                Icons.photo_camera_rounded,
-                                color: Colors.black87,
-                                size: 26,
+                            child: Center(
+                              child: Container(
+                                width: 56,
+                                height: 56,
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  color: Colors.white.withValues(alpha: 0.92),
+                                ),
+                                child: const Icon(
+                                  Icons.photo_camera_rounded,
+                                  color: Colors.black87,
+                                  size: 26,
+                                ),
                               ),
                             ),
                           ),
@@ -957,6 +981,7 @@ class _ScanScreenState extends State<ScanScreen> with WidgetsBindingObserver {
                       // scan flow: what was logged before.
                       _roundCameraButton(
                         icon: Icons.history_rounded,
+                        label: 'Recent foods',
                         onTap: () => Navigator.push(
                           context,
                           MaterialPageRoute(

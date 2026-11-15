@@ -201,7 +201,14 @@ extension _HabitsCards on _HabitsTabState {
             runSpacing: 6,
             children: List.generate(goal, (i) {
               final filled = i < glasses;
-              return GestureDetector(
+              // One unlabelled icon per glass: without this the whole row is
+              // "button" eleven times to TalkBack and the user cannot tell a
+              // filled glass from an empty one.
+              return Semantics(
+                button: true,
+                label:
+                    'Glass ${i + 1} of $goal, ${filled ? 'filled' : 'empty'}',
+                child: GestureDetector(
                 onTap: () {
                   HapticFeedback.lightImpact();
                   if (filled) {
@@ -238,6 +245,7 @@ extension _HabitsCards on _HabitsTabState {
                         : (MacroSnapTheme.textQuaternary(context)),
                     size: 18,
                   ),
+                ),
                 ),
               );
             }),

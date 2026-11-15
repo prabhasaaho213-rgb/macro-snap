@@ -187,6 +187,7 @@ class _ChatScreenState extends State<ChatScreen> {
           : MacroSnapTheme.surfaceLight,
       appBar: AppBar(
         leading: IconButton(
+          tooltip: 'Back',
           icon: Icon(
             Icons.arrow_back_ios_new_rounded,
             color: isDark ? Colors.white : const Color(0xFF1A1A1A),
@@ -376,6 +377,7 @@ class _ChatScreenState extends State<ChatScreen> {
                 shape: BoxShape.circle,
               ),
               child: IconButton(
+                tooltip: 'Send message',
                 onPressed: _busy ? null : () => _send(_input.text),
                 icon: const Icon(
                   Icons.send_rounded,

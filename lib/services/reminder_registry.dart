@@ -1,8 +1,8 @@
-import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:timezone/timezone.dart' as tz;
 import '../models/diet_profile.dart';
+import 'crash_reporting.dart';
 import '../models/habit.dart';
 import 'currency_service.dart';
 import 'habit_reminder_service.dart';
@@ -520,7 +520,12 @@ class ReminderRegistry {
           if (id != null) _armedHabitIds.add(id);
         }
       }
-    } catch (_) {}
+    } catch (e, st) {
+      // Which habit ids we believe are armed decides what gets cancelled and
+      // re-armed on the next pass. Swallowing this silently is how a habit ends
+      // up with two notifications (or none): the set looks empty when it isn't.
+      logError('ReminderRegistry._loadArmedHabitIds', e, st);
+    }
   }
 
   Future<void> _saveArmedHabitIds() async {
@@ -530,7 +535,11 @@ class ReminderRegistry {
         _keyArmedHabits,
         _armedHabitIds.map((e) => e.toString()).toList(),
       );
-    } catch (_) {}
+    } catch (e, st) {
+      // If the ids cannot be persisted the next launch has no record of what
+      // was armed, so habit reminders can be scheduled twice.
+      logError('ReminderRegistry._saveArmedHabitIds', e, st);
+    }
   }
 
   bool _armedHabitIdsLoaded = false;
@@ -538,8 +547,8 @@ class ReminderRegistry {
   Future<void> _safe(Future<void> Function() fn) async {
     try {
       await fn();
-    } catch (e) {
-      debugPrint('❌ reminder restore failed: $e');
+    } catch (e, st) {
+      logError('ReminderRegistry._safe', e, st);
     }
   }
 }

@@ -163,6 +163,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   // from somewhere (and keeps the header aligned either way).
                   if (Navigator.of(context).canPop())
                     IconButton(
+                      tooltip: 'Back',
                       icon: Icon(
                         Icons.arrow_back_ios_new_rounded,
                         color: isDark ? Colors.white : const Color(0xFF1A1A1A),

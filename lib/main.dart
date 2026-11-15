@@ -26,6 +26,7 @@ import 'services/badge_service.dart';
 import 'services/meal_streak_service.dart';
 import 'services/pending_sync_queue.dart';
 import 'services/account_partition.dart';
+import 'core/app_nav.dart';
 
 Future<void> main() async {
   // ── Global crash safety net ────────────────────────────────────────
@@ -51,8 +52,11 @@ Future<void> main() async {
   };
   PlatformDispatcher.instance.onError = (error, stack) {
     CrashReporting.record(error, stack, reason: 'Uncaught platform error');
-    // Swallow in release (the app must never die for users) but rethrow in
-    // debug so developers still see uncaught errors loudly during dev.
+    // Swallow in release (the app must never die for users) but tell the user
+    // something failed: swallowing alone left the app running with a broken
+    // feature and nothing on screen to explain it.
+    if (kReleaseMode) _announceUncaughtError();
+    // Rethrow in debug so developers still see uncaught errors loudly.
     return kReleaseMode;
   };
   await runZonedGuarded(
@@ -282,6 +286,27 @@ Future<void> _initFirebase() async {
   // in `main()`. Release-only and best-effort by design (see CrashReporting).
   await CrashReporting.init();
   await _initAppCheck();
+}
+
+bool _uncaughtErrorAnnounced = false;
+
+/// Tells the user that something failed while the app kept running.
+///
+/// Once per session — a burst of uncaught async errors must not bury the screen
+/// in snackbars — and only when the app is actually mounted, so an error during
+/// startup says nothing rather than leaving a message nobody is there to read.
+void _announceUncaughtError() {
+  if (_uncaughtErrorAnnounced) return;
+  final messenger = appMessengerKey.currentState;
+  if (messenger == null) return;
+  _uncaughtErrorAnnounced = true;
+  messenger.showSnackBar(
+    const SnackBar(
+      content: Text(
+        'Something went wrong. If the app misbehaves, restart it.',
+      ),
+    ),
+  );
 }
 
 /// Attests that requests come from this app, not from a script holding the

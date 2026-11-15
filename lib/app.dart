@@ -172,6 +172,7 @@ class _MacroSnapAppState extends State<MacroSnapApp> {
       title: 'MacroSnap',
       debugShowCheckedModeBanner: false,
       navigatorKey: appNavigatorKey,
+      scaffoldMessengerKey: appMessengerKey,
       navigatorObservers: [routeObserver],
       // MacroSnap is dark-only: the user picks nothing, nothing is persisted,
       // and both MaterialApp bots point at the dark theme so no requested

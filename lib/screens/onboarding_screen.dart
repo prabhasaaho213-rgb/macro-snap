@@ -230,6 +230,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
                   children: [
                     if (p > 0)
                       IconButton(
+                        tooltip: 'Previous step',
                         onPressed: _prev,
                         icon: Icon(Icons.arrow_back_rounded, color: textColor),
                       )
