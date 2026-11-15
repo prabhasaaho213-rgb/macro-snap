@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'auth_http.dart';
+import 'crash_reporting.dart';
 import 'package:razorpay_flutter/razorpay_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'gemini_service.dart';
@@ -188,15 +189,15 @@ class RazorpayService {
     try {
       final resp = await AuthHttp.get(
         Uri.parse('${GeminiService.serverUrl}/me/payment/status'),
-      );
+      ).timeout(const Duration(seconds: 8));
       if (resp.statusCode != 200) return false;
       final data = jsonDecode(resp.body);
       if (data is Map && data['subscribed'] == true) {
         await SubscriptionService.instance.activate();
         return true;
       }
-    } catch (e) {
-      debugPrint('Error checking payment status: $e');
+    } catch (e, st) {
+      logError('RazorpayService.refreshStatus', e, st);
     }
     return false;
   }
@@ -224,7 +225,7 @@ class RazorpayService {
       Uri.parse('${GeminiService.serverUrl}/payment/create-subscription'),
       headers: {'Content-Type': 'application/json'},
       body: jsonEncode({'name': name}),
-    );
+    ).timeout(const Duration(seconds: 20));
     if (res.statusCode == 409) {
       // The account already has an auto-charging subscription. Razorpay will
       // happily create a second one, so the server refuses — saying "already
@@ -262,7 +263,7 @@ class RazorpayService {
           'razorpay_payment_id': response.paymentId,
           'razorpay_signature': response.signature,
         }),
-      );
+      ).timeout(const Duration(seconds: 25));
       verified = res.statusCode == 200;
       if (res.statusCode == 202) {
         final data = jsonDecode(res.body);
@@ -331,7 +332,7 @@ class RazorpayService {
       try {
         final resp = await AuthHttp.get(
           Uri.parse('${GeminiService.serverUrl}/me/payment/status'),
-        );
+        ).timeout(const Duration(seconds: 8));
         if (resp.statusCode == 200) {
           final data = jsonDecode(resp.body);
           if (data is Map && data['subscribed'] == true) {

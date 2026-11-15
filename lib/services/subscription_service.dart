@@ -6,6 +6,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/foundation.dart';
 import 'auth_http.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'account_partition.dart';
 import 'crash_reporting.dart';
 import 'firebase_identity.dart';
 import 'meal_store.dart';
@@ -23,6 +24,12 @@ class SubscriptionService extends ChangeNotifier {
   static final SubscriptionService instance = SubscriptionService._();
 
   static const String _subscribedKey = 'subscribed';
+
+  /// Which account the device-level Pro flag belongs to. The flag itself is a
+  /// single boolean in device prefs, so without this a second Google account
+  /// signing in on the same phone inherited the first one's Pro until some
+  /// server check happened to run — and kept it forever if it never did.
+  static const String _subscribedOwnerKey = 'subscribed_owner';
   static const String _subscribedAtKey = 'subscribed_at';
 
   // Was the free-trial end marker; the trial no longer exists, so the key
@@ -221,6 +228,24 @@ class SubscriptionService extends ChangeNotifier {
     final p = await SharedPreferences.getInstance();
     var subscribed = p.getBool(_subscribedKey) ?? false;
     var at = p.getString(_subscribedAtKey);
+
+    // Pro belongs to an account, not to the phone.
+    final active = AccountPartition.activeFromPrefs(p);
+    final owner = p.getString(_subscribedOwnerKey);
+    if (subscribed) {
+      if (owner == null) {
+        // Installs from before the marker: adopt the current account so no
+        // paying user loses Pro to this change.
+        await p.setString(_subscribedOwnerKey, active);
+      } else if (active.isNotEmpty && owner != active) {
+        await p.remove(_subscribedKey);
+        await p.remove(_subscribedAtKey);
+        await p.remove(_proUntilKey);
+        await p.remove(_subscribedOwnerKey);
+        subscribed = false;
+        at = null;
+      }
+    }
     final subscribedNow = subscribed;
 
     if (await isAdmin()) {
@@ -273,6 +298,10 @@ class SubscriptionService extends ChangeNotifier {
     final p = await SharedPreferences.getInstance();
     await p.setBool(_subscribedKey, true);
     await p.setString(_subscribedAtKey, _lifetimeDate);
+    await p.setString(
+      _subscribedOwnerKey,
+      AccountPartition.activeFromPrefs(p),
+    );
     _subscribed = true;
     _subscribedAt = _lifetimeDate;
     notifyListeners();
@@ -403,6 +432,10 @@ class SubscriptionService extends ChangeNotifier {
     final p = await SharedPreferences.getInstance();
     await p.setString(_subscribedAtKey, now);
     await p.setBool(_subscribedKey, true);
+    await p.setString(
+      _subscribedOwnerKey,
+      AccountPartition.activeFromPrefs(p),
+    );
     _subscribed = true;
     _subscribedAt = now;
     notifyListeners();
@@ -428,6 +461,7 @@ class SubscriptionService extends ChangeNotifier {
     await p.remove(_subscribedKey);
     await p.remove(_subscribedAtKey);
     await p.remove(_proUntilKey);
+    await p.remove(_subscribedOwnerKey);
     _subscribed = false;
     _paid = false;
     _subscribedAt = null;

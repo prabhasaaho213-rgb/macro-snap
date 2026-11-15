@@ -258,6 +258,11 @@ class _ResultScreenState extends State<ResultScreen>
           );
         }
 
+        // Saving to recent foods awaits, and the screen may have been closed
+        // meanwhile — without this the reveal's setState fired on a disposed
+        // State, which throws.
+        if (!mounted) return;
+
         // The analysis is done but the "magic trick" is not: pop the detected
         // dish names onto the photo one by one, and only then show the results.
         setState(() {

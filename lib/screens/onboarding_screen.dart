@@ -137,7 +137,8 @@ class _OnboardingScreenState extends State<OnboardingScreen>
         ],
       ),
     );
-    if (keep != true) return false;
+    // The dialog awaited; this screen may already be gone.
+    if (!mounted || keep != true) return false;
     setState(() => _goal = Goal.maintain);
     return true;
   }

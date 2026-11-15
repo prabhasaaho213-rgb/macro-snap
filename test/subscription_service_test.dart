@@ -138,4 +138,60 @@ void main() {
     );
     expect(SubscriptionService.instance.isSubscribed, isFalse);
   });
+
+  group('Pro is per account, not per device', () {
+    test('a paid flag does not follow a different sign-in', () async {
+      SharedPreferences.setMockInitialValues({
+        'subscribed': true,
+        'subscribed_at': '2026-01-01T00:00:00.000',
+        'subscribed_owner': '+911111111111',
+        'phone': '+912222222222',
+      });
+      SubscriptionService.adminCheckOverride = () async => false;
+
+      await SubscriptionService.instance.load();
+
+      final p = await SharedPreferences.getInstance();
+      expect(
+        SubscriptionService.instance.isSubscribed,
+        isFalse,
+        reason: 'Account B must not inherit account A\'s Pro',
+      );
+      expect(p.getBool('subscribed'), isNull);
+      expect(p.getString('subscribed_at'), isNull);
+    });
+
+    test('the same account keeps its Pro', () async {
+      SharedPreferences.setMockInitialValues({
+        'subscribed': true,
+        'subscribed_at': '2026-01-01T00:00:00.000',
+        'subscribed_owner': '+913333333333',
+        'phone': '+913333333333',
+      });
+      SubscriptionService.adminCheckOverride = () async => false;
+
+      await SubscriptionService.instance.load();
+
+      expect(SubscriptionService.instance.isSubscribed, isTrue);
+    });
+
+    test('an install from before the owner marker adopts the account', () async {
+      SharedPreferences.setMockInitialValues({
+        'subscribed': true,
+        'subscribed_at': '2026-01-01T00:00:00.000',
+        'phone': '+914444444444',
+      });
+      SubscriptionService.adminCheckOverride = () async => false;
+
+      await SubscriptionService.instance.load();
+
+      final p = await SharedPreferences.getInstance();
+      expect(
+        SubscriptionService.instance.isSubscribed,
+        isTrue,
+        reason: 'No paying user may lose Pro to this change',
+      );
+      expect(p.getString('subscribed_owner'), '+914444444444');
+    });
+  });
 }

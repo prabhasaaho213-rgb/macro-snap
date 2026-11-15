@@ -97,7 +97,9 @@ class MealPhotoSyncService {
   static Future<void> removeForMeal(String mealId) async {
     try {
       if (!await toggleOn()) return;
-      await AuthHttp.delete(_photoUri(mealId));
+      await AuthHttp.delete(
+        _photoUri(mealId),
+      ).timeout(const Duration(seconds: 15));
     } catch (e, st) {
       logError('MealPhotoSyncService.removeForMeal', e, st);
     }
@@ -114,7 +116,9 @@ class MealPhotoSyncService {
       if (DateTime.now().difference(meal.date) >= MealImageStore.retention) {
         return null;
       }
-      final res = await AuthHttp.get(_photoUri(meal.id));
+      final res = await AuthHttp.get(
+        _photoUri(meal.id),
+      ).timeout(const Duration(seconds: 20));
       if (res.statusCode != 200) return null;
       final body = jsonDecode(utf8.decode(res.bodyBytes));
       final data = body is Map ? body['data'] : null;

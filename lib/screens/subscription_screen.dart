@@ -95,7 +95,7 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
       // so the status returned is always this user's own.
       final res = await AuthHttp.get(
         Uri.parse('${GeminiService.serverUrl}/me/payment/status'),
-      );
+      ).timeout(const Duration(seconds: 10));
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body);
         if (data is Map) {
@@ -147,6 +147,8 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
     );
     if (mounted) {
       await SubscriptionService.instance.load();
+      // Still mounted? The load awaits prefs and Firestore.
+      if (!mounted) return;
       setState(() {
         _subscribed = SubscriptionService.instance.isSubscribed;
         _subscribedDate = SubscriptionService.instance.subscribedAt;
@@ -177,6 +179,7 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
     );
     if (mounted) {
       await SubscriptionService.instance.load();
+      if (!mounted) return;
       setState(() {
         _subscribed = SubscriptionService.instance.isSubscribed;
         _subscribedDate = SubscriptionService.instance.subscribedAt;

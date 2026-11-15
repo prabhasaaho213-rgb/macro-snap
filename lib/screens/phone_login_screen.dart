@@ -164,7 +164,7 @@ class _PhoneLoginScreenState extends State<PhoneLoginScreen>
           Uri.parse('${GeminiService.serverUrl}/register'),
           headers: {'Content-Type': 'application/json'},
           body: jsonEncode({'name': nickname ?? name}),
-        );
+        ).timeout(const Duration(seconds: 15));
       } catch (e, st) {
         logError('PhoneLoginScreen._signInWithGoogle (register)', e, st);
       }

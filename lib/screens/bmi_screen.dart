@@ -90,7 +90,9 @@ class _BmiScreenState extends State<BmiScreen> {
         currentHeightCm: _heightCm,
       ),
     );
-    if (value == null) return;
+    // showDialog awaits the dialog's dismissal; the user can leave the screen
+    // while it is open, and setState on a disposed State throws.
+    if (!mounted || value == null) return;
     setState(() {
       if (weight) {
         _weightKg = value;
