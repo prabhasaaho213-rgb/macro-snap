@@ -95,7 +95,7 @@ class _DietPlanScreenState extends State<DietPlanScreen> {
     final bmi = BmiCalculator.value(weightKg: w, heightCm: h);
     if (_goal == Goal.loseWeight &&
         bmi != null &&
-        bmi < DietProfile.underweightBmi) {
+        BmiCalculator.isUnderweight(bmi)) {
       _goal = Goal.maintain;
     }
     final saved = _profile;
@@ -221,7 +221,7 @@ class _DietPlanScreenState extends State<DietPlanScreen> {
     // weight-loss target on the next screen contradicted that advice.
     if (_goal == Goal.loseWeight) {
       final bmi = BmiCalculator.value(weightKg: w, heightCm: h);
-      if (bmi != null && bmi < DietProfile.underweightBmi) {
+      if (bmi != null && BmiCalculator.isUnderweight(bmi)) {
         final switchToMaintain = await showDialog<bool>(
           context: context,
           builder: (ctx) => AlertDialog(

@@ -31,7 +31,28 @@ class DietProfile {
   static const int safeMinimumCaloriesMale = 1500;
 
   /// Below this the "weight loss" goal is a health risk, not a plan.
-  static const double underweightBmi = 18.5;
+  ///
+  /// Taken from the BMI scale itself ([BmiCategory.normal] starts here) so the
+  /// gate can never drift from the band the BMI screen prints.
+  static double get underweightBmi => BmiCategory.normal.min;
+
+  /// Grams of protein per kg of body weight, by goal.
+  ///
+  /// A deficit sits at the high end of the 1.6–2.0 g/kg range because protein
+  /// is what keeps lean mass while calories are down; maintenance takes the
+  /// RDA-plus floor for adults who train; a surplus takes the top of the
+  /// evidence range.
+  static const double proteinPerKgLoss = 1.8;
+  static const double proteinPerKgMaintain = 1.6;
+  static const double proteinPerKgGain = 2.2;
+
+  /// Absolute ceiling for the daily target.
+  ///
+  /// Scaling grams by body weight alone gave a 110 kg user 242 g of protein a
+  /// day — a number nobody needs, that no plan can make appetising, and that
+  /// pushed carbohydrate out of the remaining calories. Above ~2 g/kg the
+  /// extra grams stop buying anything.
+  static const double maxProteinGrams = 180;
 
   final double weightKg;
   final double heightCm;
@@ -85,8 +106,7 @@ class DietProfile {
     // 18.47 prints as "18.5", and calling that underweight produced copy that
     // read "Your BMI is 18.5, below the healthy range (18.5–24.9)".
     final value = bmi;
-    return value != null &&
-        BmiCalculator.displayValue(value) < underweightBmi;
+    return value != null && BmiCalculator.isUnderweight(value);
   }
 
   int get safeMinimumCalories => gender == Gender.male
@@ -112,20 +132,26 @@ class DietProfile {
     return raw < floor ? floor : raw;
   }
 
-  double get targetProtein {
-    switch (goal) {
-      case Goal.loseWeight:
-        return (weightKg * 2.0);
-      case Goal.maintain:
-        return (weightKg * 1.6);
-      case Goal.gainMuscle:
-        return (weightKg * 2.2);
-    }
-  }
+  /// Protein per kg for this goal, before the ceiling is applied.
+  double get proteinPerKg => switch (goal) {
+    Goal.loseWeight => proteinPerKgLoss,
+    Goal.maintain => proteinPerKgMaintain,
+    Goal.gainMuscle => proteinPerKgGain,
+  };
+
+  double get targetProtein =>
+      math.min(weightKg * proteinPerKg, maxProteinGrams);
 
   double get targetFats => (targetCalories * 0.25 / 9);
-  double get targetCarbs =>
-      (targetCalories - (targetProtein * 4) - (targetFats * 9)) / 4;
+
+  /// Whatever the protein and fat targets leave, never a negative number.
+  ///
+  /// The protein ceiling makes this real: without it a very heavy user on a
+  /// small calorie budget could see a negative carbohydrate target.
+  double get targetCarbs => math.max(
+    0,
+    (targetCalories - (targetProtein * 4) - (targetFats * 9)) / 4,
+  );
 
   Map<String, dynamic> toJson() => {
     'weightKg': weightKg,

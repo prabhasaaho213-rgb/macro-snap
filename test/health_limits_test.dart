@@ -99,9 +99,22 @@ void main() {
 
       final shown = BmiCalculator.displayValue(raw);
       expect(shown, 25.0);
-      // The label follows the printed number, not the hidden decimals.
+      // The label follows the printed number, not the hidden decimals — for
+      // the raw value too, so a caller that forgot to round cannot report a
+      // band the screen contradicts.
       expect(BmiCalculator.categoryFor(shown), BmiCategory.overweight);
-      expect(BmiCalculator.categoryFor(raw), BmiCategory.normal);
+      expect(BmiCalculator.categoryFor(raw), BmiCategory.overweight);
+    });
+
+    test('18.46 prints 18.5 and is not underweight', () {
+      // Rounds UP to the bottom of the healthy range, so every gate that
+      // compares raw values against 18.5 would disagree with the sentence
+      // under the score.
+      expect(BmiCalculator.isUnderweight(18.46), isFalse);
+      expect(BmiCalculator.categoryFor(18.46), BmiCategory.normal);
+      // Genuinely below: 18.44 prints 18.4.
+      expect(BmiCalculator.isUnderweight(18.44), isTrue);
+      expect(BmiCalculator.categoryFor(18.44), BmiCategory.underweight);
     });
 
     test('rounding never moves a value across a band it is not in', () {

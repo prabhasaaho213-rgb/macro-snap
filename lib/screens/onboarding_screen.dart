@@ -101,8 +101,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
     // Compare the ROUNDED number the dialog prints: 18.47 shows as "18.5" and
     // the old raw compare then said "Your BMI is 18.5, below the healthy range
     // (18.5–24.9)" — a sentence that contradicts itself.
-    return bmi != null &&
-        BmiCalculator.displayValue(bmi) < DietProfile.underweightBmi;
+    return bmi != null && BmiCalculator.isUnderweight(bmi);
   }
 
   /// Blocks a "Lose Weight" goal when the measurements entered put the user

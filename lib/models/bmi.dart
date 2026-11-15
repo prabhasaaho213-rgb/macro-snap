@@ -2,9 +2,15 @@ import 'package:flutter/material.dart';
 
 /// BMI bands, in the order they appear on the gauge and in the legend.
 ///
-/// The ranges match the WHO cut-offs that Indian health apps use, including the
-/// narrow 16.0–16.9 and 17.0–18.4 bands, so the score lands in the same place
-/// here as in any other calculator the user has seen.
+/// The ranges match the WHO cut-offs, including the narrow 16.0–16.9 and
+/// 17.0–18.4 bands, so the score lands in the same place here as in any other
+/// calculator the user has seen.
+///
+/// These are the ONE place the cut-offs live: the gauge legend, the advice
+/// copy, the underweight gate that blocks a weight-loss goal and the tests all
+/// read them from here. Switching to the South-Asian cut-offs (normal
+/// 18.0–22.9, overweight 23.0–24.9, obese ≥ 25.0) is an edit to this enum only
+/// — it is also a clinical decision, so it is not made here.
 enum BmiCategory {
   verySeverelyUnderweight,
   severelyUnderweight,
@@ -123,12 +129,28 @@ class BmiCalculator {
   /// 24.9 — a number that contradicts its own label.
   static double displayValue(double bmi) => (bmi * 10).round() / 10;
 
+  /// The band the PRINTED score falls in.
+  ///
+  /// Rounding happens here too, so a caller holding a raw value gets the band
+  /// that matches the number on screen: 24.97 prints "25.0", so it is
+  /// Overweight — reporting Normal while the legend says Normal ends at 24.9
+  /// was the contradiction this closes. Rounding an already-rounded value is
+  /// idempotent, so callers that pass [displayValue] get the same answer.
   static BmiCategory categoryFor(double bmi) {
+    final shown = displayValue(bmi);
     for (final category in BmiCategory.values) {
-      if (bmi < category.max) return category;
+      if (shown < category.max) return category;
     }
     return BmiCategory.obeseIII;
   }
+
+  /// Whether the printed score is below the healthy range.
+  ///
+  /// Every underweight gate goes through this: comparing raw values against
+  /// 18.5 disagreed with the score on screen for anything that rounds up to it
+  /// (18.46 prints "18.5" but is < 18.5 raw).
+  static bool isUnderweight(double bmi) =>
+      displayValue(bmi) < BmiCategory.normal.min;
 
   /// Where [bmi] sits on the 0..1 gauge scale.
   static double gaugePosition(double bmi) =>
