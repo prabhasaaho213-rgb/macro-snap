@@ -1,6 +1,6 @@
 # Privacy Policy for MacroSnap
 
-**Last updated: November 10, 2026**
+**Last updated: November 15, 2026**
 
 ## Data Collection
 MacroSnap collects only the data needed to run the app:
@@ -38,10 +38,11 @@ MacroSnap uses:
 - Guru conversations: kept on your device, and used only to build the context for your next question.
 - Meal photos: the local window you choose (24 hours by default); cloud copies only while you keep the backup setting on.
 - Crash reports: retained by Firebase Crashlytics for 90 days.
+- **Deletion record: kept indefinitely.** When you delete your account we keep one record containing only the identifier you signed up with (your email address), so the once-per-account ₹1 first-month offer cannot be claimed again by deleting and re-registering. It holds no meals, habits, name, photos, history or subscription state, it is not linked to any active account, and no user or app can read it — it exists solely to answer "has this identity already had the offer?". It is not removable on request while the offer exists, because that is exactly what it is there to prevent.
 
 ## Your Rights
 
-You can delete your account and all associated data at any time from **Settings → Delete Account** in the app. That removes your cloud data, your photos, your subscription record and your local data on this device, and it cannot be undone. You can also email us to ask what we hold about you, or to have it corrected or erased.
+You can delete your account and all associated data at any time from **Settings → Delete Account** in the app. That removes your cloud data, your photos, your subscription record and your local data on this device, and it cannot be undone. The only thing kept is the identifier-only deletion record described under "How long we keep things". You can also email us to ask what we hold about you, or to have it corrected or erased.
 
 ## Contact
 For questions, contact: macrosnap7@gmail.com

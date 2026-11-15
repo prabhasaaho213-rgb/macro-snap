@@ -158,19 +158,19 @@ Future<void> wipeLocalAndSignOut(BuildContext context) async {
     // Firebase Auth has no instance-level deleteUser(); the correct API is
     // delete() on the currently signed-in user.
     await FirebaseAuth.instance.currentUser?.delete();
-  } catch (e) {
+  } catch (e, st) {
     // delete() needs a recent login; fall back to plain signOut.
-    debugPrint('Firebase delete user failed: $e');
+    logError('wipeLocalAndSignOut.deleteUser', e, st);
     try {
       await FirebaseAuth.instance.signOut();
-    } catch (e2) {
-      debugPrint('Error: $e2');
+    } catch (e2, st2) {
+      logError('wipeLocalAndSignOut.signOut', e2, st2);
     }
   }
   try {
     await GoogleSignIn().signOut();
-  } catch (e) {
-    debugPrint('Error: $e');
+  } catch (e, st) {
+    logError('wipeLocalAndSignOut.googleSignOut', e, st);
   }
   // Clear THIS account's local data — not the whole device. This used to be
   // `prefs.clear()`, which also erased every other account's habits, water,
@@ -178,8 +178,8 @@ Future<void> wipeLocalAndSignOut(BuildContext context) async {
   try {
     final prefs = await SharedPreferences.getInstance();
     await _wipeAccountData(prefs);
-  } catch (e) {
-    debugPrint('Error: $e');
+  } catch (e, st) {
+    logError('wipeLocalAndSignOut.wipeAccountData', e, st);
   }
   if (context.mounted) {
     Navigator.of(context).pushAndRemoveUntil(
@@ -228,16 +228,18 @@ Future<void> deleteAccountFlow(
         'This permanently deletes your account and ALL associated data: '
         'meals, habits, diet plans, subscription and personal info. '
         'This cannot be undone.\n\n'
-        'Note: your phone / email will be remembered so this identity is '
-        'never reused for an active account.',
+        'Note: your email is remembered so this identity cannot claim the '
+        'one-time first-month offer again. Nothing else is kept.',
   );
   if (confirmed != true || !context.mounted) return;
 
   // Show a blocking progress dialog while we delete.
-  showDialog(
-    context: context,
-    barrierDismissible: false,
-    builder: (_) => const Center(child: CircularProgressIndicator()),
+  unawaited(
+    showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const Center(child: CircularProgressIndicator()),
+    ),
   );
 
   var serverOk = false;
@@ -250,8 +252,8 @@ Future<void> deleteAccountFlow(
       body: jsonEncode(const <String, dynamic>{}),
     ).timeout(const Duration(seconds: 20));
     serverOk = res.statusCode == 200;
-  } catch (e) {
-    debugPrint('Delete account server call failed: $e');
+  } catch (e, st) {
+    logError('deleteAccountFlow.server', e, st);
   }
 
   if (!context.mounted) return;
@@ -472,7 +474,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       if (!mounted) return;
       setState(() => _name = newName);
       // Auto-sync name to cloud.
-      MealSyncService.syncPreferences({'name': newName});
+      unawaited(MealSyncService.syncPreferences({'name': newName}));
     }
   }
 

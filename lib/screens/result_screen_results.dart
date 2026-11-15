@@ -243,7 +243,7 @@ extension _ResultResults on _ResultScreenState {
                         child: GradientButton(
                           label: 'Log This Meal',
                           onPressed: () async {
-                            HapticFeedback.heavyImpact();
+                            unawaited(HapticFeedback.heavyImpact());
                             final id = const Uuid().v4();
                             final loggedAt = DateTime.now();
                             // Keep the photo for the next 24 hours so the

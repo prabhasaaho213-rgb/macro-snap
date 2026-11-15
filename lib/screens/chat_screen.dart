@@ -99,7 +99,7 @@ class _ChatScreenState extends State<ChatScreen> {
   Future<void> _send(String raw) async {
     final text = raw.trim();
     if (text.isEmpty || _busy) return;
-    HapticFeedback.lightImpact();
+    unawaited(HapticFeedback.lightImpact());
     _input.clear();
     setState(() {
       _messages.add(_ChatMessage(role: _Role.user, text: text));

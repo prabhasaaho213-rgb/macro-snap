@@ -149,7 +149,7 @@ extension _ResultDialogs on _ResultScreenState {
                   scannedAt: DateTime.now(),
                 ),
               );
-              HapticFeedback.mediumImpact();
+              unawaited(HapticFeedback.mediumImpact());
               // The recent-food save above awaits — guard the pop for it.
               if (ctx.mounted) Navigator.pop(ctx);
             },

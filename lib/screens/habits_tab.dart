@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../core/theme.dart';
@@ -403,7 +405,7 @@ class _HabitsTabState extends State<HabitsTab> {
         return;
       }
       setModalState(() => onEmoji(emoji));
-      HapticFeedback.lightImpact();
+      unawaited(HapticFeedback.lightImpact());
       if (sheetContext.mounted) {
         ScaffoldMessenger.of(sheetContext).showSnackBar(
           SnackBar(

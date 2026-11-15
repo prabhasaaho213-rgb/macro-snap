@@ -311,7 +311,7 @@ extension _ResultStates on _ResultScreenState {
               right: 10,
               child: GestureDetector(
                 onTap: () async {
-                  HapticFeedback.lightImpact();
+                  unawaited(HapticFeedback.lightImpact());
                   final ok = await MealImageStore.saveToGallery(path);
                   if (!mounted) return;
                   ScaffoldMessenger.of(context).showSnackBar(

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'dart:convert';
 import 'dart:math' as math;
 
@@ -233,7 +235,7 @@ class DietPlanService {
       );
       await file.writeAsString(jsonEncode(profile.toJson()));
       // Auto-sync to cloud (fire-and-forget)
-      MealSyncService.syncDietProfile(profile.toJson());
+      unawaited(MealSyncService.syncDietProfile(profile.toJson()));
     } catch (e, st) {
       logError('DietPlanService.save', e, st);
     }

@@ -125,7 +125,7 @@ extension _HabitsSheets on _HabitsTabState {
                 // Completion-state change only — the reminder schedule is
                 // unchanged, so skip the zonedSchedule cancel+recreate churn
                 // (consistent with the mission-card swipe/tap paths).
-                store.update(h, syncReminder: false);
+                unawaited(store.update(h, syncReminder: false));
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
                     content: Text('Streak reset for ${h.name}'),

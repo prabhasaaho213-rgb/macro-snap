@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
 import '../models/meal_record.dart';
+import 'crash_reporting.dart';
 import 'firebase_identity.dart';
 import 'sync_status_service.dart';
 
@@ -119,7 +120,10 @@ class MealSyncService {
   /// produces (a name over 80 bytes, 10,000+ kcal, a macro over 1 kg).
   @visibleForTesting
   static Map<String, dynamic> mealDoc(MealRecord meal, String uid) {
-    final json = meal.toJson();
+    // `imagePath` is a path inside THIS device's app storage. Uploaded, it was
+    // dead weight every other device had to carry and a restore into a
+    // directory that does not exist — so it never leaves the phone.
+    final json = Map<String, dynamic>.from(meal.toJson())..remove('imagePath');
     // Rules require an int: clamp() returns num, so convert back explicitly.
     final calories = meal.calories.clamp(0, _maxCalories).toInt();
     final doc = <String, dynamic>{
@@ -159,8 +163,8 @@ class MealSyncService {
           .set(mealDoc(meal, owner), SetOptions(merge: true));
       SyncStatusService.instance.reportSuccess();
       return true;
-    } catch (e) {
-      debugPrint('MealSyncService.syncMeal failed: $e');
+    } catch (e, st) {
+      logError('MealSyncService.syncMeal', e, st);
       SyncStatusService.instance.reportFailure('Meal sync failed');
       return false;
     }
@@ -174,8 +178,8 @@ class MealSyncService {
       await _db.collection('meals').doc(mealId).delete();
       SyncStatusService.instance.reportSuccess();
       return true;
-    } catch (e) {
-      debugPrint('MealSyncService.removeMeal failed: $e');
+    } catch (e, st) {
+      logError('MealSyncService.removeMeal', e, st);
       SyncStatusService.instance.reportFailure('Meal remove failed');
       return false;
     }

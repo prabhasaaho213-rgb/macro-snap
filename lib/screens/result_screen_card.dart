@@ -572,7 +572,7 @@ extension _ResultCard on _ResultScreenState {
     controller.dispose();
     final title = saved?.trim();
     if (title == null || title.isEmpty || !mounted) return;
-    HapticFeedback.selectionClick();
+    unawaited(HapticFeedback.selectionClick());
     _rebuild(() => _titleOverride = title);
   }
 
@@ -635,7 +635,7 @@ extension _ResultCard on _ResultScreenState {
       ),
     );
     if (saved == null || !mounted) return;
-    HapticFeedback.selectionClick();
+    unawaited(HapticFeedback.selectionClick());
     _rebuild(() => _healthOverride = saved);
   }
 

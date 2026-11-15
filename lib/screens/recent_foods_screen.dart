@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../core/theme.dart';
@@ -61,7 +63,7 @@ class _RecentFoodsScreenState extends State<RecentFoodsScreen> {
 
   Future<void> _logFood(RecentFood food) async {
     // Log the meal
-    MealStore.instance.add(food.toMealRecord());
+    unawaited(MealStore.instance.add(food.toMealRecord()));
 
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(

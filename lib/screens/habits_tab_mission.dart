@@ -50,7 +50,7 @@ extension _HabitsMission on _HabitsTabState {
               background: SwipeActionBackground(rightSwipe: true),
               secondaryBackground: SwipeActionBackground(rightSwipe: false),
               confirmDismiss: (direction) async {
-                HapticFeedback.mediumImpact();
+                unawaited(HapticFeedback.mediumImpact());
                 if (direction == DismissDirection.startToEnd) {
                   // Swipe right → COMPLETE today's task (explicit: swiping right
                   // again on an already-completed card stays completed, it never

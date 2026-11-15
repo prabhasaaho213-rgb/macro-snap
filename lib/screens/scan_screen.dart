@@ -222,9 +222,9 @@ class _ScanScreenState extends State<ScanScreen> with WidgetsBindingObserver {
   /// Hands the user to the barcode scanner and re-reads the allowance on the
   /// way back, since a barcode log can also change what is left today.
   Future<void> _openBarcode() async {
-    HapticFeedback.lightImpact();
+    unawaited(HapticFeedback.lightImpact());
     await Navigator.push(context, habitFlowRoute(const BarcodeScanScreen()));
-    if (mounted) _loadScans();
+    if (mounted) unawaited(_loadScans());
   }
 
   @override
@@ -295,7 +295,7 @@ class _ScanScreenState extends State<ScanScreen> with WidgetsBindingObserver {
           _cameraPermanentlyDenied = false;
         });
         // The tab may have been left while the camera was still opening.
-        if (!scanTabVisible.value) controller.pausePreview();
+        if (!scanTabVisible.value) unawaited(controller.pausePreview());
       } else {
         // Screen went away mid-initialize — don't leak the camera.
         await controller.dispose();
@@ -363,14 +363,14 @@ class _ScanScreenState extends State<ScanScreen> with WidgetsBindingObserver {
   }
 
   Future<void> _capture() async {
-    HapticFeedback.lightImpact();
+    unawaited(HapticFeedback.lightImpact());
     if (!await ScanGate.canScan()) {
       if (mounted) _showLimitDialog();
       return;
     }
     if (_controller == null || !_controller!.value.isInitialized) return;
     try {
-      HapticFeedback.mediumImpact();
+      unawaited(HapticFeedback.mediumImpact());
       final xfile = await _controller!.takePicture();
       final tempDir = Directory.systemTemp;
       final tempFile = File(
@@ -407,7 +407,7 @@ class _ScanScreenState extends State<ScanScreen> with WidgetsBindingObserver {
       if (mounted) _showLimitDialog();
       return;
     }
-    HapticFeedback.lightImpact();
+    unawaited(HapticFeedback.lightImpact());
     final picker = ImagePicker();
     // Higher resolution feeds the AI more detail for accurate recognition
     // (512px was too small for fine details like desserts and packaged food).

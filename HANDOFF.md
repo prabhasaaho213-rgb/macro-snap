@@ -106,9 +106,14 @@ Release builds report to **Firebase Crashlytics** (`lib/services/crash_reporting
 Collection starts after `Firebase.initializeApp()` and is release-only: debug
 and profile builds stay local so the dashboard is not polluted. Uncaught
 framework/platform/zone errors are recorded as fatal; caught errors go through
-`logError('<Class.method>', e, st)` as non-fatal, which is why the old generic
-`debugPrint("Error: $e")` calls no longer exist. Reporting is best-effort and
-never throws — a failure to report can never break startup.
+`logError('<Class.method>', e, st)` as non-fatal. Every `catch` that can hide
+a real failure — meal sync writes/deletes, habit sync, payment verification,
+the delete-account server call, notification action handling — reports that
+way. What `debugPrint` still covers is intentionally local-only chatter: the
+CrashReporting sink's own fallback line, notification logging that runs in a
+background isolate where Crashlytics may not be initialised, and startup
+trace lines. Reporting is best-effort and never throws — a failure to report
+can never break startup.
 
 ## Owner / admin access
 

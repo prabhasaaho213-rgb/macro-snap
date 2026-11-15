@@ -170,7 +170,7 @@ class _HomeScreenState extends State<HomeScreen>
     if (prefs.getString('first_log_celebrated_day') == day) return;
     await prefs.setString('first_log_celebrated_day', day);
     if (!mounted) return;
-    ConfettiCelebration.show(context, particleCount: 45);
+    unawaited(ConfettiCelebration.show(context, particleCount: 45));
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
         content: Text('First meal logged today — nice start 🔥'),

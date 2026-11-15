@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
@@ -96,13 +98,13 @@ class _BarcodeScanScreenState extends State<BarcodeScanScreen> {
       _lookingUp = true;
       _pendingCode = code;
     });
-    HapticFeedback.mediumImpact();
+    unawaited(HapticFeedback.mediumImpact());
 
     final food = await BarcodeService.lookup(code);
     if (!mounted) return;
 
     if (food != null) {
-      HapticFeedback.heavyImpact();
+      unawaited(HapticFeedback.heavyImpact());
       setState(() {
         _found = food;
         _lookingUp = false;
@@ -137,7 +139,7 @@ class _BarcodeScanScreenState extends State<BarcodeScanScreen> {
       );
       return;
     }
-    MealStore.instance.add(mealFromBarcode(food, grams));
+    unawaited(MealStore.instance.add(mealFromBarcode(food, grams)));
     if (mounted) Navigator.pop(context);
   }
 

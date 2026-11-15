@@ -1,11 +1,12 @@
 import 'dart:async';
 import 'dart:ui' show PlatformDispatcher;
 
-import 'package:flutter/foundation.dart' show kReleaseMode;
+import 'package:flutter/foundation.dart' show kDebugMode, kReleaseMode;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_app_check/firebase_app_check.dart';
 import 'app.dart';
 import 'services/currency_service.dart';
 import 'services/meal_image_store.dart';
@@ -280,6 +281,30 @@ Future<void> _initFirebase() async {
   // Crash reporting needs a live Firebase app, so it starts here rather than
   // in `main()`. Release-only and best-effort by design (see CrashReporting).
   await CrashReporting.init();
+  await _initAppCheck();
+}
+
+/// Attests that requests come from this app, not from a script holding the
+/// Firebase API key (which ships inside `google-services.json` and is therefore
+/// public). Releases use Play Integrity; debug builds use the debug provider,
+/// whose token must be added in Firebase Console → App Check → Manage debug
+/// tokens.
+///
+/// **Enforcement is a console setting, not this call.** Until App Check is
+/// enforced for Firestore/Authentication, this only *collects* attestation.
+/// Turning enforcement on before the console shows verified traffic would
+/// reject every request from every install, so it stays off until the
+/// dashboard has real data. Activation is best-effort and never blocks startup.
+Future<void> _initAppCheck() async {
+  try {
+    await FirebaseAppCheck.instance.activate(
+      providerAndroid: kDebugMode
+          ? const AndroidDebugProvider()
+          : const AndroidPlayIntegrityProvider(),
+    );
+  } catch (e, st) {
+    logError('main._initAppCheck', e, st);
+  }
 }
 
 /// Runs a single startup step, swallowing any error so one failure can

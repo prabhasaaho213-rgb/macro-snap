@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -137,7 +139,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
 
   Future<void> _complete() async {
     _dismissKeyboard();
-    HapticFeedback.heavyImpact();
+    unawaited(HapticFeedback.heavyImpact());
     // Skip lands here too, so the safe-goal check cannot be bypassed by
     // jumping straight to the end of onboarding.
     if (_goal == Goal.loseWeight && _isUnderweight) {
@@ -150,7 +152,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
       await prefs.setString('name', name);
       userNameNotifier.value = name;
       // Auto-save the name to the cloud too (no-op for guests).
-      MealSyncService.syncPreferences({'name': name});
+      unawaited(MealSyncService.syncPreferences({'name': name}));
     }
 
     final profile = DietProfile(
@@ -162,7 +164,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
       activity: _activity,
       diet: _diet,
     );
-    DietPlanService.instance.save(profile);
+    unawaited(DietPlanService.instance.save(profile));
 
     if (mounted) {
       Navigator.of(
@@ -173,7 +175,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
 
   Future<void> _next() async {
     _dismissKeyboard();
-    HapticFeedback.lightImpact();
+    unawaited(HapticFeedback.lightImpact());
     if (_page.value < _totalSteps - 1) {
       // Page 6 is the goal step: stop an underweight user from walking out of
       // it with a deficit selected.
@@ -188,7 +190,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
         curve: Curves.easeOutCubic,
       );
     } else {
-      _complete();
+      unawaited(_complete());
     }
   }
 

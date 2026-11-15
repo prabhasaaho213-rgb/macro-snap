@@ -19,7 +19,7 @@ extension _HomeCalories on _HomeScreenState {
     if (prefs.getString('goal_celebrated_day') == day) return;
     await prefs.setString('goal_celebrated_day', day);
     if (!mounted) return;
-    ConfettiCelebration.show(context);
+    unawaited(ConfettiCelebration.show(context));
   }
 
   // ─── HERO CALORIE CARD (Habitly Hero style) ────────────────

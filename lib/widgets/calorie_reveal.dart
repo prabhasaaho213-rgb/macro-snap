@@ -11,6 +11,8 @@
 //  * If the calories change later (user edits the grams), the number glides to
 //    the new value quietly: no ticks, no confetti.
 
+import 'dart:async';
+
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -169,7 +171,7 @@ class _CalorieRevealState extends State<CalorieReveal>
   Future<void> _onLanded() async {
     if (_landed) return;
     _landed = true;
-    if (widget.haptics) HapticFeedback.mediumImpact();
+    if (widget.haptics) unawaited(HapticFeedback.mediumImpact());
     _pop.forward(from: 0);
 
     if (_celebrated || !widget.celebrate) return;
@@ -180,7 +182,7 @@ class _CalorieRevealState extends State<CalorieReveal>
     if (fits == true) {
       _celebrated = true;
       await Future.delayed(const Duration(milliseconds: 250));
-      if (mounted) ConfettiCelebration.show(context);
+      if (mounted) unawaited(ConfettiCelebration.show(context));
     }
   }
 

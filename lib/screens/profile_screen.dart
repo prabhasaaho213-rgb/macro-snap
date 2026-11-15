@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -118,7 +120,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     if (!mounted) return;
     setState(() => _name = newName);
     // Same auto-sync the Settings name editor does.
-    MealSyncService.syncPreferences({'name': newName});
+    unawaited(MealSyncService.syncPreferences({'name': newName}));
   }
 
   /// Opens the diet profile editor and repaints with whatever came back — a
@@ -490,7 +492,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     return InkWell(
       borderRadius: BorderRadius.circular(18),
       onTap: () async {
-        Haptics.tap();
+        unawaited(Haptics.tap());
         // BMI is Pro: free users land on the paywall instead of the
         // calculator — same rule as the AI meal plan. unlocksPro() also
         // admits the admin's lifetime grant, so the owner never sees the

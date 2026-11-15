@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -260,8 +262,8 @@ class _DietPlanScreenState extends State<DietPlanScreen> {
       diet: _diet,
       avatar: _avatar,
     );
-    HapticFeedback.heavyImpact();
-    DietPlanService.instance.save(profile);
+    unawaited(HapticFeedback.heavyImpact());
+    unawaited(DietPlanService.instance.save(profile));
     setState(() => _profile = profile);
   }
 

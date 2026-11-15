@@ -108,13 +108,29 @@ service cloud.firestore {
     // list is always allowed, so an account that was Pro and lapsed with six
     // habits keeps syncing edits, completions and water instead of having
     // every habit write silently rejected. Adding a fourth still needs Pro.
+    //
+    // The shape is bounded as well: `habits is list` alone let a client write
+    // 50,000 habits, a water log with a million keys, or a negative goal. The
+    // caps are well above any real account (20 habits, a year of water days,
+    // a 5,000-unit goal) and only reject writes no real usage produces.
+    function habitShapeOk() {
+      let d = request.resource.data;
+      return d.habits is list
+        && d.habits.size() <= 20
+        && d.size() <= 8
+        && (!('waterLog' in d)
+          || (d.waterLog is map && d.waterLog.size() <= 400))
+        && (!('waterGoal' in d)
+          || (d.waterGoal is int && d.waterGoal >= 0 && d.waterGoal <= 5000));
+    }
+
     match /habitData/{uid} {
       allow read: if signedIn() && isOwner(uid);
       allow create: if signedIn() && isOwner(uid)
-        && request.resource.data.habits is list
+        && habitShapeOk()
         && (request.resource.data.habits.size() <= 3 || hasPro(uid));
       allow update: if signedIn() && isOwner(uid)
-        && request.resource.data.habits is list
+        && habitShapeOk()
         && (request.resource.data.habits.size() <= 3
           || (resource.data.habits is list
             && request.resource.data.habits.size() <= resource.data.habits.size())
@@ -211,14 +227,21 @@ service cloud.firestore {
 
     // ─── referrals/{code} — referral-code index ─────────────────────────
     // Reward grants run server-side (Admin SDK, which bypasses these rules).
-    // A client may create and read only ITS OWN code: the previous
-    // `allow read: if signedIn()` let any signed-in account read every other
-    // user's referral document (uid, code, reward state). Code redemption is
-    // a backend operation, so nothing legitimate needs cross-user reads.
+    // A client may create and read only ITS OWN code, and the document id must
+    // BE that account's code: `uid == request.auth.uid` alone let any
+    // signed-in account mint unlimited codes under any string it liked, which
+    // a redemption path that trusts the index could be talked into crediting.
+    // The code is compared against `users/{uid}.referralCode`, which only the
+    // backend can write, so a client cannot pick a fresh code for itself.
+    // Code redemption is a backend operation, so nothing legitimate needs
+    // cross-user reads.
     match /referrals/{code} {
       allow create: if signedIn()
         && request.resource.data.uid == request.auth.uid
-        && request.resource.data.size() <= 10;
+        && request.resource.data.size() <= 10
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && get(/databases/$(database)/documents/users/$(request.auth.uid))
+             .data.referralCode == code;
       allow read: if signedIn()
         && resource.data.uid == request.auth.uid;
       allow update, delete: if false;

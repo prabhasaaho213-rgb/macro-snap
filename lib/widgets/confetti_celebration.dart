@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -31,7 +33,7 @@ class ConfettiCelebration extends StatefulWidget {
     BuildContext context, {
     int particleCount = 60,
   }) async {
-    HapticFeedback.heavyImpact();
+    unawaited(HapticFeedback.heavyImpact());
     final overlay = Overlay.of(context, rootOverlay: true);
     late final OverlayEntry entry;
     entry = OverlayEntry(

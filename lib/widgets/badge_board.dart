@@ -292,9 +292,11 @@ class _BadgeMedallionState extends State<_BadgeMedallion>
     _pop
       ..value = 0
       ..forward(from: 0);
-    _shine.forward(from: 0).then((_) {
-      if (mounted) _shine.repeat();
-    });
+    unawaited(
+      _shine.forward(from: 0).then((_) {
+        if (mounted) _shine.repeat();
+      }),
+    );
   }
 
   @override
