@@ -1,4 +1,6 @@
+import 'dart:async';
 import 'dart:convert';
+import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'auth_http.dart';
 import 'firebase_identity.dart';
@@ -43,29 +45,67 @@ class ReferralService {
 
   /// (Re)generates the caller's referral code server-side.
   static Future<String> generateCode() async {
-    final resp = await AuthHttp.post(
-      Uri.parse('$_baseUrl/referral/generate'),
-      headers: {'Content-Type': 'application/json'},
-      body: jsonEncode(const <String, dynamic>{}),
-    );
+    final resp = await _post('/referral/generate', const <String, dynamic>{});
     if (resp.statusCode == 401) throw Exception(_signedOut);
+    if (resp.statusCode == 429) {
+      throw Exception('Too many requests. Wait a minute and try again.');
+    }
+    if (resp.statusCode >= 500) {
+      throw Exception('Our server is having trouble. Try again in a moment.');
+    }
     if (resp.statusCode != 200) throw Exception('Failed to generate code');
-    final json = jsonDecode(resp.body) as Map<String, dynamic>;
-    return json['referral_code'] as String;
+    // The body is only decoded once the status says it is worth decoding:
+    // a gateway 502 page is HTML and `as Map` threw a FormatException whose
+    // text ended up on screen.
+    final code = _jsonBody(resp.body)?['referral_code'];
+    if (code is! String || code.isEmpty) {
+      throw Exception('The server sent an unexpected response.');
+    }
+    return code;
   }
 
   /// Applies a friend's code to the signed-in account.
   static Future<String> applyCode(String code) async {
-    final resp = await AuthHttp.post(
-      Uri.parse('$_baseUrl/referral/apply'),
-      headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({'code': code}),
-    );
+    final resp = await _post('/referral/apply', {'code': code});
     if (resp.statusCode == 401) throw Exception(_signedOut);
+    if (resp.statusCode == 429) {
+      throw Exception('Too many attempts. Wait a minute and try again.');
+    }
+    if (resp.statusCode >= 500) {
+      throw Exception('Our server is having trouble. Try again in a moment.');
+    }
     if (resp.statusCode != 200) {
-      final body = jsonDecode(resp.body) as Map<String, dynamic>;
-      throw Exception(body['error'] as String? ?? 'Failed to apply code');
+      final body = _jsonBody(resp.body);
+      throw Exception(body?['error'] as String? ?? 'Failed to apply code');
     }
     return 'free_month';
+  }
+
+  /// POST with a bounded wait and a friendly transport failure.
+  ///
+  /// Without the timeout a hung request left the screen on its spinner, and a
+  /// raw `SocketException: Failed host lookup…` reached the user as-is.
+  static Future<http.Response> _post(String path, Map<String, dynamic> body) async {
+    try {
+      return await AuthHttp.post(
+        Uri.parse('$_baseUrl$path'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode(body),
+      ).timeout(const Duration(seconds: 15));
+    } on TimeoutException {
+      throw Exception('That took too long. Check your connection and try again.');
+    } catch (e) {
+      // SocketException / ClientException / DNS: all the same story to a user.
+      throw Exception('Could not reach the server. Check your connection.');
+    }
+  }
+
+  static Map<String, dynamic>? _jsonBody(String body) {
+    try {
+      final decoded = jsonDecode(body);
+      return decoded is Map<String, dynamic> ? decoded : null;
+    } catch (_) {
+      return null;
+    }
   }
 }

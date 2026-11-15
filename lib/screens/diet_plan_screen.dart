@@ -7,6 +7,7 @@ import '../services/auth_http.dart';
 import '../core/theme.dart';
 import '../models/bmi.dart';
 import '../models/diet_profile.dart';
+import '../services/crash_reporting.dart';
 import '../services/gemini_service.dart';
 import '../services/meal_store.dart';
 import '../services/subscription_service.dart';
@@ -301,14 +302,20 @@ class _DietPlanScreenState extends State<DietPlanScreen> {
           // with what the screen shows.
           'diet': _diet.name,
         }),
-      );
-      final data = jsonDecode(resp.body) as Map<String, dynamic>;
+        // Plan generation is a model call on the server: it is slow, and a
+        // hung request used to sit on the spinner forever.
+      ).timeout(const Duration(seconds: 45));
+
+      // Status first, body second: a gateway 502/504 answers with HTML, and
+      // decoding before checking turned "the server is down" into raw
+      // FormatException text on screen.
+      final data = _jsonBody(resp.body);
       if (resp.statusCode != 200) {
         // A non-2xx body carries `message` (human-readable, e.g. the 429
         // rate-limit text) and, failing that, `error` (a machine code). Prefer
         // the message so the user never reads a bare `pro_required`.
-        final serverMessage = (data['message'] ?? data['error'])?.toString();
-        if (data['error'] == 'pro_required') {
+        final serverMessage = (data?['message'] ?? data?['error'])?.toString();
+        if (data?['error'] == 'pro_required') {
           // The server says this account is not Pro. That happens when the local
           // flag is stale — a free plan that expired since this screen loaded —
           // so re-read it (which also fixes the button below) and send them to
@@ -327,7 +334,18 @@ class _DietPlanScreenState extends State<DietPlanScreen> {
           );
           return;
         }
+        if (resp.statusCode == 429) {
+          throw Exception('Too many plan requests. Wait a minute and try again.');
+        }
+        if (resp.statusCode >= 500) {
+          throw Exception(
+            'The plan service is down right now. Try again in a few minutes.',
+          );
+        }
         throw Exception(serverMessage ?? 'Failed to generate');
+      }
+      if (data == null) {
+        throw Exception('The server sent an unexpected response. Try again.');
       }
       if (mounted) {
         setState(() {
@@ -335,13 +353,35 @@ class _DietPlanScreenState extends State<DietPlanScreen> {
           _generating = false;
         });
       }
-    } catch (e) {
+    } on TimeoutException {
+      if (mounted) {
+        setState(() {
+          _aiError = 'The plan took too long. Check your connection and retry.';
+          _generating = false;
+        });
+      }
+    } catch (e, st) {
+      logError('DietPlanScreen._generateAiPlan', e, st);
       if (mounted) {
         setState(() {
           _aiError = e.toString().replaceFirst('Exception: ', '');
           _generating = false;
         });
       }
+    }
+  }
+
+  /// The response body as a JSON object, or null when it is not one.
+  ///
+  /// Error responses are not always JSON — a gateway 502/504 sends an HTML
+  /// page — and `jsonDecode(...) as Map` there put a FormatException's text in
+  /// front of the user.
+  static Map<String, dynamic>? _jsonBody(String body) {
+    try {
+      final decoded = jsonDecode(body);
+      return decoded is Map<String, dynamic> ? decoded : null;
+    } catch (_) {
+      return null;
     }
   }
 

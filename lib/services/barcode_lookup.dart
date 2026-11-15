@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:http/http.dart' as http;
 
+import '../core/app_version.dart';
 import 'barcode_db.dart';
 
 /// Resolves a scanned barcode to per-100 g nutrition.
@@ -20,8 +21,15 @@ class BarcodeService {
 
   /// Open Food Facts asks clients to identify themselves; a generic Dart
   /// user-agent gets rate-limited. Contact is the app's support address.
+  ///
+  /// The version comes from [kAppVersion] so it cannot drift again — it was
+  /// hardcoded to 1.5.9 while the app shipped 1.5.16.
   static const String userAgent =
-      'MacroSnap/1.5.9 (Android; macrosnap7@gmail.com)';
+      'MacroSnap/$kAppVersion (Android; macrosnap7@gmail.com)';
+
+  /// Anything above these per 100 g is a data error, not a food.
+  static const double maxKcalPer100g = 900;
+  static const double maxMacroPer100g = 100;
 
   static const Duration timeout = Duration(seconds: 8);
 
@@ -46,9 +54,17 @@ class BarcodeService {
     final uri = Uri.https('world.openfoodfacts.org', '/api/v2/product/$barcode.json', {
       'fields': 'product_name,brands,nutriments,quantity',
     });
+    // A Client created here has to be closed here: the old code built a new
+    // one per lookup and never disposed it, so every scan leaked a connection
+    // pool (and its sockets stayed open until GC).
+    final ownsClient = client == null;
+    final httpClient = client ?? http.Client();
     try {
-      final response = await (client ?? http.Client())
-          .get(uri, headers: {'User-Agent': userAgent, 'Accept': 'application/json'})
+      final response = await httpClient
+          .get(
+            uri,
+            headers: {'User-Agent': userAgent, 'Accept': 'application/json'},
+          )
           .timeout(timeout);
       if (response.statusCode != 200) return null;
       final decoded = jsonDecode(response.body);
@@ -57,6 +73,8 @@ class BarcodeService {
     } catch (_) {
       // Offline, DNS failure, timeout, malformed JSON — all mean "no answer".
       return null;
+    } finally {
+      if (ownsClient) httpClient.close();
     }
   }
 
@@ -80,10 +98,16 @@ class BarcodeService {
         ? product['nutriments'] as Map
         : const {};
 
-    final calories = _caloriesPer100g(nutriments);
-    final protein = _asDouble(nutriments['proteins_100g']);
-    final carbs = _asDouble(nutriments['carbohydrates_100g']);
-    final fats = _asDouble(nutriments['fat_100g']);
+    final protein = _saneMacro(_asDouble(nutriments['proteins_100g']));
+    final carbs = _saneMacro(_asDouble(nutriments['carbohydrates_100g']));
+    final fats = _saneMacro(_asDouble(nutriments['fat_100g']));
+
+    // Open Food Facts often has the macros but no energy figure, and logging
+    // a 300 kcal snack as 0 kcal is worse than estimating: fall back to the
+    // Atwater factors (4/4/9 kcal per gram).
+    final calories =
+        _saneCalories(_caloriesPer100g(nutriments)) ??
+        _caloriesFromMacros(protein: protein, carbs: carbs, fats: fats);
 
     // A product with a name and nothing else cannot be logged; treat it as a
     // miss so the user gets the manual form instead of a card full of zeros.
@@ -105,6 +129,33 @@ class BarcodeService {
       fiberPer100g: _asDouble(nutriments['fiber_100g']) ?? 0,
       sugarPer100g: _asDouble(nutriments['sugars_100g']) ?? 0,
     );
+  }
+
+  /// 4/4/9 estimate for a product that reports macros but no energy.
+  static double? _caloriesFromMacros({
+    double? protein,
+    double? carbs,
+    double? fats,
+  }) {
+    if (protein == null && carbs == null && fats == null) return null;
+    final kcal = (protein ?? 0) * 4 + (carbs ?? 0) * 4 + (fats ?? 0) * 9;
+    return kcal > 0 ? kcal : null;
+  }
+
+  /// A macro above 100 g per 100 g is impossible — reject it rather than
+  /// logging a pack of, say, 900 g of protein.
+  static double? _saneMacro(double? value) {
+    if (value == null) return null;
+    if (value.isNaN || value < 0 || value > maxMacroPer100g) return null;
+    return value;
+  }
+
+  /// Likewise for energy: pure fat is ~900 kcal per 100 g, so anything above
+  /// that is a data error (Open Food Facts carries a few such rows).
+  static double? _saneCalories(double? value) {
+    if (value == null) return null;
+    if (value.isNaN || value <= 0 || value > maxKcalPer100g) return null;
+    return value;
   }
 
   /// kcal per 100 g, falling back to the kilojoule figure some labels carry.

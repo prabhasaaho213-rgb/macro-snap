@@ -7,6 +7,7 @@ import '../core/theme.dart';
 import '../models/bmi.dart';
 import '../models/diet_profile.dart';
 import '../services/meal_sync_service.dart';
+import '../widgets/nickname_prompt.dart' show kNicknameMaxLength;
 
 /// Cal AI-style onboarding: collects user profile data before first use.
 ///
@@ -97,7 +98,11 @@ class _OnboardingScreenState extends State<OnboardingScreen>
 
   bool get _isUnderweight {
     final bmi = _bmi;
-    return bmi != null && bmi < DietProfile.underweightBmi;
+    // Compare the ROUNDED number the dialog prints: 18.47 shows as "18.5" and
+    // the old raw compare then said "Your BMI is 18.5, below the healthy range
+    // (18.5–24.9)" — a sentence that contradicts itself.
+    return bmi != null &&
+        BmiCalculator.displayValue(bmi) < DietProfile.underweightBmi;
   }
 
   /// Blocks a "Lose Weight" goal when the measurements entered put the user
@@ -137,23 +142,34 @@ class _OnboardingScreenState extends State<OnboardingScreen>
     return true;
   }
 
-  Future<void> _complete() async {
-    _dismissKeyboard();
-    unawaited(HapticFeedback.heavyImpact());
-    // Skip lands here too, so the safe-goal check cannot be bypassed by
-    // jumping straight to the end of onboarding.
-    if (_goal == Goal.loseWeight && _isUnderweight) {
-      if (!await _confirmHealthyGoal()) return;
-    }
+  /// Finishes onboarding without inventing a profile.
+  ///
+  /// Skip used to run the full [_complete], which SAVED the dial defaults
+  /// (25 years, 70 kg, 170 cm, maintain, vegetarian) as if the user had entered
+  /// them: Home then showed "personalized" targets nobody chose, and Diet Plan
+  /// could not tell a real profile from a default. Now Skip stores only the
+  /// name they actually typed and leaves the profile empty — Diet Plan's own
+  /// form is where the numbers get asked for.
+  Future<void> _finish({bool saveName = true}) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('onboarding_v2_done', true);
     final name = _name.isNotEmpty ? _name : _nameController.text.trim();
-    if (name.isNotEmpty) {
+    if (saveName && name.isNotEmpty) {
       await prefs.setString('name', name);
       userNameNotifier.value = name;
       // Auto-save the name to the cloud too (no-op for guests).
       unawaited(MealSyncService.syncPreferences({'name': name}));
     }
+  }
+
+  Future<void> _complete() async {
+    _dismissKeyboard();
+    unawaited(HapticFeedback.heavyImpact());
+    // The safe-goal check cannot be bypassed by jumping to the last step.
+    if (_goal == Goal.loseWeight && _isUnderweight) {
+      if (!await _confirmHealthyGoal()) return;
+    }
+    await _finish();
 
     final profile = DietProfile(
       weightKg: _weight,
@@ -165,12 +181,22 @@ class _OnboardingScreenState extends State<OnboardingScreen>
       diet: _diet,
     );
     unawaited(DietPlanService.instance.save(profile));
+    _leave();
+  }
 
-    if (mounted) {
-      Navigator.of(
-        context,
-      ).pushReplacement(MaterialPageRoute(builder: (_) => widget.nextScreen));
-    }
+  /// Skip: no profile is written, only the fact that onboarding is done.
+  Future<void> _skip() async {
+    _dismissKeyboard();
+    unawaited(HapticFeedback.lightImpact());
+    await _finish();
+    _leave();
+  }
+
+  void _leave() {
+    if (!mounted) return;
+    Navigator.of(
+      context,
+    ).pushReplacement(MaterialPageRoute(builder: (_) => widget.nextScreen));
   }
 
   Future<void> _next() async {
@@ -247,7 +273,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
                     ),
                     const Spacer(),
                     TextButton(
-                      onPressed: _complete,
+                      onPressed: _skip,
                       child: Text(
                         'Skip',
                         style: TextStyle(
@@ -354,7 +380,10 @@ class _OnboardingScreenState extends State<OnboardingScreen>
           min: 18,
           max: 100,
           step: 1,
-          onChanged: (v) => setState(() => _age = v),
+          // Clamp what we STORE, not just what the dial paints: the dial showed
+          // 18 while _age stayed 14, and Next then saved 14 as an adult
+          // profile that every adult formula in the app was applied to.
+          onChanged: (v) => setState(() => _age = v < 18 ? 18 : v),
           textColor: textColor,
           subText: subText,
           isDark: isDark,
@@ -487,6 +516,11 @@ class _OnboardingScreenState extends State<OnboardingScreen>
               focusNode: _nameFocus,
               textCapitalization: TextCapitalization.words,
               autofocus: true,
+              // Same cap the nickname dialog uses: the greeting is the one
+              // place this name is painted, and 15 characters is what fits
+              // there without overflowing.
+              maxLength: kNicknameMaxLength,
+              maxLengthEnforcement: MaxLengthEnforcement.enforced,
               // Tapping the background closes the keyboard too.
               onTapOutside: (_) => _dismissKeyboard(),
               textAlign: TextAlign.center,
@@ -853,6 +887,16 @@ class _OnboardingScreenState extends State<OnboardingScreen>
     );
   }
 
+  /// Keeps a height inside the range the height dial can display, expressed in
+  /// [isCm] units (100–220 cm, or 48–84 inches).
+  static double _clampDialHeight(double cm, bool isCm) {
+    final minCm = isCm ? 100.0 : 48.0 * 2.54;
+    final maxCm = isCm ? 220.0 : 84.0 * 2.54;
+    if (cm < minCm) return minCm;
+    if (cm > maxCm) return maxCm;
+    return cm;
+  }
+
   Widget _buildHeightDial(Color textColor, Color subText, bool isDark) {
     final minH = _isCm ? 100.0 : 48.0;
     final maxH = _isCm ? 220.0 : 84.0;
@@ -876,7 +920,14 @@ class _OnboardingScreenState extends State<OnboardingScreen>
             GestureDetector(
               onTap: () {
                 HapticFeedback.selectionClick();
-                setState(() => _isCm = !_isCm);
+                setState(() {
+                  _isCm = !_isCm;
+                  // The dial only offers 100–220 cm / 48–84 in. Someone at
+                  // 105 cm who switched to inches saw the dial snap to 48 in
+                  // (122 cm) while _height stayed at 105, and Next then saved
+                  // a height that was not the one on screen.
+                  _height = _clampDialHeight(_height, _isCm);
+                });
               },
               child: AnimatedContainer(
                 duration: const Duration(milliseconds: 300),

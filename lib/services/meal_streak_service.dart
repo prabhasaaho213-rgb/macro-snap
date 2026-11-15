@@ -1,8 +1,11 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:shared_preferences/shared_preferences.dart';
+import 'crash_reporting.dart';
 import '../models/habit.dart';
+import '../services/account_partition.dart';
 import '../services/badge_service.dart';
+import '../services/meal_sync_service.dart';
 
 /// Tracks the user's calorie-goal streak — consecutive days where the daily
 /// calorie goal was met.
@@ -14,6 +17,9 @@ import '../services/badge_service.dart';
 /// "un-banked" by a later edit or delete, just like a habit completion.
 class MealStreakService {
   /// Every dateKey (yyyy-MM-dd) the calorie goal was met, sorted ascending.
+  /// The stored key is scoped to the active account (see [_datesKey]) — it used
+  /// to be a plain global key, so a second account on the same phone inherited
+  /// the first one's streak and the backfill awarded its badges.
   static const _keyDates = 'calorie_goal_hit_dates';
 
   /// Legacy keys from the previous streak model (a counter + one date,
@@ -37,10 +43,30 @@ class MealStreakService {
     return _loadFuture ??= _loadOnce();
   }
 
+  /// The preferences key for the ACTIVE account's banked days.
+  static Future<String> _datesKey() async {
+    final prefs = await SharedPreferences.getInstance();
+    final suffix = AccountPartition.suffix(AccountPartition.activeFromPrefs(prefs));
+    return AccountPartition.key(_keyDates, suffix);
+  }
+
+  /// Re-reads the banked days for the account that is active NOW.
+  ///
+  /// The service caches one set per process, which is right while the account
+  /// never changes and wrong the moment it does: the previous account's streak
+  /// (and the badges computed from it) stayed in memory after a sign-out.
+  static Future<void> reload() async {
+    _hitDates = [];
+    _loaded = false;
+    _loadFuture = null;
+    await load();
+  }
+
   static Future<void> _loadOnce() async {
     try {
       final prefs = await SharedPreferences.getInstance();
       final dates = <String>{};
+      final scopedKey = await _datesKey();
 
       // Migration first: seed the date set from the legacy streak so the
       // user's banked days carry over across the model change.
@@ -49,28 +75,45 @@ class MealStreakService {
       final legacyDate = DateTime.tryParse(legacyDateRaw);
       if (legacyStreak > 0 && legacyDate != null) {
         for (var i = 0; i < legacyStreak; i++) {
-          dates.add(dateKey(legacyDate.subtract(Duration(days: i))));
+          // Calendar arithmetic, not `subtract(Duration(days: i))`: across a
+          // DST change a 24-hour step lands on 23:00 or 01:00 of the previous
+          // day and the same date can be banked twice.
+          dates.add(
+            dateKey(
+              DateTime(
+                legacyDate.year,
+                legacyDate.month,
+                legacyDate.day - i,
+              ),
+            ),
+          );
         }
       }
 
       // Defensive parse: a corrupt entry is dropped, corrupt storage resets
       // to the migration-seeded set — never crashes a screen that reads the
       // streak on every rebuild.
-      final raw = prefs.getString(_keyDates) ?? '';
+      // The scoped key first; the old global key seeds a pre-scoping install
+      // once, then is removed below so it cannot leak to a second account.
+      final raw = prefs.getString(scopedKey) ?? prefs.getString(_keyDates) ?? '';
       for (final entry in jsonList(raw)) {
         if (DateTime.tryParse(entry) != null) dates.add(entry);
       }
 
       _hitDates = dates.toList()..sort();
 
-      if (prefs.containsKey(_keyDates) || dates.isNotEmpty) {
+      if (prefs.containsKey(scopedKey) || dates.isNotEmpty) {
         // Persist the (possibly migration-seeded + cleaned) set once, and
         // drop the legacy keys so they can only seed a single time.
-        await prefs.setString(_keyDates, _hitDates.join(','));
+        await prefs.setString(scopedKey, _hitDates.join(','));
       }
+      if (prefs.containsKey(_keyDates)) await prefs.remove(_keyDates);
       await prefs.remove(_keyLegacyStreak);
       await prefs.remove(_keyLegacyDate);
-    } catch (_) {
+    } catch (e, st) {
+      // A silent reset here reads as "you have no streak" — the same class of
+      // invisible failure the per-account key was added to stop.
+      logError('MealStreakService._loadOnce', e, st);
       _hitDates = [];
     }
     _loaded = true;
@@ -100,7 +143,13 @@ class MealStreakService {
     final streak = computeCurrentStreak();
     try {
       final prefs = await SharedPreferences.getInstance();
-      await prefs.setString(_keyDates, _hitDates.join(','));
+      await prefs.setString(await _datesKey(), _hitDates.join(','));
+      // The banked days live in this account's `userPreferences` document too.
+      // Without that, a reinstall started the streak at zero and the streak
+      // badges "came back" only as a silent backfill with today's date.
+      unawaited(
+        MealSyncService.syncPreferences({'streakDates': _hitDates.join(',')}),
+      );
       // Streak badges reward persistence: 7 and 14 banked days earn
       // Week Warrior / Fortnight Flame.
       await BadgeService.instance.noteStreak(streak);
@@ -126,12 +175,12 @@ class MealStreakService {
     final hits = hitDates.toSet();
     var day = DateTime(today.year, today.month, today.day);
     if (!hits.contains(dateKey(day))) {
-      day = day.subtract(const Duration(days: 1));
+      day = _previousDay(day);
     }
     var count = 0;
     while (hits.contains(dateKey(day))) {
       count++;
-      day = day.subtract(const Duration(days: 1));
+      day = _previousDay(day);
     }
     return count;
   }
@@ -154,10 +203,19 @@ class MealStreakService {
       } else {
         run = 0;
       }
-      cursor = cursor.add(const Duration(days: 1));
+      cursor = DateTime(cursor.year, cursor.month, cursor.day + 1);
     }
     return best;
   }
+
+  /// The day before [day], as a calendar date.
+  ///
+  /// `subtract(const Duration(days: 1))` is 24 hours, not one day: on a DST
+  /// fall-back day that lands back inside the same date and a day gets counted
+  /// twice. India has no DST, so this only bites travellers — which is exactly
+  /// why it survived this long.
+  static DateTime _previousDay(DateTime day) =>
+      DateTime(day.year, day.month, day.day - 1);
 
   /// Current streak, async for callers that may race the one-time load.
   static Future<int> getCurrent() async {
@@ -170,6 +228,33 @@ class MealStreakService {
   static Future<int> getBest() async {
     await load();
     return computeBestStreakFor(hitDates: _hitDates);
+  }
+
+  /// The banked days, for callers that need the dates themselves (badge
+  /// backfill wants the day a streak was reached, not "when we noticed").
+  static Future<List<String>> bankedDates() async {
+    await load();
+    return List<String>.unmodifiable(_hitDates);
+  }
+
+  /// Unions the cloud's banked days into this device's set.
+  ///
+  /// A union, never a replace: the cloud copy can lag behind a day banked
+  /// offline, and losing a met day is worse than carrying a stale one.
+  static Future<void> mergeCloudDates(Iterable<String> cloudDates) async {
+    await load();
+    final merged = <String>{..._hitDates};
+    for (final entry in cloudDates) {
+      if (DateTime.tryParse(entry) != null) merged.add(entry.trim());
+    }
+    if (merged.length == _hitDates.length) return;
+    _hitDates = merged.toList()..sort();
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(await _datesKey(), _hitDates.join(','));
+    } catch (e, st) {
+      logError('MealStreakService.mergeCloudDates', e, st);
+    }
   }
 
   /// Whether today's goal has already been banked — cheap, non-async check
@@ -193,6 +278,7 @@ class MealStreakService {
     _loadFuture = null;
     try {
       final prefs = await SharedPreferences.getInstance();
+      await prefs.remove(await _datesKey());
       await prefs.remove(_keyDates);
       await prefs.remove(_keyLegacyStreak);
       await prefs.remove(_keyLegacyDate);

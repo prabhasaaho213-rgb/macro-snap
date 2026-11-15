@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../core/app_version.dart';
 import '../core/theme.dart';
 import '../services/rate_us_service.dart';
 
@@ -36,7 +37,7 @@ class UpdatesScreen extends StatefulWidget {
   /// found.
   /// `test/release_version_test.dart` fails when this drifts from the
   /// version in `pubspec.yaml`, so a release bump cannot forget it.
-  static const String latestVersion = '1.5.16';
+  static const String latestVersion = kAppVersion;
 
   /// SharedPreferences key holding the latest version the user has seen.
   static const String seenVersionKey = 'updates_seen_version';

@@ -17,6 +17,7 @@ import '../services/meal_store.dart';
 import '../services/habit_store.dart';
 import '../services/subscription_service.dart';
 import '../services/account_partition.dart';
+import '../services/meal_streak_service.dart';
 import '../services/pending_sync_queue.dart';
 import '../widgets/nickname_prompt.dart';
 import 'main_shell.dart';
@@ -136,6 +137,10 @@ class _PhoneLoginScreenState extends State<PhoneLoginScreen>
       // collision-prone suffix → the current one). Move the local data NOW,
       // before anything reloads from it.
       await AccountPartition.ensureCurrent(prefs);
+      // The calorie-goal streak is cached per process and keyed per account.
+      // Re-read it here, or a second account on this phone keeps showing the
+      // streak the previous one banked.
+      await MealStreakService.reload();
       // A saved nickname must NEVER be overwritten by the Google display
       // name — the greeting keeps the user's chosen nickname forever.
       await NicknameStore.persistLoginName(prefs, name);

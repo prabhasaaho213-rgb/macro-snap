@@ -98,19 +98,19 @@ class Habit {
     if (isDueOn(ref) &&
         !isCompleted(ref) &&
         !(streakProtection && isSkipped(ref))) {
-      d = ref.subtract(const Duration(days: 1));
+      d = _previousDay(ref);
     }
 
     var count = 0;
     while (true) {
       if (!isDueOn(d)) {
-        d = d.subtract(const Duration(days: 1));
+        d = _previousDay(d);
         continue;
       }
       final valid = isCompleted(d) || (streakProtection && isSkipped(d));
       if (!valid) break;
       count++;
-      d = d.subtract(const Duration(days: 1));
+      d = _previousDay(d);
     }
     return count;
   }
@@ -138,10 +138,18 @@ class Habit {
           run = 0;
         }
       }
-      cursor = cursor.add(const Duration(days: 1));
+      cursor = DateTime(cursor.year, cursor.month, cursor.day + 1);
     }
     return best;
   }
+
+  /// The day before [day], as a calendar date.
+  ///
+  /// 24 hours is not always one day: on a DST fall-back day `subtract(Duration
+  /// (days: 1))` lands back inside the same date, so a streak step repeats a
+  /// day instead of moving to the previous one.
+  static DateTime _previousDay(DateTime day) =>
+      DateTime(day.year, day.month, day.day - 1);
 
   double completionRate({int days = 30}) {
     final now = dayOnly(DateTime.now());

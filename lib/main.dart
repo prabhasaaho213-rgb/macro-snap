@@ -239,6 +239,15 @@ Future<void> _bootstrap() async {
         if (!prefs.containsKey('name') && cloudName is String) {
           await prefs.setString('name', cloudName);
         }
+        // The calorie-goal streak is part of the account, not the device: a
+        // reinstall used to start it at zero (and the streak badge backfill
+        // then "found" it months later with today's date).
+        final cloudStreak = cloudPrefs['streakDates'];
+        if (cloudStreak is String && cloudStreak.isNotEmpty) {
+          await MealStreakService.mergeCloudDates(
+            MealStreakService.jsonList(cloudStreak),
+          );
+        }
       }
     }, 'Preferences cloud restore'),
   );
@@ -276,6 +285,9 @@ Future<void> _backfillBadges() async {
     // counting a seed would award "First Weigh-In" on the next launch — the
     // badge fix would have been undone here instead of at the seed.
     hasWeighIn: WeightStore.instance.hasRealWeighIn,
+    // Streak badges record the day the run was completed, not the day this
+    // launch noticed it.
+    hitDates: await MealStreakService.bankedDates(),
   );
 }
 

@@ -199,6 +199,25 @@ $kPlayStoreUrl''';
       final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
       if (byteData == null) return false;
       final dir = await getTemporaryDirectory();
+      // Remove the previous week cards before writing a new one: every share
+      // used to leave a macrosnap_weekly_*.png behind in the temp directory,
+      // and nothing ever deleted them.
+      try {
+        for (final old in dir.listSync()) {
+          final name = old.uri.pathSegments.isEmpty
+              ? ''
+              : old.uri.pathSegments.last;
+          if (name.startsWith('macrosnap_weekly_') && name.endsWith('.png')) {
+            try {
+              old.deleteSync();
+            } catch (_) {
+              // A file the system has locked is skipped, not fatal.
+            }
+          }
+        }
+      } catch (_) {
+        // Listing the temp dir is best-effort housekeeping.
+      }
       final file = File(
         '${dir.path}/macrosnap_weekly_${DateTime.now().millisecondsSinceEpoch}.png',
       );

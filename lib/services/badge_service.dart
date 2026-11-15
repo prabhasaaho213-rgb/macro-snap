@@ -190,15 +190,26 @@ class BadgeService extends ChangeNotifier {
     required int totalMeals,
     required int streakDays,
     required bool hasWeighIn,
+    /// The calorie-goal days on record, so a streak badge can carry the day the
+    /// run was actually completed instead of today.
+    List<String> hitDates = const [],
   }) async {
     await load();
     final before = _earnedAt.length;
     if (totalMeals > 0) _recordSilently(AppBadge.firstBite);
     if (totalMeals >= tenPlatesCount) _recordSilently(AppBadge.tenPlates);
     if (hasWeighIn) _recordSilently(AppBadge.firstWeighIn);
-    if (streakDays >= weekStreak) _recordSilently(AppBadge.weekWarrior);
+    if (streakDays >= weekStreak) {
+      _recordSilently(
+        AppBadge.weekWarrior,
+        earnedOn: _streakReachedOn(hitDates, weekStreak),
+      );
+    }
     if (streakDays >= fortnightStreak) {
-      _recordSilently(AppBadge.fortnightFlame);
+      _recordSilently(
+        AppBadge.fortnightFlame,
+        earnedOn: _streakReachedOn(hitDates, fortnightStreak),
+      );
     }
     if (_earnedAt.length != before) {
       await _save();
@@ -206,8 +217,30 @@ class BadgeService extends ChangeNotifier {
     }
   }
 
-  void _recordSilently(AppBadge badge) {
-    _earnedAt.putIfAbsent(badge.id, () => DateTime.now().toIso8601String());
+  void _recordSilently(AppBadge badge, {DateTime? earnedOn}) {
+    _earnedAt.putIfAbsent(
+      badge.id,
+      () => (earnedOn ?? DateTime.now()).toIso8601String(),
+    );
+  }
+
+  /// The day a run of [length] consecutive banked days was completed, or null
+  /// when the history never reached it.
+  static DateTime? _streakReachedOn(List<String> hitDates, int length) {
+    final days = hitDates
+        .map(DateTime.tryParse)
+        .whereType<DateTime>()
+        .map((d) => DateTime(d.year, d.month, d.day))
+        .toList()
+      ..sort();
+    if (days.isEmpty) return null;
+    var run = 1;
+    if (run >= length) return days.first;
+    for (var i = 1; i < days.length; i++) {
+      run = days[i].difference(days[i - 1]).inDays == 1 ? run + 1 : 1;
+      if (run >= length) return days[i];
+    }
+    return null;
   }
 
   /// Test hook: forget everything loaded so the next [load] re-reads prefs.

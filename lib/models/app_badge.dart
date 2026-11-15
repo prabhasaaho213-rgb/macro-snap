@@ -52,7 +52,7 @@ class AppBadge {
   static const weekWarrior = AppBadge(
     id: 'week_warrior',
     title: 'Week Warrior',
-    description: 'Hit your macro targets 7 days in a row',
+    description: 'Hit your calorie goal 7 days in a row',
     icon: Icons.local_fire_department_rounded,
     kind: BadgeKind.streak,
   );
@@ -60,7 +60,7 @@ class AppBadge {
   static const fortnightFlame = AppBadge(
     id: 'fortnight_flame',
     title: 'Fortnight Flame',
-    description: 'Hit your macro targets 14 days in a row',
+    description: 'Hit your calorie goal 14 days in a row',
     icon: Icons.whatshot_rounded,
     kind: BadgeKind.streak,
   );

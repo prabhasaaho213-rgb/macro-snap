@@ -157,6 +157,68 @@ extension _HabitsCards on _HabitsTabState {
   }
 
   // ─── WATER TRACKER ─────────────────────────────────────────
+
+  /// Asks for a new daily glass goal. Bounded to 1–20 so the row of glasses
+  /// stays a row and `waterToday / waterGoal` can never divide by zero.
+  Future<void> _editWaterGoal(BuildContext context, bool isDark) async {
+    unawaited(HapticFeedback.lightImpact());
+    var draft = store.waterGoal.clamp(1, 20);
+    final chosen = await showDialog<int>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          backgroundColor: isDark ? MacroSnapTheme.cardDark : Colors.white,
+          title: const Text('Daily water goal'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                '$draft glass${draft == 1 ? '' : 'es'}',
+                style: const TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.w900,
+                  color: MacroSnapTheme.neonCyan,
+                ),
+              ),
+              Slider(
+                value: draft.toDouble(),
+                min: 1,
+                max: 20,
+                divisions: 19,
+                label: '$draft',
+                activeColor: MacroSnapTheme.neonCyan,
+                onChanged: (value) =>
+                    setDialogState(() => draft = value.round()),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(ctx, draft),
+              style: FilledButton.styleFrom(
+                backgroundColor: MacroSnapTheme.neonCyan,
+                foregroundColor: Colors.black,
+              ),
+              child: const Text('Save'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (chosen == null || !context.mounted) return;
+    store.setWaterGoal(chosen);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Water goal set to $chosen glasses'),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
   Widget _waterCard(double progress, bool isDark) {
     final glasses = store.waterToday;
     final goal = store.waterGoal;
@@ -183,12 +245,32 @@ extension _HabitsCards on _HabitsTabState {
                   ),
                 ],
               ),
-              Text(
-                '$glasses / $goal',
-                style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w800,
-                  color: MacroSnapTheme.neonCyan,
+              // Tappable: the goal was fixed at 8 glasses because
+              // `setWaterGoal` had no caller anywhere in the app.
+              Semantics(
+                button: true,
+                label: 'Daily water goal, $goal glasses. Change it',
+                child: GestureDetector(
+                  onTap: () => _editWaterGoal(context, isDark),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        '$glasses / $goal',
+                        style: const TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w800,
+                          color: MacroSnapTheme.neonCyan,
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      const Icon(
+                        Icons.edit_rounded,
+                        size: 14,
+                        color: MacroSnapTheme.neonCyan,
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ],

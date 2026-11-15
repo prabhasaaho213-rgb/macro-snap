@@ -487,6 +487,11 @@ extension _HabitsSheets on _HabitsTabState {
                 TextField(
                   controller: nameCtrl,
                   autofocus: !isEdit,
+                  // A habit name is painted on a card and in a notification;
+                  // an unbounded one either overflows or gets truncated
+                  // without warning.
+                  maxLength: 40,
+                  maxLengthEnforcement: MaxLengthEnforcement.enforced,
                   onChanged: (_) {
                     if (nameError != null) {
                       setModalState(() => nameError = null);

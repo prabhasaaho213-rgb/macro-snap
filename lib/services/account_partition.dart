@@ -95,6 +95,10 @@ class AccountPartition {
     'guru_chat',
     'pending_sync',
     'synced_meal_ids',
+    // The calorie-goal streak moved out of a global key: on a shared phone a
+    // second account inherited the first one's banked days (and the streak
+    // badges computed from them).
+    'calorie_goal_hit_dates',
   ];
 
   /// Moves the ACTIVE account's local data onto its current suffix.

@@ -7,6 +7,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:io';
 import '../services/account_partition.dart';
+import 'bmi.dart';
 import '../services/meal_sync_service.dart';
 import '../services/crash_reporting.dart';
 
@@ -80,8 +81,12 @@ class DietProfile {
   }
 
   bool get isUnderweight {
+    // Compare the number the UI shows (one decimal) rather than the raw value:
+    // 18.47 prints as "18.5", and calling that underweight produced copy that
+    // read "Your BMI is 18.5, below the healthy range (18.5–24.9)".
     final value = bmi;
-    return value != null && value < underweightBmi;
+    return value != null &&
+        BmiCalculator.displayValue(value) < underweightBmi;
   }
 
   int get safeMinimumCalories => gender == Gender.male
@@ -94,9 +99,15 @@ class DietProfile {
       Goal.maintain => tdee.round(),
       Goal.gainMuscle => (tdee + 300).round(),
     };
-    // Never prescribe below BMR or the sex-specific safe minimum, whichever
-    // is higher. BMR alone still allows a deficit for most people; it is the
-    // hard stop for very small bodies.
+    // The safety floor exists for DEFICITS: never prescribe below BMR or the
+    // sex-specific safe minimum, whichever is higher.
+    //
+    // It is deliberately not applied to maintain/gain. For a small sedentary
+    // user whose TDEE is under 1,500, the floor used to RAISE a maintain target
+    // above maintenance — "Maintain" handing out a surplus is a worse error
+    // than a low-but-truthful maintenance figure, and gain already adds its
+    // own surplus on top.
+    if (goal != Goal.loseWeight) return raw;
     final floor = math.max(bmr.round(), safeMinimumCalories);
     return raw < floor ? floor : raw;
   }
