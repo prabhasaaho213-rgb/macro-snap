@@ -1,54 +1,43 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
-import '../core/theme.dart';
-import '../widgets/gradient_button.dart';
-import 'crash_reporting.dart';
-import 'meal_store.dart';
 
-/// Redirects users to the MacroSnap Play Store listing to leave a rating,
-/// and shows a polite, once-in-a-while rate prompt (inspired by Spotify,
-/// Duolingo and other apps). Respects "no thanks" and offers "remind later".
+import 'crash_reporting.dart';
+
+/// Opens MacroSnap's Play Store page, and remembers when the user has been
+/// there to rate.
+///
+/// The AUTOMATIC prompt used to live here: a custom dialog on a launch counter
+/// that read "Enjoying MacroSnap?" with a single button labelled "Rate 5 Stars
+/// ⭐". Two things were wrong with it. It told the user what to rate, which is
+/// the solicitation pattern Play's policy treats as fake engagement, and it
+/// asked after three launches regardless of whether anything had been logged.
+/// The automatic ask is now Play's own in-app review sheet, raised after the
+/// third saved meal (see [InAppReviewService]); this file keeps only the
+/// deliberate paths — Settings' "Rate us" row and the same action on the
+/// What's New screen — plus the explicit-intent store launcher they share.
+///
+/// The launcher matters: the plain `market://` scheme is hijacked by OEM stores
+/// such as V-Appstore on several devices, which sent "Rate Us" to the wrong
+/// store. The native channel targets the Play Store package explicitly, with
+/// url_launcher as the fallback.
 class RateUsService {
   static const String _packageName = 'com.macrosnap.macro_snap';
 
-  // SharedPreferences keys
-  static const String _launchKey = 'rate_launch_count';
-  static const String _laterKey = 'rate_later_count';
+  /// Set once the user has actually been taken to the store page.
   static const String _ratedKey = 'rate_done';
-  static const String _dismissedKey = 'rate_dismissed';
 
-  /// Minimum launches before the first prompt appears (gives the user time
-  /// to actually experience the app first).
-  static const int _minLaunchesBeforePrompt = 3;
-
-  /// Meals logged before the prompt is even considered.
-  static const int _minMealsBeforePrompt = 5;
-
-  /// How many launches to wait after each "Later" before asking again.
-  static const int _launchesPerReminder = 5;
-
-  /// Maximum number of "Later" reminders before we stop asking.
-  static const int _maxReminders = 3;
-
-  /// Opens the Play Store page for MacroSnap.
-  ///
-  /// The primary path is a native explicit intent pinned to the Play Store
-  /// package (see MainActivity.openPlayStore) — the plain `market://` scheme
-  /// is hijacked by OEM stores like V-Appstore on several devices, which
-  /// sent "Rate Us" to the wrong store. Falls back to launching the URLs
-  /// directly when the channel is unavailable (e.g. widget tests).
   static const MethodChannel _launcher = MethodChannel('macrosnap/launcher');
 
+  /// Opens the Play Store listing for MacroSnap.
   static Future<bool> openPlayStore() async {
     final market = Uri.parse('market://details?id=$_packageName');
     final web = Uri.parse(
       'https://play.google.com/store/apps/details?id=$_packageName',
     );
 
-    // 1) Native explicit intent (Play Store package only) — can't be
-    //    intercepted by V-Appstore / GetApps / etc.
+    // 1) Native explicit intent (Play Store package only).
     try {
       final opened = await _launcher.invokeMethod<bool>('openPlayStore');
       if (opened == true) return true;
@@ -77,45 +66,9 @@ class RateUsService {
     return false;
   }
 
-  /// Registers a fresh app launch and decides whether to show the prompt.
-  /// Call this once per app startup (fire-and-forget).
-  static Future<void> onAppLaunch(BuildContext context) async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-
-      // Never show again once rated or explicitly dismissed forever.
-      if (prefs.getBool(_ratedKey) ?? false) return;
-      if (prefs.getBool(_dismissedKey) ?? false) return;
-
-      final launches = (prefs.getInt(_launchKey) ?? 0) + 1;
-      await prefs.setInt(_launchKey, launches);
-
-      final reminders = prefs.getInt(_laterKey) ?? 0;
-      if (reminders >= _maxReminders) return;
-
-      final needed =
-          _minLaunchesBeforePrompt + (reminders * _launchesPerReminder);
-      if (launches < needed) return;
-
-      // Launches alone are the wrong test: a brand-new user who opened the app
-      // three times and logged nothing has no opinion worth asking for, and
-      // asking then is how a five-star prompt turns into a one-star review.
-      // Require real use — meals actually logged — before the ask.
-      if (MealStore.instance.allMeals.length < _minMealsBeforePrompt) return;
-
-      // Wait a moment so the prompt never overlaps the first screen build.
-      await Future.delayed(const Duration(milliseconds: 900));
-      if (!context.mounted) return;
-      await _showPrompt(context);
-    } catch (_) {
-      // Rating prompt is best-effort; never break startup over it.
-    }
-  }
-
-  /// A manual "Rate Us" action (e.g. from Settings) that opens Play Store
-  /// directly without the prompt dialog. Only marks the user as rated once
-  /// the store page actually launches, so a failed launch doesn't suppress
-  /// future prompts.
+  /// The Settings / What's New "Rate us" action: opens the listing directly.
+  /// Only marked as rated once the store page actually launched, so a failed
+  /// launch does not silently suppress anything.
   static Future<void> rateNowFromSettings() async {
     final opened = await openPlayStore();
     if (opened) {
@@ -131,118 +84,4 @@ class RateUsService {
       logError('RateUsService.prefsMarkRated', e, st);
     }
   }
-
-  /// The prompt dialog: "Enjoying MacroSnap? Rate us 5 stars!"
-  static Future<void> _showPrompt(BuildContext context) async {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-
-    final action = await showDialog<RatePromptAction>(
-      context: context,
-      barrierDismissible: true,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: isDark ? MacroSnapTheme.cardDark : Colors.white,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
-        contentPadding: const EdgeInsets.fromLTRB(24, 28, 24, 20),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // Stars row
-            Row(
-              mainAxisSize: MainAxisSize.min,
-              children: List.generate(5, (i) {
-                return Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 2),
-                  child: Icon(
-                    Icons.star_rounded,
-                    size: 32,
-                    color: MacroSnapTheme.neonYellow.withValues(
-                      alpha: 1 - (i * 0.08),
-                    ),
-                  ),
-                );
-              }),
-            ),
-            const SizedBox(height: 16),
-            Text(
-              'Enjoying MacroSnap?',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.w900,
-                letterSpacing: -0.3,
-                color: isDark ? Colors.white : const Color(0xFF1A1A1A),
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Your rating helps us reach more people '
-              'and keeps the app free. Thanks for your support!',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 13,
-                height: 1.4,
-                color: MacroSnapTheme.textSecondary(context),
-              ),
-            ),
-            const SizedBox(height: 24),
-            SizedBox(
-              width: double.infinity,
-              height: 50,
-              child: GradientButton(
-                label: 'Rate 5 Stars ⭐',
-                onPressed: () => Navigator.of(ctx).pop(RatePromptAction.rate),
-                height: 50,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                TextButton(
-                  onPressed: () =>
-                      Navigator.of(ctx).pop(RatePromptAction.later),
-                  child: Text(
-                    'Later',
-                    style: TextStyle(
-                      fontSize: 13,
-                      color: MacroSnapTheme.textTertiary(context),
-                    ),
-                  ),
-                ),
-                TextButton(
-                  onPressed: () =>
-                      Navigator.of(ctx).pop(RatePromptAction.noThanks),
-                  child: Text(
-                    "No, thanks",
-                    style: TextStyle(
-                      fontSize: 13,
-                      color: MacroSnapTheme.textTertiary(context),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-
-    final prefs = await SharedPreferences.getInstance();
-    switch (action) {
-      case RatePromptAction.rate:
-        await prefs.setBool(_ratedKey, true);
-        await openPlayStore();
-        break;
-      case RatePromptAction.later:
-      case null:
-        // "Later" or barrier-tap dismiss — ask again in a few launches.
-        await prefs.setInt(_laterKey, (prefs.getInt(_laterKey) ?? 0) + 1);
-        break;
-      case RatePromptAction.noThanks:
-        await prefs.setBool(_dismissedKey, true);
-        break;
-    }
-  }
 }
-
-enum RatePromptAction { rate, later, noThanks }

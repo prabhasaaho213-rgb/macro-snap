@@ -6,7 +6,6 @@ import '../core/haptics.dart';
 import '../core/theme.dart';
 import '../services/currency_service.dart';
 import '../services/nav_ab_test.dart';
-import '../services/rate_us_service.dart';
 import '../services/subscription_service.dart';
 import '../widgets/notification_prompt.dart';
 import '../widgets/badge_board.dart';
@@ -44,10 +43,6 @@ class _MainShellState extends State<MainShell> {
     WidgetsBinding.instance.addPostFrameCallback(
       (_) => _maybeShowLaunchPrompts(),
     );
-    // Prompt for a Play Store rating after a few launches (best-effort).
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      RateUsService.onAppLaunch(context);
-    });
   }
 
   /// Single entry point for tab changes (bottom-nav taps, swipes, notification

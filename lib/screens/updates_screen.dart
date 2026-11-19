@@ -61,6 +61,7 @@ class _UpdatesScreenState extends State<UpdatesScreen> {
         'Your water goal is editable instead of fixed at 8 glasses, and habit streaks count calendar days across daylight-saving changes',
         'Barcodes reject impossible nutrition values and fill in missing calories from the macros, and a scan that times out says so instead of blaming the connection',
         'The app no longer asks for microphone or NFC access, which it never used',
+        'A rating is suggested once, through Google Play\'s own review card, after you have saved three meals — and you choose the stars, not us',
       ],
     ),
     _UpdateEntry(

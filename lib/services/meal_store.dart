@@ -7,6 +7,7 @@ import 'dart:io';
 import '../models/meal_record.dart';
 import 'account_partition.dart';
 import 'badge_service.dart';
+import 'in_app_review_service.dart';
 import 'meal_image_store.dart';
 import 'meal_photo_sync.dart';
 import 'meal_sync_service.dart';
@@ -272,6 +273,10 @@ class MealStore {
     // uploading here is what makes "Keep forever (Pro)" survive a phone
     // change, not only longer local retention.
     unawaited(MealPhotoSyncService.uploadForMeal(meal));
+    // The rating ask rides on the log too, and is not awaited: the meal is
+    // already saved and on screen, so a review sheet that fails (or is
+    // dismissed by Play's own rules) can never delay or undo the save.
+    unawaited(InAppReviewService.maybeAfterMealSave(_meals.length));
   }
 
   Future<void> remove(String id) async {
