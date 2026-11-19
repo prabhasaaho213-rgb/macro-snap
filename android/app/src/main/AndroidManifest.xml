@@ -19,6 +19,19 @@
         android:required="false"
         tools:replace="android:required"/>
 
+    <!-- Stripped from the merged manifest. The camera plugin (camera_android_camerax)
+         declares RECORD_AUDIO because it can record video; MacroSnap only ever
+         takes still photos, so the microphone is never opened.
+
+         NFC arrives from the bundled barcode-scanning library. Nothing in the app
+         reads a tag — barcodes are decoded from the camera or typed by hand.
+
+         Both are removed rather than left in place because Play shows the
+         permission list on the store page, and "Microphone · NFC" on a food app
+         reads as data collection that never happens. -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" tools:node="remove"/>
+    <uses-permission android:name="android.permission.NFC" tools:node="remove"/>
+
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
     <!-- Required by flutter_local_notifications for scheduled reminders: -->
     <!-- re-schedule after reboot/update and vibrate when they fire. -->
