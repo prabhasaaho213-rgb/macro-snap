@@ -221,6 +221,17 @@ credentials and no secret, which falls back to the development key — would sim
 rewrite the canary to match itself. To rotate the key deliberately, delete
 `meta/tombstone_key_check` and let the next request publish the new value.
 
+A preview deployment or a local run has no `TOMBSTONE_SECRET` and falls back to
+the development key, so it publishes **nothing**: only a real key may vouch for
+itself. It also refuses to write fingerprints into a connected Firestore
+(`tombstone NOT written: …`), because a dev-key fingerprint enforces nothing and
+writing one would delete the legacy document that is the only evidence the
+account ever deleted. So pointing a preview or a laptop at production Firestore
+changes neither the canary nor the tombstones — and cannot lock the key check
+into the wrong value. If you ever see a dev-key canary in
+`meta/tombstone_key_check`, something older than this build wrote it: delete the
+document and let production republish.
+
 The CLI's `vercel logs` returns only the startup lines for this project —
 request-time output was not visible there — so do not conclude the canary is
 missing from an empty log; check the document itself. The migration's last line
