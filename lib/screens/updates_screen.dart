@@ -62,6 +62,7 @@ class _UpdatesScreenState extends State<UpdatesScreen> {
         'Barcodes reject impossible nutrition values and fill in missing calories from the macros, and a scan that times out says so instead of blaming the connection',
         'The app no longer asks for microphone or NFC access, which it never used',
         'A rating is suggested once, through Google Play\'s own review card, after you have saved three meals — and you choose the stars, not us',
+        'The Pro screen lists only what Pro actually unlocks, so nothing you already get for free is sold back to you',
       ],
     ),
     _UpdateEntry(

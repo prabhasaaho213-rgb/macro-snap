@@ -340,28 +340,28 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
                 ),
               ],
               const SizedBox(height: 32),
-              _buildFeatureRow(
-                Icons.local_fire_department_rounded,
-                'Streak Tracking',
-                'Stay consistent with daily logging streaks',
-                isDark,
-              ),
-              _buildFeatureRow(
-                Icons.insights_rounded,
-                'Weekly Auto-Insights',
-                'See your protein gaps and trends without manual tracking',
-                isDark,
-              ),
-              // "Complete Meal History" sat here through 1.5.12. Nothing
-              // lists past meals by date — Home shows today only and Recent
-              // Foods is a search list — so the row sold a screen that does
-              // not exist. Removed for the same reason as "Cloud Backup".
-              // "Cloud Backup" used to be listed here, but nothing locks it:
-              // /meals/sync and /habits/sync accept any signed-in user, so it
-              // is already free for everyone. A benefit that is not actually
-              // gated reads as a false promise, so it has been removed and
-              // replaced by the two features the server really does refuse
-              // (403 pro_required).
+              // Exactly three rows, and each one is something Pro really
+              // unlocks. Everything else that used to sit here was removed for
+              // the same reason, so it is worth recording all four:
+              //
+              // "Complete Meal History" (through 1.5.12) — nothing lists past
+              // meals by date; Home shows today and Recent Foods is a search
+              // list. It sold a screen that does not exist.
+              //
+              // "Cloud Backup" — /meals/sync and /habits/sync accept any
+              // signed-in user, so backup was already free for everyone.
+              //
+              // "Streak Tracking" — streaks are on Home for every user; no
+              // code path checks Pro before showing them.
+              //
+              // "Weekly Auto-Insights" — there is no weekly-insights screen at
+              // all, so this was the worst of the four.
+              //
+              // What remains is what the code enforces: the two server-side
+              // 403 pro_required gates (Guru, AI meal plan) and the scan limit
+              // that ScanGate lifts for Pro. A benefit that is not actually
+              // gated reads as a false promise, and Play treats a paywall
+              // promise the app does not keep as misleading metadata.
               _buildFeatureRow(
                 Icons.smart_toy_rounded,
                 'Guru Assistant',

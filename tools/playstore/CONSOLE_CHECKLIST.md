@@ -23,23 +23,62 @@ customer who is still being charged.
 
 Play Console → *App content* → *Data safety*.
 
-- **Remove Location.** The app has no location code and no location permission in
-  the merged manifest. Declaring it is both wrong and the first thing a cautious
-  user sees.
+- **Delete the Location category** — both *Approximate* and *Precise* row. There
+  is no location permission in the merged manifest, no location plugin in
+  `pubspec.yaml`, and no location call in `lib/`. The only thing that looked
+  location-adjacent is `lib/services/currency_service.dart`, which reads the
+  device **timezone and locale** to label prices in the user's currency — not
+  location data, and nothing about it is transmitted.
 - Check the rest against the table in `tools/playstore/listing.md`: Name, Email,
   Health & fitness, Photos, Purchase history, App activity, Device IDs. Nothing
-  else.
+  else. Microphone, Contacts, SMS, Calendar and Files are all *No*.
 - Confirm "Data is encrypted in transit" and "Users can request data deletion".
 
-Verification: the summary line on the listing no longer includes Location.
+Verification: the *Data safety* summary on the store listing lists six
+categories and Location is not one of them. Over-declaring is not the safe
+direction — it makes the app look more invasive than it is and it is the first
+thing a cautious user reads.
 
 ## 3. Paste the listing copy (10 min)
 
 Play Console → *Grow* → *Store presence* → *Main store listing*. Copy the short
-and full description from `tools/playstore/listing.md`.
+and full description from `tools/playstore/listing.md` — replace the text, do
+not edit around the old one, because the live copy still sells Pro benefits the
+app does not gate.
 
-Verification: the description states **3 free scans a day** and **₹49/month,
-first month ₹1**.
+**3a. The Pro lines to delete.** The live description names *Complete Meal
+History* and *Cloud Backup* under Pro. Neither exists as a paywalled feature:
+`/meals/sync` and `/habits/sync` accept any signed-in user, and no screen lists
+past meals by date. The app removed both from its own paywall in 1.5.17 for the
+same reason, and the replacement copy lists only the three things the server
+refuses with `403 pro_required` or `ScanGate` enforces: unlimited scans, the AI
+meal plan, and Guru.
+
+**3b. Pricing must be on the page.** Free = 3 photo scans a day (barcode and
+manual entry unlimited); Pro = ₹49/month with the first month at ₹1. Both are in
+the description's PRICING block. A user who discovers the scan limit *after*
+installing rates that discovery, not the app.
+
+**3c. Three fields outside the description.** They are easy to miss because the
+description looks finished without them:
+
+| Field | Where | Value |
+|---|---|---|
+| Privacy policy | *Main store listing* → Privacy policy | `https://prabhasaaho213-rgb.github.io/macro-snap/` |
+| Subscription benefit | *Monetise* → *Products* → *Subscriptions* → plan → Benefit | the three Pro bullets |
+| Base plan price | *Monetise* → *Subscriptions* → base plan | ₹49/month + ₹1 intro on the same base plan |
+
+On the privacy URL: the console currently points at
+`.../macro-snap-source-1.4.5/`, an old repo name kept alive by a redirect. It
+resolves today, which is exactly why it survives reviews — and why it is one
+rename away from taking the listing out of compliance. The correct address is
+the one the app opens from Settings and the one printed in the description.
+
+Verification: open the store page in a private browser window and check, in one
+pass, that (1) the privacy link opens the current policy, (2) the price under
+the install button reads ₹49/month with the ₹1 offer, (3) the description says
+"3 a day" and does not contain "Complete Meal History", "Cloud Backup", "Streak
+Tracking" or "Weekly Auto-Insights".
 
 ## 4. Publish the Firestore rules (10 min) — security
 
@@ -88,7 +127,9 @@ testing). Walk these and note anything odd:
 - [ ] Gallery scan
 - [ ] Barcode scan (packaged item) and typed barcode
 - [ ] A habit with a reminder → force-stop the app → wait for the reminder
-- [ ] Weekly share card → the image opens and shares
+- [ ] Referral screen → the code copies, and "Share on WhatsApp" opens the
+      share sheet with the code in the text (that is the only sharing flow in
+      the app; there is no weekly share card, despite older notes)
 - [ ] Settings → *Delete account* on a throwaway account
 - [ ] One real **₹1 checkout**, then cancel it in the Razorpay dashboard and
       refund it. Pro must stay on until the paid month ends.
