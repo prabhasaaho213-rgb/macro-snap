@@ -172,16 +172,36 @@ One written review, asking for better diet plans. Suggested public reply:
 `TOMBSTONE_SECRET` is missing in production, so a deploy without the variable
 takes down scans, payments and sign-in — not just deletion. The safe order is:
 
-1. set `TOMBSTONE_SECRET` in Vercel (done: added as **Config** so the migration
-   can pull it with `vercel env pull`; a Secret is unreadable, even by you);
+1. set `TOMBSTONE_SECRET` in Vercel (done — an ordinary encrypted environment
+   variable, `type: encrypted` / `visibility: config`, scoped to Production;
+   that is *not* Edge Config — the server reads `process.env`, and Edge Config
+   would never reach it);
 2. run the migration below with that same value;
 3. deploy.
 
+After the deploy, the first thing to check in Project → Logs is that
+`TOMBSTONE_SECRET is required` does **not** appear — if it does, the variable is
+not reaching `process.env` (wrong environment scope, or stored somewhere other
+than Environment Variables).
+
 A key that differs between step 1 and step 2 is the quiet failure: the migration
-succeeds and writes fingerprints that the server will never match, so everyone
-who deleted before still gets ₹1. The script reports `key confirmed` when some
-legacy address's fingerprint already exists — a positive signal. If it says
-`NOT confirmed`, stop and check the value before `--apply`.
+succeeds and writes fingerprints the server will never match, so everyone who
+deleted before still gets ₹1. This cannot be detected from the data — in a
+correct run no legacy document's fingerprint already exists, because the delete
+handler removes the legacy document when that account deletes again. So the
+server publishes a canary: on the first request of each instance it writes
+`meta/tombstone_key_check` = HMAC(key, `macrosnap-tombstone-key-check-v1`), and
+the migration recomputes it and **refuses to write on a mismatch**.
+
+To confirm the canary exists before running anything: Firebase Console →
+Firestore → `meta` → `tombstone_key_check`. Two caveats learned from doing this:
+a canary written at module load is dropped when the instance freezes after
+answering (hence "first request"), and the CLI's `vercel logs` returns only the
+startup lines for this project — request-time `console.log` output was not
+visible there, so do not conclude the canary is missing from an empty log. `key
+verified against the server canary` is the line you want; `unverified (no canary
+yet)` means the server has not booted with this key, and `MISMATCH — refused`
+means you are holding the wrong value.
 
 The privacy policy and the deletion page changed on 19 Nov 2026. Both make two
 promises that must be true in the running system, not just in the HTML:
