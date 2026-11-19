@@ -172,12 +172,14 @@ promises that must be true in the running system, not just in the HTML:
    *Billing* and confirm the project holding `GEMINI_API_KEY` has an active
    billing account. If it does not, either enable it or change the policy text,
    because as written it would be wrong.
-2. **The 24-month deletion record.** `deleted_accounts` rows now hold an HMAC
-   fingerprint instead of an email, and rows older than 24 months are deleted on
-   the next account deletion. No scheduled job is needed, and none exists — so
-   the purge only runs when somebody deletes an account. On a quiet month the
-   row simply lives a little longer than 24 months, which is what the policy's
-   "automatically after 24 months" is describing.
+2. **The 24-month deletion record.** The tombstone now holds an HMAC fingerprint
+   instead of an email, and anything older than 24 months is deleted on the next
+   account deletion — in Firestore *and* in Postgres, because the production
+   deployment runs Firestore-only (`DATABASE_URL` is unset; the function prints
+   "running without Postgres" on every cold start). No scheduled job is needed
+   and none exists, so the purge runs when somebody deletes an account; on a
+   quiet month a record lives slightly past 24 months, which is what "deleted
+   automatically after 24 months" is describing.
 
 Publish `app/docs/index.html` and `app/docs/delete-account.html` wherever the
 GitHub Pages site is served from, then load both URLs in a private window and
