@@ -38,11 +38,11 @@ MacroSnap uses:
 - Guru conversations: kept on your device, and used only to build the context for your next question.
 - Meal photos: the local window you choose (24 hours by default); cloud copies only while you keep the backup setting on.
 - Crash reports: retained by Firebase Crashlytics for 90 days.
-- **Deletion record: kept indefinitely.** When you delete your account we keep one record containing only the identifier you signed up with (your email address), so the once-per-account ₹1 first-month offer cannot be claimed again by deleting and re-registering. It holds no meals, habits, name, photos, history or subscription state, it is not linked to any active account, and no user or app can read it — it exists solely to answer "has this identity already had the offer?". It is not removable on request while the offer exists, because that is exactly what it is there to prevent.
+- **Deletion record: a one-way fingerprint, kept at most 24 months.** When you delete your account we keep one record: a keyed hash (HMAC) of the email address you signed up with, plus the date of deletion. It is not your email address — it cannot be turned back into one without a secret key that exists only in our server environment — and it holds no meals, habits, name, phone, photos, history, trial data or subscription state. No user and no other part of the app can read it. Its only purpose is to answer "has this identity already had the ₹1 offer?". After 24 months it stops counting for that purpose, and the record itself is deleted at the next account deletion. You can also ask us to erase it sooner (see Your Rights); the only consequence is that the ₹1 offer could then be claimed again with that address.
 
 ## Your Rights
 
-You can delete your account and all associated data at any time from **Settings → Delete Account** in the app. That removes your cloud data, your photos, your subscription record and your local data on this device, and it cannot be undone. The only thing kept is the identifier-only deletion record described under "How long we keep things". You can also email us to ask what we hold about you, or to have it corrected or erased.
+You can delete your account and all associated data at any time from **Settings → Delete Account** in the app. That removes your cloud data, your photos, your subscription record and your local data on this device, and it cannot be undone. The only thing kept is the fingerprint-only deletion record described under "How long we keep things" — and that is erasable on request too. You can also email us to ask what we hold about you, or to have it corrected or erased; we answer within 30 days.
 
 ## Contact
 For questions, contact: macrosnap7@gmail.com

@@ -59,7 +59,14 @@ manual entry unlimited); Pro = ₹49/month with the first month at ₹1. Both ar
 the description's PRICING block. A user who discovers the scan limit *after*
 installing rates that discovery, not the app.
 
-**3c. Three fields outside the description.** They are easy to miss because the
+**3c. `TOMBSTONE_SECRET` must exist in Vercel production** (Project → Settings →
+Environment Variables), or the function refuses to boot — by design, since a
+constant fallback in the source would let anyone hash a guessed email and test
+the tombstone table. Generate once with `openssl rand -hex 32` and never change
+it: HMAC is one-way, so re-keying makes every account deleted before the change
+eligible for the ₹1 month again.
+
+**3d. Three fields outside the description.** They are easy to miss because the
 description looks finished without them:
 
 | Field | Where | Value |
@@ -172,25 +179,43 @@ promises that must be true in the running system, not just in the HTML:
    *Billing* and confirm the project holding `GEMINI_API_KEY` has an active
    billing account. If it does not, either enable it or change the policy text,
    because as written it would be wrong.
-2. **The 24-month deletion record.** The tombstone now holds an HMAC fingerprint
-   instead of an email, and anything older than 24 months is deleted on the next
-   account deletion — in Firestore *and* in Postgres, because the production
-   deployment runs Firestore-only (`DATABASE_URL` is unset; the function prints
-   "running without Postgres" on every cold start). No scheduled job is needed
-   and none exists, so the purge runs when somebody deletes an account; on a
-   quiet month a record lives slightly past 24 months, which is what "deleted
-   automatically after 24 months" is describing.
+2. **The 24-month deletion record.** The tombstone holds an HMAC fingerprint
+   instead of an email. Two separate things enforce the window, because they
+   fail differently:
+   - the **offer check** ignores any fingerprint whose `deleted_at` is older
+     than 24 months, so an expired record stops withholding the ₹1 month the
+     moment it expires — no cleanup needed;
+   - **expired documents are deleted** on the next account deletion, in
+     Firestore *and* in Postgres (production runs Firestore-only: `DATABASE_URL`
+     is unset and the function prints "running without Postgres" on cold start).
+     There is no scheduled job, so the bytes may outlive the window by weeks;
+     that is why the policy says the record "stops counting after 24 months" and
+     is deleted "at the next account deletion" rather than claiming a daily job.
 
 Publish `app/docs/index.html` and `app/docs/delete-account.html` wherever the
 GitHub Pages site is served from, then load both URLs in a private window and
 confirm the new paragraphs are visible. A policy that says something the server
 does not do is worse than the vaguer text it replaced.
 
-**One-time cleanup.** Any tombstone written by an earlier build contains a
-cleartext email at `deletedAccounts/<email>`. The delete handler now removes that
-document when the same account is deleted again, but nothing else will. If you
-want them gone now, open Firestore → `deletedAccounts` and delete the documents
-whose id looks like an address (fingerprints are 64 hex characters).
+**One-time migration (do this before pointing 1.5.17 at users).** Tombstones
+written by earlier builds sit at `deletedAccounts/<email>`, and the offer check
+now only looks up fingerprints — so everyone who deleted before this build can
+claim the ₹1 month again. Do **not** delete those documents by hand: the address
+is the only evidence left. Convert them instead:
+
+```
+cd backend
+TOMBSTONE_SECRET=<production key> FIREBASE_SERVICE_ACCOUNT_JSON=<json> \
+  node tools/migrate_tombstones.js          # dry run: prints counts only
+TOMBSTONE_SECRET=<production key> FIREBASE_SERVICE_ACCOUNT_JSON=<json> \
+  node tools/migrate_tombstones.js --apply  # writes fingerprints, deletes old docs
+```
+
+The script never prints an address, preserves each record's original
+`deleted_at`, is idempotent (fingerprint ids are skipped), and merges two legacy
+documents that normalise to the same address into one fingerprint. Run it with
+the **same** `TOMBSTONE_SECRET` the server uses, or the documents it writes will
+never match.
 
 ## 11. Things not to do
 

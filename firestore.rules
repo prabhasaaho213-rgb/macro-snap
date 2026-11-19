@@ -164,12 +164,18 @@ service cloud.firestore {
         && request.resource.data.size() <= 10;
     }
 
-    // ─── deletedAccounts/{identifier} — deletion tombstones ────────────
+    // ─── deletedAccounts/{fingerprint} — deletion tombstones ───────────
     // Written ONLY by the backend via the Admin SDK (rules bypass) when an
-    // account deletes itself, and NEVER wiped. It remembers the identifier so
-    // delete -> re-register cannot re-claim the offers that are once per
-    // account (the ₹1 intro month). Clients must never read or write it.
-    match /deletedAccounts/{identifier} {
+    // account deletes itself. The document id is an HMAC of the account's
+    // identifier, keyed with a secret that lives only in the server's
+    // environment — never the email itself, so this collection cannot be turned
+    // into a list of addresses. Each document holds { deleted_at } only.
+    //
+    // It exists so delete -> re-register cannot re-claim the ₹1 intro month. It
+    // is not permanent: the offer check ignores records older than 24 months,
+    // and the backend deletes expired documents at the next account deletion.
+    // Clients must never read or write it.
+    match /deletedAccounts/{fingerprint} {
       allow read, write: if false;
     }
 

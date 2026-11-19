@@ -45,16 +45,25 @@ We will process your request within **7 business days**.
 ## What Data Is Retained
 
 **One record is kept on purpose: a deletion tombstone.** When you delete your
-account, MacroSnap stores the identifier you signed up with (your email
-address) in a `deletedAccounts` record so the same identity cannot be used to
+account, MacroSnap stores a **one-way fingerprint** of the email address you
+signed up with, and the date of deletion, so the same identity cannot be used to
 claim the once-per-account ₹1 first-month offer a second time.
 
-- It contains **only the identifier** — no meals, habits, name, photos, history
-  or subscription state, and it is not linked to any active account.
-- It is kept **indefinitely**, because a fingerprint with an expiry would let
-  the offer be farmed again once the expiry passed.
+- The fingerprint is a keyed hash (HMAC) of the address, not the address. It
+  cannot be turned back into your email without the secret key, which lives only
+  in the server environment — not in the app, not in the code, not in this
+  repository.
+- It contains **only that fingerprint and the deletion date** — no meals,
+  habits, name, phone, photos, history, trial data or subscription state, and it
+  is not linked to any active account.
+- It is kept for **at most 24 months**: after that it no longer counts for the
+  offer, and the record is deleted at the next account deletion.
 - It is never shown to any other user, and it is not readable or writable by
   the app (server-only).
+- It can be **erased sooner on request** — email
+  [macrosnap7@gmail.com](mailto:macrosnap7@gmail.com) from any address. The only
+  consequence is that the ₹1 offer could then be claimed again with that email
+  address.
 
 Also retained, as described in the [privacy policy](PRIVACY_POLICY.md):
 

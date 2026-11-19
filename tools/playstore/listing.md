@@ -62,7 +62,7 @@ PRIVACY
 • No ads, and no selling of data.
 • Delete your account from Settings → Delete account. That removes your data.
   One record survives so the same ₹1 first-month offer cannot be claimed twice:
-  a one-way fingerprint of your email, deleted automatically after 24 months and
+  a one-way fingerprint of your email, which stops counting after 24 months,
   erased on request.
 • Privacy policy: https://prabhasaaho213-rgb.github.io/macro-snap/
 
