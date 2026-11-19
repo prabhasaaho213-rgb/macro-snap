@@ -176,8 +176,19 @@ takes down scans, payments and sign-in — not just deletion. The safe order is:
    variable, `type: encrypted` / `visibility: config`, scoped to Production;
    that is *not* Edge Config — the server reads `process.env`, and Edge Config
    would never reach it);
-2. run the migration below with that same value;
-3. deploy.
+2. deploy;
+3. open the app once so a live instance handles a request, then confirm
+   `meta/tombstone_key_check` exists (Firebase Console → Firestore → `meta` →
+   `tombstone_key_check`);
+4. run the migration below with that same value.
+
+This order costs exactly one thing: between step 2 and step 4, accounts deleted
+by earlier builds can still claim the ₹1 month, because their legacy documents
+are invisible to the offer check. That window is minutes, and the migration is
+safe to re-run. It is far cheaper than migrating first: only the deployed server
+publishes the canary, so a migration run before the deploy has nothing to check
+the key against — which is exactly the silent failure this mechanism exists to
+catch.
 
 After the deploy, the first thing to check in Project → Logs is that
 `TOMBSTONE_SECRET is required` does **not** appear — if it does, the variable is
@@ -193,15 +204,29 @@ server publishes a canary: on the first request of each instance it writes
 `meta/tombstone_key_check` = HMAC(key, `macrosnap-tombstone-key-check-v1`), and
 the migration recomputes it and **refuses to write on a mismatch**.
 
-To confirm the canary exists before running anything: Firebase Console →
-Firestore → `meta` → `tombstone_key_check`. Two caveats learned from doing this:
-a canary written at module load is dropped when the instance freezes after
-answering (hence "first request"), and the CLI's `vercel logs` returns only the
-startup lines for this project — request-time `console.log` output was not
-visible there, so do not conclude the canary is missing from an empty log. `key
-verified against the server canary` is the line you want; `unverified (no canary
-yet)` means the server has not booted with this key, and `MISMATCH — refused`
-means you are holding the wrong value.
+The canary is written on the first request of each instance (a write started at
+module load is dropped when the instance freezes after answering), so "it does
+not exist" at migration time means step 2 or step 3 has not happened. `--apply`
+now **refuses** in that case instead of warning, because a missing canary cannot
+prove the key. It also refuses when the document could not be read at all
+(`ERROR reading the canary`): a permission or network failure is not evidence
+that the server has not booted. `--force` overrides either refusal and is only
+correct when you deleted the document on purpose.
+
+The server never overwrites the canary. If the stored value does not match its
+key it logs `tombstone canary MISMATCH: meta/tombstone_key_check holds a value
+from a different TOMBSTONE_SECRET` and leaves the document untouched. Overwriting
+would defeat the whole check: a changed key — or a laptop run with production
+credentials and no secret, which falls back to the development key — would simply
+rewrite the canary to match itself. To rotate the key deliberately, delete
+`meta/tombstone_key_check` and let the next request publish the new value.
+
+The CLI's `vercel logs` returns only the startup lines for this project —
+request-time output was not visible there — so do not conclude the canary is
+missing from an empty log; check the document itself. The migration's last line
+names the case it hit: `key verified against the server canary` is the good one;
+`unverified (no canary yet)` and `ERROR reading the canary` both refuse to write
+unless forced.
 
 The privacy policy and the deletion page changed on 19 Nov 2026. Both make two
 promises that must be true in the running system, not just in the HTML:
@@ -253,7 +278,9 @@ documents that normalise to the same address into one fingerprint — keeping th
 deleted". It commits in chunks of 200 records (400 operations), because a
 Firestore commit allows 500 and the old single-batch version would have failed
 on a collection of more than ~250 records. Run it with the **same**
-`TOMBSTONE_SECRET` the server uses, or the documents it writes will never match.
+`TOMBSTONE_SECRET` the server uses, or the documents it writes will never match —
+that is why it reads the canary first and refuses to write while the key is
+unconfirmed.
 
 A failed purge is now logged as `tombstone purge failed (Firestore|Postgres): …`
 in the function logs rather than swallowed, so Search the logs for that string if
