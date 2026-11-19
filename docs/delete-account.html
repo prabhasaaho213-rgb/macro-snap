@@ -82,7 +82,7 @@
 <body>
     <div class="container">
         <h1>Delete Your Account</h1>
-        <p class="date">Last updated: November 15, 2026</p>
+        <p class="date">Last updated: November 19, 2026</p>
 
         <p>You have the right to delete your MacroSnap account and associated data at any time. Below are the methods available to request account deletion.</p>
 
@@ -99,11 +99,16 @@
         <div class="note">
             <strong>What is retained (if applicable):</strong>
             <ul>
-                <li><strong>A deletion record holding only the email address you signed up with.</strong>
-                    It exists so the once-per-account ₹1 first-month offer cannot be claimed again by
-                    deleting and re-registering. It holds no meals, habits, name, photos or history,
-                    is not linked to any active account, and is kept indefinitely — a record with an
-                    expiry would let the offer be farmed again.</li>
+                <li><strong>A deletion record holding a one-way fingerprint of your email address, plus
+                    the date of deletion.</strong> It exists so the once-per-account ₹1 first-month offer
+                    cannot be claimed again by deleting and re-registering. The fingerprint is a keyed
+                    hash (HMAC): it cannot be turned back into your email address without our server
+                    key, and the app cannot read it. It holds no meals, habits, name, phone, photos,
+                    history or trial data, and is not linked to any active account. It is deleted
+                    automatically after <strong>24 months</strong>, and we will erase it sooner on
+                    request — email <strong>macrosnap7@gmail.com</strong> from any address. The only
+                    consequence of erasing it is that the ₹1 offer could then be claimed again with
+                    that email address.</li>
                 <li>Anonymous crash reports (no personal identifiers, 90 days)</li>
                 <li>Transaction records held by Razorpay for tax/accounting purposes (90 days)</li>
             </ul>

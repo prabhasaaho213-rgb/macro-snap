@@ -159,12 +159,47 @@ One written review, asking for better diet plans. Suggested public reply:
 > not have seen it. If you tell me which meals you want covered (South Indian
 > breakfasts? high-protein veg?), I'll make sure the planner gets those right.
 
-## 10. Things not to do
+## 10. Publish the updated policy, and check the Gemini tier once
+
+The privacy policy and the deletion page changed on 19 Nov 2026. Both make two
+promises that must be true in the running system, not just in the HTML:
+
+1. **The billed Gemini tier.** The policy says Google logs images for abuse
+   monitoring for a limited period (up to 55 days) and does not use them to
+   improve its products. That second half is only true for a Cloud project with
+   **billing enabled** — on the free tier Google's terms let it use the content
+   to improve its services and to have reviewers read it. Open Google Cloud →
+   *Billing* and confirm the project holding `GEMINI_API_KEY` has an active
+   billing account. If it does not, either enable it or change the policy text,
+   because as written it would be wrong.
+2. **The 24-month deletion record.** `deleted_accounts` rows now hold an HMAC
+   fingerprint instead of an email, and rows older than 24 months are deleted on
+   the next account deletion. No scheduled job is needed, and none exists — so
+   the purge only runs when somebody deletes an account. On a quiet month the
+   row simply lives a little longer than 24 months, which is what the policy's
+   "automatically after 24 months" is describing.
+
+Publish `app/docs/index.html` and `app/docs/delete-account.html` wherever the
+GitHub Pages site is served from, then load both URLs in a private window and
+confirm the new paragraphs are visible. A policy that says something the server
+does not do is worse than the vaguer text it replaced.
+
+**One-time cleanup.** Any tombstone written by an earlier build contains a
+cleartext email at `deletedAccounts/<email>`. The delete handler now removes that
+document when the same account is deleted again, but nothing else will. If you
+want them gone now, open Firestore → `deletedAccounts` and delete the documents
+whose id looks like an address (fingerprints are 64 hex characters).
+
+## 11. Things not to do
 
 - **Don't enable App Check enforcement** before the metrics look clean.
 - **Don't ask friends for 5-star reviews.** Play treats it as fake engagement.
 - **Don't upload 1.5.17 to Play without the AAB** (`releases/1.5.17/*.aab`) — the
   APK is for sideloading.
+- **Don't describe a photo as "not retained" by anyone.** We retain nothing; Google
+  keeps abuse-monitoring logs for a limited period. Say that.
+- **Don't let a paid feature reach the store page without a `403 pro_required`
+  or a `ScanGate` branch behind it.**
 - **Don't skip the version bump** on the next release: `pubspec.yaml`,
   `lib/core/app_version.dart` and the changelog entry in
   `lib/screens/updates_screen.dart` are checked against each other by

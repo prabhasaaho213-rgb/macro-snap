@@ -55,12 +55,15 @@ PRICING — NO SURPRISES
 PRIVACY
 • Your meals, habits, weight and plan are stored on your device and synced to
   your own account so a reinstall does not lose them.
-• Meal photos are sent to our server only to be analysed, and are never shared
-  with third parties.
+• Meal photos are sent to our server only to be analysed, then handed to
+  Google's Gemini API and discarded by us. We store no copy. Google logs API
+  requests for abuse monitoring for a limited period (up to 55 days) and, on
+  the billed tier we use, does not use them to improve its products.
 • No ads, and no selling of data.
-• Delete your account from Settings → Delete account. That removes your data;
-  only a record that the account existed is kept so the same welcome offer
-  cannot be claimed twice.
+• Delete your account from Settings → Delete account. That removes your data.
+  One record survives so the same ₹1 first-month offer cannot be claimed twice:
+  a one-way fingerprint of your email, deleted automatically after 24 months and
+  erased on request.
 • Privacy policy: https://prabhasaaho213-rgb.github.io/macro-snap/
 
 ABOUT ACCURACY
@@ -119,7 +122,7 @@ from this table and check the current build against it before submitting.
 | Personal info → Name | Yes | The nickname you choose, shown in the app and stored with your account. |
 | Personal info → Email address | Yes | From Google sign-in; used as the account identity. |
 | Health and fitness → Fitness info | Yes | Height, weight, age, goal, activity level and the meals you log. Collected because the plan and targets are computed from them. |
-| Photos and videos → Photos | Yes | The meal photo you choose or take. Sent to the server for analysis; not used for anything else. |
+| Photos and videos → Photos | Yes | The meal photo you choose or take. Sent to the server, analysed by Google's Gemini API, discarded by us; never used for advertising or model training. |
 | Financial info → Purchase history | Yes | Subscription state from Razorpay/Play. Card details never reach the app or our server. |
 | App activity → Other actions | Yes | Meals, habits, water and streak days you log. |
 | Device or other IDs | Yes | Firebase installation ID, used to keep your session and sync working. |

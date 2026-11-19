@@ -64,7 +64,7 @@
 <body>
     <div class="container">
         <h1>Privacy Policy</h1>
-        <p class="date">Last updated: November 15, 2026</p>
+        <p class="date">Last updated: November 19, 2026</p>
 
         <p>MacroSnap ("we", "our", or "us") is committed to protecting your privacy. This Privacy Policy explains how we collect, use, and safeguard your information when you use our mobile application.</p>
 
@@ -112,8 +112,8 @@
             <li><strong>Local Storage:</strong> A copy of your meals, habits, preferences and settings is kept on your device so the app works offline</li>
             <li><strong>Cloud Sync:</strong> When you sign in, your data is saved automatically and continuously to Cloud Firestore (Firebase), keyed to your account, so it restores on any device you sign into</li>
             <li><strong>Firebase:</strong> Authentication is handled by Firebase (Google)</li>
-            <li><strong>Photos & scans:</strong> Food images are sent to Google Gemini AI for analysis and are not retained by us; a copy of a logged meal's photo is kept on your device for the window you choose, and optionally in Cloud Firestore if you enable Pro photo backup</li>
-            <li><strong>Deletion record:</strong> when you delete your account, one record holding only the identifier you signed up with (your email address) is kept indefinitely, so the once-per-account ₹1 first-month offer cannot be claimed again by deleting and re-registering. It contains no meals, habits, name, photos or history, is not linked to any active account, and is not readable by the app</li>
+            <li><strong>Photos &amp; scans:</strong> Food images are sent to Google Gemini AI for analysis. <strong>We</strong> store no copy of the image on our servers — it is decoded in memory, sent, and discarded. Google's own terms govern what happens at its end: images and prompts sent through the Gemini API are logged for a limited period for abuse monitoring (currently up to 55 days), and when the API is used on a billed project — which is how MacroSnap runs it — Google does not use that content to improve its products. If the key were ever moved to the free (unbilled) tier, Google's terms would allow it to use that content to improve its services and to have reviewers read it, which is why production stays on the billed tier. A copy of a logged meal's photo is kept on your device for the window you choose, and optionally in Cloud Firestore if you enable Pro photo backup</li>
+            <li><strong>Deletion record:</strong> when you delete your account, we keep exactly one record: a one-way, keyed fingerprint (an HMAC) of the email address you signed up with, and the deletion date. It cannot be turned back into your email address without our server key, it contains no meals, habits, name, phone, photos, history or trial data, it is not linked to any active account, and the app cannot read it. Its only purpose is to stop the once-per-account ₹1 first-month offer being claimed again by deleting and re-registering. It is <strong>deleted automatically after 24 months</strong>, and you can ask us to erase it sooner at <strong>macrosnap7@gmail.com</strong> — the only consequence is that the ₹1 offer could then be claimed again with that address</li>
         </ul>
 
         <h2>4. Third-Party Services</h2>
@@ -134,6 +134,7 @@
             <li>Delete your account and all associated data — use the in-app <strong>Delete Account</strong> option in Settings, or see the <a href="delete-account.html">account deletion page</a>. The identifier-only deletion record described in section 3 is the one thing kept</li>
             <li>Opt out of data collection by uninstalling the app</li>
             <li>Request deletion of cloud-synced data by contacting us</li>
+            <li>Request erasure of the deletion fingerprint described in section 3, or a copy of your data, by emailing <strong>macrosnap7@gmail.com</strong>. We answer within 30 days, and erasing the fingerprint does not require an account — the request itself is the only record we keep of it</li>
         </ul>
 
         <h2>7. Children's Privacy</h2>
