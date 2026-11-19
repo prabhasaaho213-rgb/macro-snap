@@ -168,6 +168,21 @@ One written review, asking for better diet plans. Suggested public reply:
 
 ## 10. Publish the updated policy, and check the Gemini tier once
 
+**Order of operations for the tombstone key.** The function throws at load when
+`TOMBSTONE_SECRET` is missing in production, so a deploy without the variable
+takes down scans, payments and sign-in — not just deletion. The safe order is:
+
+1. set `TOMBSTONE_SECRET` in Vercel (done: added as **Config** so the migration
+   can pull it with `vercel env pull`; a Secret is unreadable, even by you);
+2. run the migration below with that same value;
+3. deploy.
+
+A key that differs between step 1 and step 2 is the quiet failure: the migration
+succeeds and writes fingerprints that the server will never match, so everyone
+who deleted before still gets ₹1. The script reports `key confirmed` when some
+legacy address's fingerprint already exists — a positive signal. If it says
+`NOT confirmed`, stop and check the value before `--apply`.
+
 The privacy policy and the deletion page changed on 19 Nov 2026. Both make two
 promises that must be true in the running system, not just in the HTML:
 
@@ -213,9 +228,16 @@ TOMBSTONE_SECRET=<production key> FIREBASE_SERVICE_ACCOUNT_JSON=<json> \
 
 The script never prints an address, preserves each record's original
 `deleted_at`, is idempotent (fingerprint ids are skipped), and merges two legacy
-documents that normalise to the same address into one fingerprint. Run it with
-the **same** `TOMBSTONE_SECRET` the server uses, or the documents it writes will
-never match.
+documents that normalise to the same address into one fingerprint — keeping the
+**later** deletion date, since that is the one that says "this identity has
+deleted". It commits in chunks of 200 records (400 operations), because a
+Firestore commit allows 500 and the old single-batch version would have failed
+on a collection of more than ~250 records. Run it with the **same**
+`TOMBSTONE_SECRET` the server uses, or the documents it writes will never match.
+
+A failed purge is now logged as `tombstone purge failed (Firestore|Postgres): …`
+in the function logs rather than swallowed, so Search the logs for that string if
+you ever need to prove the cleanup ran.
 
 ## 11. Things not to do
 
