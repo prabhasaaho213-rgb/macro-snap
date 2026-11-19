@@ -50,8 +50,22 @@ class _UpdatesScreenState extends State<UpdatesScreen> {
   static const List<_UpdateEntry> _changelog = [
     _UpdateEntry(
       version: UpdatesScreen.latestVersion,
-      date: '2026-11-10',
+      date: '2026-11-15',
       isLatest: true,
+      notes: [
+        'Skipping setup no longer makes up numbers for you — until you enter your height, weight and age, the app does not pretend to know your targets',
+        'Your calorie streak belongs to your account now: a second account on the same phone no longer inherits it, and a reinstall restores it instead of starting from zero',
+        'Pro is tied to the account that paid for it, so signing in as someone else on a shared phone no longer leaves them with your subscription',
+        'The BMI band always matches the score on screen, and weight loss is blocked only below the healthy range',
+        'Switching between cm and inches now saves the height you can actually see, and the age dial saves what it shows',
+        'Your water goal is editable instead of fixed at 8 glasses, and habit streaks count calendar days across daylight-saving changes',
+        'Barcodes reject impossible nutrition values and fill in missing calories from the macros, and a scan that times out says so instead of blaming the connection',
+        'The app no longer asks for microphone or NFC access, which it never used',
+      ],
+    ),
+    _UpdateEntry(
+      version: '1.5.16',
+      date: '2026-11-10',
       notes: [
         'Meals you log offline upload by themselves once the connection is back, and a meal deleted on another phone no longer comes back here',
         'Long-press a meal to edit its name, calories, macros or time instead of deleting it and scanning again',
