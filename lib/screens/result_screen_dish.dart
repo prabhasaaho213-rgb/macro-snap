@@ -108,6 +108,15 @@ extension _ResultDish on _ResultScreenState {
                   ),
                 ],
               ),
+              const SizedBox(height: 4),
+              Text(
+                '${(dish.grams > 0 ? dish.grams : totalGrams).round()} g · per 100 g values',
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                  color: MacroSnapTheme.textTertiary(context),
+                ),
+              ),
             ],
           ),
         ),

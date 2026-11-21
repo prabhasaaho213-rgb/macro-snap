@@ -45,6 +45,26 @@ class _StartupSplashState extends State<StartupSplash>
   /// animation that makes the wait feel longer than it is.
   bool _introDone = false;
 
+  /// The static flame logo shown behind the Lottie and as the Lottie's
+  /// first-frame placeholder. Showing it (instead of an empty [SizedBox])
+  /// during the brief `loaded == null` window means the logo area is never
+  /// momentarily transparent over the dark splash.
+  static Widget get _logoMarker {
+    return Container(
+      width: 88,
+      height: 88,
+      decoration: const BoxDecoration(
+        gradient: MacroSnapTheme.accentGradient,
+        borderRadius: BorderRadius.all(Radius.circular(26)),
+      ),
+      child: const Icon(
+        Icons.local_fire_department_rounded,
+        size: 46,
+        color: Colors.white,
+      ),
+    );
+  }
+
   /// The delayed detach fired when the composition ends. Held so [dispose]
   /// can cancel it — a timer outliving the widget leaks (and fails tests).
   Timer? _introEnd;
@@ -100,8 +120,12 @@ class _StartupSplashState extends State<StartupSplash>
                             'assets/animations/logo_intro.json',
                             repeat: false,
                             frameBuilder: (context, child, loaded) {
+                              // Never paint an empty (transparent) slot over the dark
+                              // splash: while the composition is still being resolved show
+                              // the static flame logo instead, so the logo area is never
+                              // momentarily blank at the very first frame.
                               if (loaded == null) {
-                                return const SizedBox.shrink();
+                                return _logoMarker;
                               }
                               return child;
                             },
@@ -111,7 +135,9 @@ class _StartupSplashState extends State<StartupSplash>
                                   setState(() => _introDone = true);
                                 }
                               });
-                              return const SizedBox.shrink();
+                              // A corrupt Lottie asset degrades to the static logo
+                              // rather than an empty screen on launch.
+                              return _logoMarker;
                             },
                             onLoaded: (composition) {
                               // Detach after the composition ends so the last

@@ -76,11 +76,20 @@ class _HomeScreenState extends State<HomeScreen>
       vsync: this,
       duration: const Duration(milliseconds: 800),
     );
-    _fadeAnim = CurvedAnimation(parent: _animController, curve: Curves.easeOut);
+    // Start the entrance near-visible so the body is never invisible while
+    // the stores are still loading. Waiting for the loads to finish before
+    // showing the screen is what left the home blank for seconds after the
+    // splash disappeared on cold starts.
+    _fadeAnim = CurvedAnimation(
+      parent: _animController,
+      curve: Curves.easeOut,
+    );
     _slideAnim = Tween<Offset>(
-      begin: const Offset(0, 0.04),
+      begin: const Offset(0, 0.02),
       end: Offset.zero,
     ).animate(CurvedAnimation(parent: _animController, curve: Curves.easeOut));
+    // Visible on the very first frame — no waits on the stores.
+    _animController.value = 0.97;
     MealStore.instance.changeNotifier.addListener(_onDataChanged);
     userNameNotifier.addListener(_onNameChanged);
     SubscriptionService.instance.addListener(_onSubscriptionChanged);
@@ -222,7 +231,9 @@ class _HomeScreenState extends State<HomeScreen>
       _guruUnlocked = SubscriptionService.instance.isSubscribed;
     });
     userNameNotifier.value = name;
-    _animController.forward();
+    // Entrance is already visible; glide the rest of the way now that the
+    // real numbers are on screen.
+    _animController.forward(from: 0.97);
 
     // Best-effort: the server is the authority on the free-scan allowance, so
     // reconcile the badge once the screen is already up.

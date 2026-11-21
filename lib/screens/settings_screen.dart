@@ -1,4 +1,4 @@
-import 'dart:async';
+﻿import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
@@ -32,6 +32,7 @@ import 'phone_login_screen.dart';
 import 'onboarding_screen.dart';
 import 'updates_screen.dart';
 import 'referral_screen.dart';
+import 'profile_screen.dart';
 import '../services/crash_reporting.dart';
 
 /// The account-deletion flow, as top-level functions so it can be opened from
@@ -646,6 +647,23 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
             ),
             const SizedBox(height: 20),
+            const Divider(height: 18),
+            AnimatedEntrance(
+              delayMs: 80,
+              child: _settingTile(
+                Icons.person_rounded,
+                'Profile',
+                'Name, details, BMI, badges and account',
+                () {
+                  Navigator.push(
+                    context,
+                    habitFlowRoute(const ProfileScreen()),
+                  );
+                },
+                isDark,
+              ),
+            ),
+            const SizedBox(height: 18),
             // Settings list card
             GlassCard(
               padding: const EdgeInsets.all(16),

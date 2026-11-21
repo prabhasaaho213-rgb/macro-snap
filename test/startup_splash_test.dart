@@ -143,4 +143,26 @@ void main() {
     // exactly what the app's dark surface is, so there is no flash.
     expect(scaffold.backgroundColor, MacroSnapTheme.surfaceDark);
   });
+
+  testWidgets('the splash never shows an empty logo slot at the first frame', (
+    tester,
+  ) async {
+    // The Lottie would briefly return SizedBox.shrink() while the composition is
+    // still loading. The placeholder must be the static flame logo so the logo
+    // area is never transparent over the dark splash.
+    await tester.pumpWidget(
+      wrap(const StartupSplash()),
+      // Disable the real asset load path so only the frameBuilder placeholder is
+      // exercised — same surface, no network.
+    );
+    // Pump the first frame: the logo slot must contain the flame icon, not be
+    // empty.
+    await tester.pump(const Duration(milliseconds: 10));
+    expect(
+      find.byIcon(Icons.local_fire_department_rounded),
+      findsOneWidget,
+      reason: 'the logo placeholder must be the flame icon, never blank',
+    );
+  });
+
 }

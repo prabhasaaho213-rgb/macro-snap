@@ -1,4 +1,4 @@
-import 'package:firebase_auth/firebase_auth.dart';
+﻿import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../core/app_nav.dart';
@@ -11,7 +11,7 @@ import '../widgets/notification_prompt.dart';
 import '../widgets/badge_board.dart';
 import 'home_screen.dart';
 import 'habits_tab.dart';
-import 'profile_screen.dart';
+import 'health_dashboard_screen.dart';
 import 'scan_screen.dart';
 import 'subscription_screen.dart';
 
@@ -284,15 +284,14 @@ class _MainShellState extends State<MainShell> {
 
   /// Cached tab pages so switching tabs doesn't re-create screens.
   ///
-  /// Order is the nav order: Home · Cam · Habits · Profile. Profile is a tab
-  /// of its own now — it used to be the first row inside Settings, which hid
-  /// the one screen that answers "what does the app know about me?" behind a
-  /// settings list.
+  /// Order is the nav order: Home Â· Cam Â· Habits Â· Health. The Health tab
+  /// shows today's steps and calories from Health Connect alongside the food
+  /// logs, so activity and intake live in one place.
   late final List<Widget> _tabPages = const [
     HomeScreen(),
     ScanScreen(),
     HabitsTab(),
-    ProfileScreen(),
+    HealthDashboardScreen(),
   ];
 
   /// Keeps every visited tab mounted and paints only the selected one.
@@ -394,7 +393,7 @@ class _MainShellState extends State<MainShell> {
                   onTap: () => _goToTab(2),
                 ),
                 _NavItemCircle(
-                  icon: Icons.person_rounded,
+                  icon: Icons.fitness_center_rounded,
                   isSelected: _currentIndex == 3,
                   onTap: () => _goToTab(3),
                 ),
@@ -418,8 +417,8 @@ class _MainShellState extends State<MainShell> {
                   onTap: () => _goToTab(2),
                 ),
                 _NavItem(
-                  icon: Icons.person_rounded,
-                  label: 'Profile',
+                  icon: Icons.fitness_center_rounded,
+                  label: 'Health',
                   isSelected: _currentIndex == 3,
                   onTap: () => _goToTab(3),
                 ),
@@ -547,7 +546,7 @@ class _NavItemCircle extends StatelessWidget {
         Icons.home_rounded => 'Home',
         Icons.photo_camera_rounded => 'Cam',
         Icons.favorite_rounded => 'Habits',
-        _ => 'Profile',
+        _ => 'Health',
       },
       excludeSemantics: true,
       child: GestureDetector(

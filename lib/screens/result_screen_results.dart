@@ -1,4 +1,4 @@
-part of 'result_screen.dart';
+﻿part of 'result_screen.dart';
 
 // Split out of result_screen.dart. Same library, so these builders keep access to
 // the screen's private state without threading parameters through.
@@ -431,92 +431,413 @@ extension _ResultResults on _ResultScreenState {
 
   /// Total-serving gram adjuster. Defaults to 100 g; the user can raise or
   /// lower it and every item's nutrients rescale from their per-100g values.
+  ///
+  /// The grams value itself is tappable: tapping it opens a numeric keypad so
+  /// the user can type an exact weight (e.g. 120 g) and commit it with Enter.
+  /// Every macro then recomputes from the new total, the same way the +/- and
+  /// the Edit sheet do.
   Widget _buildGramAdjuster(bool isDark) {
-    return GlassCard(
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        child: Row(
-          children: [
-            Icon(
-              Icons.scale_rounded,
-              size: 18,
-              color: MacroSnapTheme.textTertiary(context),
-            ),
-            const SizedBox(width: 8),
-            Flexible(
-              child: Text(
-                // The label wraps to a second line when the controls crowd it
-                // instead of shrinking into "Total Serv…".
-                'Total Serving',
-                maxLines: 2,
-                style: TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600,
-                  color: MacroSnapTheme.textSecondary(context),
-                ),
-              ),
-            ),
-            const Spacer(),
-            Semantics(
-              button: true,
-              label: 'Decrease serving size',
-              child: GestureDetector(
-                onTap: () => _setGrams(_grams >= 50 ? _grams - 25 : 25),
-                child: Container(
-                  padding: const EdgeInsets.all(6),
-                  decoration: BoxDecoration(
-                    color: MacroSnapTheme.neonGreen.withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: const Icon(
-                    Icons.remove_rounded,
-                    size: 18,
-                    color: MacroSnapTheme.neonGreen,
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(width: 12),
-            Text(
-              '$_grams',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.w800,
-                color: isDark ? Colors.white : const Color(0xFF1A1A1A),
-              ),
-            ),
-            const SizedBox(width: 4),
-            Text(
-              'g',
-              style: TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w500,
+    return SemanticTapTarget(
+      onTap: () => _editTotalGrams(isDark),
+      child: GlassCard(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          child: Row(
+            children: [
+              Icon(
+                Icons.scale_rounded,
+                size: 18,
                 color: MacroSnapTheme.textTertiary(context),
               ),
-            ),
-            const SizedBox(width: 12),
-            Semantics(
-              button: true,
-              label: 'Increase serving size',
-              child: GestureDetector(
-                onTap: () => _setGrams(_grams <= 975 ? _grams + 25 : 1000),
-                child: Container(
-                  padding: const EdgeInsets.all(6),
-                  decoration: BoxDecoration(
-                    color: MacroSnapTheme.neonGreen.withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: const Icon(
-                    Icons.add_rounded,
-                    size: 18,
-                    color: MacroSnapTheme.neonGreen,
+              const SizedBox(width: 8),
+              Flexible(
+                child: Text(
+                  // The label wraps to a second line when the controls crowd it
+                  // instead of shrinking into "Total Serv…".
+                  'Total Serving',
+                  maxLines: 2,
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: MacroSnapTheme.textSecondary(context),
                   ),
                 ),
               ),
+              const Spacer(),
+              Semantics(
+                button: true,
+                label: 'Decrease serving size',
+                child: GestureDetector(
+                  onTap: () => _setGrams(_grams >= 50 ? _grams - 25 : 25),
+                  child: Container(
+                    padding: const EdgeInsets.all(6),
+                    decoration: BoxDecoration(
+                      color: MacroSnapTheme.neonGreen.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: const Icon(
+                      Icons.remove_rounded,
+                      size: 18,
+                      color: MacroSnapTheme.neonGreen,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Semantics(
+                button: true,
+                label: 'Serving size in grams: $_grams',
+                child: GestureDetector(
+                  onTap: () => _editTotalGrams(isDark),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 6,
+                    ),
+                    decoration: BoxDecoration(
+                      color: MacroSnapTheme.neonGreen.withValues(alpha: 0.10),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(
+                        color: MacroSnapTheme.neonGreen.withValues(alpha: 0.25),
+                      ),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          '$_grams',
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w800,
+                            color: isDark
+                                ? Colors.white
+                                : const Color(0xFF1A1A1A),
+                          ),
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          'g',
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w500,
+                            color: MacroSnapTheme.textTertiary(context),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 4),
+              Semantics(
+                button: true,
+                label: 'Increase serving size',
+                child: GestureDetector(
+                  onTap: () => _setGrams(_grams <= 975 ? _grams + 25 : 1000),
+                  child: Container(
+                    padding: const EdgeInsets.all(6),
+                    decoration: BoxDecoration(
+                      color: MacroSnapTheme.neonGreen.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: const Icon(
+                      Icons.add_rounded,
+                      size: 18,
+                      color: MacroSnapTheme.neonGreen,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// Opens the numeric keypad so the user can type the total serving weight.
+  /// On Enter, the new total is committed and every macro is recomputed from
+  /// its per-100 g value, including the dish cards and the ingredients list.
+  Future<void> _editTotalGrams(bool isDark) async {
+    final controller = TextEditingController(text: _grams.toString());
+    final entered = await showDialog<int>(
+      context: context,
+      builder: (ctx) => _GramKeypadDialog(
+        controller: controller,
+        initial: _grams,
+      ),
+    );
+    controller.dispose();
+    if (entered == null || !mounted) return;
+    unawaited(HapticFeedback.mediumImpact());
+    _setGrams(entered);
+  }
+}
+
+/// A small numeric keypad so the user can type a serving weight in grams.
+/// This is the tap-to-edit path for the Total Serving card: the user taps the
+/// grams value, gets a visible keypad, types a number, and commits it with the
+/// Enter button ("Save").
+class _GramKeypadDialog extends StatefulWidget {
+  final TextEditingController controller;
+  final int initial;
+
+  const _GramKeypadDialog(
+    {required this.controller, required this.initial});
+
+  @override
+  State<_GramKeypadDialog> createState() => _GramKeypadDialogState();
+}
+
+class _GramKeypadDialogState extends State<_GramKeypadDialog> {
+  late final TextEditingController _ctrl;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = TextEditingController(text: widget.initial.toString());
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  void _append(String digit) {
+    if (digit == '.' && _ctrl.text.contains('.')) return;
+    final raw = _ctrl.text;
+    if (digit == '.' && raw.endsWith('.')) return;
+    final candidate = raw + digit;
+    if (int.tryParse(candidate) == null && !candidate.contains('.')) return;
+    final parsed = double.tryParse(candidate);
+    if (parsed == null) return;
+    // Keep reasonable bounds: 1 g to 10000 g.
+    if (parsed < 1 || parsed > 10000) return;
+    _ctrl.text = parsed == parsed.roundToDouble()
+        ? parsed.round().toString()
+        : parsed.toString();
+  }
+
+  void _backspace() {
+    if (_ctrl.text.isEmpty) return;
+    _ctrl.text = _ctrl.text.trimRight();
+    if (_ctrl.text.isEmpty) _ctrl.text = '0';
+  }
+
+  static const _inputMaxLength = 6;
+
+  int? _commit() {
+    // A pasted or manually entered value longer than the cap is reduced to
+    // the first _inputMaxLength characters so the parser and the 40-sp preview
+    // never see an absurdly long string.
+    if (_ctrl.text.length > _inputMaxLength) {
+      _ctrl.text = _ctrl.text.substring(0, _inputMaxLength);
+    }
+    final text = _ctrl.text.trim();
+    if (text.isEmpty) return null;
+    final parsed = int.tryParse(text);
+    if (parsed == null) {
+      final doubleParsed = double.tryParse(text);
+      if (doubleParsed == null) return null;
+      if (doubleParsed < 1 || doubleParsed > 10000) return null;
+      return doubleParsed.round();
+    }
+    if (parsed < 1 || parsed > 10000) return null;
+    return parsed;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return AlertDialog(
+      backgroundColor: isDark ? MacroSnapTheme.cardDark : Colors.white,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+      title: Row(
+        children: [
+          Container(
+            width: 36,
+            height: 36,
+            decoration: BoxDecoration(
+              color: MacroSnapTheme.neonGreen.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(10),
             ),
-          ],
+            child: const Icon(
+              Icons.edit_rounded,
+              color: MacroSnapTheme.neonGreen,
+              size: 18,
+            ),
+          ),
+          const SizedBox(width: 12),
+          const Text('Edit serving size'),
+        ],
+      ),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // Big read-only preview of what the user is typing.
+          Container(
+            alignment: Alignment.center,
+            padding: const EdgeInsets.symmetric(vertical: 18),
+            decoration: BoxDecoration(
+              color: isDark
+                  ? MacroSnapTheme.neonGreen.withValues(alpha: 0.06)
+                  : MacroSnapTheme.neonGreen.withValues(alpha: 0.08),
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(
+                color: MacroSnapTheme.neonGreen.withValues(alpha: 0.25),
+              ),
+            ),
+            child: Text(
+              _ctrl.text.isEmpty ? '0' : _ctrl.text,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: 40,
+                fontWeight: FontWeight.w800,
+                color: isDark ? Colors.white : const Color(0xFF1A1A1A),
+                letterSpacing: -1.2,
+              ),
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'grams',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: MacroSnapTheme.textTertiary(context),
+            ),
+          ),
+          const SizedBox(height: 16),
+          // Numeric keypad.
+          Wrap(
+            alignment: WrapAlignment.center,
+            spacing: 10,
+            runSpacing: 10,
+            children: [
+              for (final digit in ['1', '2', '3', '4', '5', '6', '7', '8', '9'])
+                _KeypadButton(
+                  label: digit,
+                  onTap: () {
+                    _append(digit);
+                    HapticFeedback.selectionClick();
+                  },
+                ),
+              _KeypadButton(
+                label: '.',
+                onTap: () {
+                  _append('.');
+                  HapticFeedback.selectionClick();
+                },
+              ),
+              _KeypadButton(
+                label: '0',
+                onTap: () {
+                  _append('0');
+                  HapticFeedback.selectionClick();
+                },
+              ),
+              _KeypadButton(
+                label: '⌫',
+                onTap: () {
+                  _backspace();
+                  HapticFeedback.selectionClick();
+                },
+              ),
+              _KeypadButton(
+                label: 'Clear',
+                onTap: () {
+                  _ctrl.text = '0';
+                  HapticFeedback.selectionClick();
+                },
+              ),
+            ],
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          onPressed: () {
+            final value = _commit();
+            if (value == null) {
+              HapticFeedback.selectionClick();
+              _ctrl.text = '0';
+              return;
+            }
+            HapticFeedback.mediumImpact();
+            Navigator.pop(context, value);
+          },
+          child: const Text('Save'),
+        ),
+      ],
+    );
+  }
+}
+
+class _KeypadButton extends StatelessWidget {
+  final String label;
+  final VoidCallback onTap;
+
+  const _KeypadButton({required this.label, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final isAction = label == 'Clear' || label == '⌫';
+    return SizedBox(
+      width: 64,
+      height: 54,
+      child: FilledButton(
+        onPressed: onTap,
+        style: FilledButton.styleFrom(
+          backgroundColor: isAction
+              ? MacroSnapTheme.textTertiary(context).withValues(alpha: 0.10)
+              : MacroSnapTheme.neonGreen,
+          foregroundColor: isAction
+              ? MacroSnapTheme.textTertiary(context)
+              : Colors.black,
+          shape: const CircleBorder(),
+          padding: EdgeInsets.zero,
+          minimumSize: const Size(0, 0),
+          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+        ),
+        child: Text(
+          label,
+          style: const TextStyle(
+            fontSize: 20,
+            fontWeight: FontWeight.w700,
+            height: 1.0,
+          ),
         ),
       ),
     );
   }
 }
+
+/// Marks a tappable widget for a11y while keeping one clear visual tap target.
+class SemanticTapTarget extends StatelessWidget {
+  final VoidCallback onTap;
+  final Widget child;
+
+  const SemanticTapTarget({super.key, required this.onTap, required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      button: true,
+      label: 'Edit total serving weight in grams',
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(24),
+        child: child,
+      ),
+    );
+  }
+}
+

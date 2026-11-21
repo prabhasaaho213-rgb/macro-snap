@@ -43,6 +43,7 @@ dependencies:
   lottie: ^3.6.1
   firebase_app_check: ^0.4.9
   in_app_review: ^2.0.12
+  health: 13.3.1
 
 dev_dependencies:
   flutter_test:

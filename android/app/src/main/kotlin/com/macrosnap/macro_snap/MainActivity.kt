@@ -10,7 +10,7 @@ import android.os.Bundle
 import android.os.Environment
 import android.provider.MediaStore
 import androidx.core.view.WindowCompat
-import io.flutter.embedding.android.FlutterActivity
+import io.flutter.embedding.android.FlutterFragmentActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
 import java.io.File
@@ -26,9 +26,12 @@ import java.io.File
  * achieves the same result and is confirmed working across all API levels.
  * Flutter's rendering pipeline draws under the system bars, and
  * [Scaffold] / [SafeArea] handle insets — so no layout changes needed.
+ *
+ * Extends [FlutterFragmentActivity] (not [FlutterActivity]) so the `health`
+ * plugin can use [registerForActivityResult] when requesting Health Connect
+ * permissions — that API contract requires the FragmentActivity base.
  */
-
-class MainActivity : FlutterActivity() {
+class MainActivity : FlutterFragmentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         // Draw under system bars on Android 15+ (SDK 35+).
         WindowCompat.setDecorFitsSystemWindows(window, false)

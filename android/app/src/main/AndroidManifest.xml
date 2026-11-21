@@ -1,4 +1,4 @@
-<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+﻿<manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
     <uses-permission android:name="android.permission.INTERNET"/>
     <uses-permission android:name="android.permission.CAMERA"/>
@@ -45,7 +45,15 @@
          still delivers on the platform's best-effort schedule. -->
     <uses-permission android:name="android.permission.VIBRATE"/>
     <!-- allowBackup=false: preferences hold the local Pro flag, and an Android
-         cloud backup would restore it onto a different device during setup. -->
+         cloud backup would restore it onto a different device during setup. -->
+    <!-- Required by the health plugin to read step counts from Health Connect / Google Fit. -->
+    <uses-permission android:name="android.permission.ACTIVITY_RECOGNITION"/>
+
+
+    <!-- Health Connect: read steps + calories burned so the health dashboard can show activity alongside food logs. -->
+    <uses-permission android:name="android.permission.health.READ_STEPS"/>
+    <uses-permission android:name="android.permission.health.READ_TOTAL_CALORIES_BURNED"/>
+    <uses-permission android:name="android.permission.health.WRITE_NUTRITION"/>
     <application
         android:label="MacroSnap"
         android:name="${applicationName}"
@@ -75,7 +83,10 @@
                 <action android:name="android.intent.action.MAIN"/>
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
-        </activity>
+                    <intent-filter>
+                <action android:name="androidx.health.ACTION_SHOW_PERMISSIONS_RATIONALE" />
+            </intent-filter>
+</activity>
         <!-- Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->
         <meta-data
@@ -103,7 +114,19 @@
                 <action android:name="com.htc.intent.action.QUICKBOOT_POWERON"/>
             </intent-filter>
         </receiver>
-    </application>
+    
+        <!-- Health Connect: activity alias so the permissions screen can link back to this app / privacy policy. -->
+        <activity-alias
+            android:name="ViewPermissionUsageActivity"
+            android:exported="true"
+            android:targetActivity=".MainActivity"
+            android:permission="android.permission.START_VIEW_PERMISSION_USAGE">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW_PERMISSION_USAGE" />
+                <category android:name="android.intent.category.HEALTH_PERMISSIONS" />
+            </intent-filter>
+        </activity-alias>
+</application>
     <!-- Required to query activities that can process text, see:
          https://developer.android.com/training/package-visibility and
          https://developer.android.com/reference/android/content/Intent#ACTION_PROCESS_TEXT.
@@ -134,5 +157,11 @@
             <action android:name="android.intent.action.PROCESS_TEXT"/>
             <data android:mimeType="text/plain"/>
         </intent>
-    </queries>
+    
+        <!-- Health Connect: let the app find the Health Connect app and show the permissions-rationale screen. -->
+        <package android:name="com.google.android.apps.healthdata" />
+        <intent>
+            <action android:name="androidx.health.ACTION_SHOW_PERMISSIONS_RATIONALE" />
+        </intent>
+</queries>
 </manifest>

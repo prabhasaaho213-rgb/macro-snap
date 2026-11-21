@@ -23,7 +23,7 @@ class MacroBar extends StatelessWidget {
   final bool isDark;
   final String unit;
 
-  @override
+    @override
   Widget build(BuildContext context) {
     final pct = (value / max(target, 1)).clamp(0.0, 1.0);
     return Column(
@@ -34,27 +34,34 @@ class MacroBar extends StatelessWidget {
           children: [
             Row(
               children: [
-                Container(
-                  width: 8,
-                  height: 8,
-                  decoration: BoxDecoration(
-                    color: color,
-                    shape: BoxShape.circle,
+                                  Container(
+                    width: 7,
+                    height: 7,
+                    decoration: BoxDecoration(
+                      color: color,
+                      shape: BoxShape.circle,
+                    ),
                   ),
-                ),
-                const SizedBox(width: 8),
-                Text(
-                  label,
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w700,
-                    color: MacroSnapTheme.textSecondary(context),
+                const SizedBox(width: 6),
+                Flexible(
+                  child: Text(
+                    label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      color: MacroSnapTheme.textSecondary(context),
+                      height: 1.15,
+                    ),
                   ),
                 ),
               ],
             ),
             Text(
               '${value.toStringAsFixed(0)} / ${target.toStringAsFixed(0)}$unit',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
               style: TextStyle(
                 fontSize: 12,
                 fontWeight: FontWeight.w700,
