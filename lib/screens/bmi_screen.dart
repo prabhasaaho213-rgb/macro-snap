@@ -37,6 +37,16 @@ class _BmiScreenState extends State<BmiScreen> {
     super.initState();
     // The trend card reads the history, and this screen writes to it.
     WeightStore.instance.addListener(_onWeightChanged);
+    // Start from the profile the app already loaded during startup instead of
+    // from the 70 kg / 170 cm sample numbers. Opening on the sample body and
+    // swapping to the real one a frame later made the gauge swing from 24.2 to
+    // the user's own score — the "glitch" every visit showed.
+    final profile = DietPlanService.instance.profile;
+    if (profile != null) {
+      _weightKg = profile.weightKg;
+      _heightCm = profile.heightCm;
+      _loadedProfile = true;
+    }
     _loadProfile();
   }
 
@@ -69,7 +79,9 @@ class _BmiScreenState extends State<BmiScreen> {
     if (!mounted) return;
     setState(() {
       _loadedProfile = profile != null;
-      if (profile != null) {
+      // Only adopt the profile's numbers while the user has not edited them
+      // here — a late load must not undo a weight just typed in.
+      if (profile != null && !_dirty) {
         _weightKg = profile.weightKg;
         _heightCm = profile.heightCm;
       }

@@ -335,7 +335,26 @@ class _SettingsScreenState extends State<SettingsScreen> {
   @override
   void initState() {
     super.initState();
+    // Pro can be granted or expire while this screen is open (server check,
+    // admin claim, referral window ending). The account card and the
+    // subscription row follow it instead of freezing the first reading.
+    SubscriptionService.instance.addListener(_onSubscriptionChanged);
     _load();
+  }
+
+  @override
+  void dispose() {
+    SubscriptionService.instance.removeListener(_onSubscriptionChanged);
+    super.dispose();
+  }
+
+  void _onSubscriptionChanged() {
+    if (!mounted) return;
+    setState(() {
+      _subscribed = SubscriptionService.instance.isSubscribed;
+      _subscribedDate = SubscriptionService.instance.subscribedAt;
+      _proUntil = SubscriptionService.instance.proUntil;
+    });
   }
 
   @override
@@ -648,19 +667,29 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
             const SizedBox(height: 20),
             const Divider(height: 18),
+            // Profile is a row like every other one on this screen, so it sits
+            // in the same card container. It used to be a bare tile floating
+            // on the page background between two cards — the one button that
+            // did not look like the rest.
             AnimatedEntrance(
               delayMs: 80,
-              child: _settingTile(
-                Icons.person_rounded,
-                'Profile',
-                'Name, details, BMI, badges and account',
-                () {
-                  Navigator.push(
-                    context,
-                    habitFlowRoute(const ProfileScreen()),
-                  );
-                },
-                isDark,
+              child: GlassCard(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 4,
+                ),
+                child: _settingTile(
+                  Icons.person_rounded,
+                  'Profile',
+                  'Name, details, BMI, badges and account',
+                  () {
+                    Navigator.push(
+                      context,
+                      habitFlowRoute(const ProfileScreen()),
+                    );
+                  },
+                  isDark,
+                ),
               ),
             ),
             const SizedBox(height: 18),

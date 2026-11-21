@@ -343,6 +343,13 @@ class _ScanScreenState extends State<ScanScreen> with WidgetsBindingObserver {
 
   void _navigateToResult(String path) {
     if (!mounted) return;
+    // Pause the viewfinder while the result card is on top of it. A live
+    // CameraPreview painting under a pushed route is what makes the hand-off
+    // flash black on some devices; resuming on return also means the preview
+    // is warm instead of re-opening the camera.
+    final controller = _controller;
+    final hadPreview = controller != null && controller.value.isInitialized;
+    if (hadPreview) unawaited(controller.pausePreview());
     Navigator.push(
       context,
       PageRouteBuilder(
@@ -356,7 +363,32 @@ class _ScanScreenState extends State<ScanScreen> with WidgetsBindingObserver {
           );
         },
       ),
-    );
+    ).whenComplete(() {
+      if (!mounted) return;
+      final live = _controller;
+      if (hadPreview &&
+          live != null &&
+          live.value.isInitialized &&
+          scanTabVisible.value) {
+        unawaited(live.resumePreview());
+      }
+    });
+  }
+
+  /// Leaves the scanner.
+  ///
+  /// The Scan screen is the shell's TAB, not a pushed route. `Navigator.pop`
+  /// from a tab popped the shell's root route instead, leaving the app with an
+  /// empty navigator — a black screen with no way back. Only pop when this
+  /// screen really was pushed (the Home "Snap" action used to do that); from
+  /// the tab, go Home.
+  void _closeScanner() {
+    final nav = Navigator.of(context);
+    if (nav.canPop()) {
+      nav.pop();
+      return;
+    }
+    openShellTab(0);
   }
 
   void _showPreview(String path) {
@@ -547,7 +579,7 @@ class _ScanScreenState extends State<ScanScreen> with WidgetsBindingObserver {
               color: Colors.white,
               size: 24,
             ),
-            onPressed: () => Navigator.pop(context),
+            onPressed: _closeScanner,
           ),
         ),
         body: Center(
@@ -804,7 +836,7 @@ class _ScanScreenState extends State<ScanScreen> with WidgetsBindingObserver {
                               color: Colors.white,
                               size: 26,
                             ),
-                            onPressed: () => Navigator.pop(context),
+                            onPressed: _closeScanner,
                           ),
                           const Spacer(),
                           Container(

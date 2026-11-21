@@ -468,7 +468,10 @@ extension _ResultResults on _ResultScreenState {
                 button: true,
                 label: 'Decrease serving size',
                 child: GestureDetector(
-                  onTap: () => _setGrams(_grams >= 50 ? _grams - 25 : 25),
+                  // 5 g per tap, and never below 5 g — the same step the
+                  // keypad and the store use. 25 g jumps were too coarse to
+                  // correct a portion you actually ate.
+                  onTap: () => _setGrams(_grams > 5 ? _grams - 5 : 5),
                   child: Container(
                     padding: const EdgeInsets.all(6),
                     decoration: BoxDecoration(
@@ -533,7 +536,7 @@ extension _ResultResults on _ResultScreenState {
                 button: true,
                 label: 'Increase serving size',
                 child: GestureDetector(
-                  onTap: () => _setGrams(_grams <= 975 ? _grams + 25 : 1000),
+                  onTap: () => _setGrams(_grams < 1000 ? _grams + 5 : 1000),
                   child: Container(
                     padding: const EdgeInsets.all(6),
                     decoration: BoxDecoration(
@@ -614,15 +617,25 @@ class _GramKeypadDialogState extends State<_GramKeypadDialog> {
     if (parsed == null) return;
     // Keep reasonable bounds: 1 g to 10000 g.
     if (parsed < 1 || parsed > 10000) return;
-    _ctrl.text = parsed == parsed.roundToDouble()
-        ? parsed.round().toString()
-        : parsed.toString();
+    // setState, not only the controller write: the preview above the keypad
+    // renders [_ctrl.text], and assigning to the controller does not rebuild
+    // this dialog. Without it the digits never appeared, every tap landed on
+    // a hidden buffer, and the grams edit looked like it did nothing at all.
+    setState(() {
+      _ctrl.text = parsed == parsed.roundToDouble()
+          ? parsed.round().toString()
+          : parsed.toString();
+      _ctrl.selection = TextSelection.collapsed(offset: _ctrl.text.length);
+    });
   }
 
   void _backspace() {
     if (_ctrl.text.isEmpty) return;
-    _ctrl.text = _ctrl.text.trimRight();
-    if (_ctrl.text.isEmpty) _ctrl.text = '0';
+    setState(() {
+      _ctrl.text = _ctrl.text.trimRight();
+      if (_ctrl.text.isEmpty) _ctrl.text = '0';
+      _ctrl.selection = TextSelection.collapsed(offset: _ctrl.text.length);
+    });
   }
 
   static const _inputMaxLength = 6;

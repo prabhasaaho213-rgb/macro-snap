@@ -35,10 +35,14 @@ extension _HomeMeals on _HomeScreenState {
                   MacroSnapTheme.neonGreen,
                   isDark,
                   () {
-                    Navigator.push(
-                      context,
-                      habitFlowRoute(const ScanScreen()),
-                    ).then((_) => _refresh());
+                    // Switch to the Scan TAB instead of pushing a second
+                    // ScanScreen on top of the shell. Two live ScanScreens
+                    // meant two CameraControllers fighting for the same
+                    // hardware — the whole app came back black when the pushed
+                    // copy was closed. The tab already exists and resumes its
+                    // paused preview instantly.
+                    _refresh();
+                    openShellTab(1);
                   },
                 ),
                 _quickAction(

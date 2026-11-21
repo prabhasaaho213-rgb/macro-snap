@@ -36,20 +36,46 @@ class _ProfileScreenState extends State<ProfileScreen> {
   String _phone = '';
   bool _subscribed = false;
   bool _isAdmin = false;
-  bool _loading = true;
 
   DietProfile? get _profile => DietPlanService.instance.profile;
 
   @override
   void initState() {
     super.initState();
+    // Paint from what the app already loaded (the plan is read during
+    // startup) instead of showing a spinner for a frame and then replacing it
+    // — that swap was the flash the page opened with.
+    _subscribed = SubscriptionService.instance.isSubscribed;
+    SubscriptionService.instance.addListener(_onSubscriptionChanged);
     _load();
   }
 
-  /// Paints the identity first (prefs are instant) and lets the body metrics
-  /// and plan fill in after. A brand-new account with no local profile file
-  /// waits on a cloud fetch inside [DietPlanService.load]; holding the whole
-  /// screen behind that would leave the user on a spinner for it.
+  @override
+  void dispose() {
+    SubscriptionService.instance.removeListener(_onSubscriptionChanged);
+    super.dispose();
+  }
+
+  /// A Pro grant can land while this screen is open (server check, admin
+  /// claim). Without this the plan chip and the Pro badges stayed on the
+  /// state the page was built with.
+  void _onSubscriptionChanged() {
+    if (!mounted) return;
+    setState(() {
+      _subscribed = SubscriptionService.instance.isSubscribed;
+    });
+    unawaited(_refreshAdmin());
+  }
+
+  Future<void> _refreshAdmin() async {
+    final isAdmin = await SubscriptionService.instance.isAdmin();
+    if (mounted && isAdmin != _isAdmin) setState(() => _isAdmin = isAdmin);
+  }
+
+  /// Fills the identity (prefs are instant) and then the body metrics. A
+  /// brand-new account with no local profile file waits on a cloud fetch
+  /// inside [DietPlanService.load], so the page is already readable while it
+  /// runs rather than being held behind a spinner.
   Future<void> _load() async {
     final prefs = await SharedPreferences.getInstance();
     if (!mounted) return;
@@ -57,17 +83,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
       _name = prefs.getString('name') ?? 'User';
       _email = prefs.getString('email') ?? '';
       _phone = prefs.getString('phone') ?? '';
-      _loading = false;
     });
 
     await DietPlanService.instance.load();
     await SubscriptionService.instance.load();
-    final isAdmin = await SubscriptionService.instance.isAdmin();
     if (!mounted) return;
     setState(() {
       _subscribed = SubscriptionService.instance.isSubscribed;
-      _isAdmin = isAdmin;
     });
+    await _refreshAdmin();
   }
 
   bool get _isGuest => _phone.isEmpty || _phone.startsWith('guest_');
@@ -185,9 +209,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               ),
             ),
             Expanded(
-              child: _loading
-                  ? const Center(child: CircularProgressIndicator())
-                  : ListView(
+              child: ListView(
                       padding: const EdgeInsets.fromLTRB(20, 8, 20, 28),
                       children: [
                         AnimatedEntrance(

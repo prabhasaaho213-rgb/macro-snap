@@ -37,6 +37,7 @@ class _MainShellState extends State<MainShell> {
     _currentIndex = shellTabIndex.value;
     _mountedTabs.add(_currentIndex);
     scanTabVisible.value = _currentIndex == 1;
+    healthTabVisible.value = _currentIndex == 3;
     shellTabIndex.addListener(_onShellTabChanged);
     // Launch prompts, ordered so dialogs never stack: subscription upsell
     // first, then the notification-permission ask if still denied.
@@ -63,6 +64,8 @@ class _MainShellState extends State<MainShell> {
     });
     // Lets the Scan tab pause its camera while the user is elsewhere.
     scanTabVisible.value = index == 1;
+    // Lets the Health tab poll only while it is the visible tab.
+    healthTabVisible.value = index == 3;
   }
 
   void _onShellTabChanged() {
@@ -72,6 +75,8 @@ class _MainShellState extends State<MainShell> {
   @override
   void dispose() {
     shellTabIndex.removeListener(_onShellTabChanged);
+    scanTabVisible.value = false;
+    healthTabVisible.value = false;
     super.dispose();
   }
 

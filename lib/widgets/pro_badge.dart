@@ -31,6 +31,19 @@ class ProBadge extends StatelessWidget {
     // isSubscribed covers all three ways to be Pro: a paid Razorpay plan, a
     // referral window, and the admin lifetime grant (which is stored as a
     // subscription with the 1900 marker), so the owner stops seeing chips too.
+    //
+    // ListenableBuilder, not a bare read: the subscription state arrives
+    // asynchronously (local load, then the server check, then the admin claim).
+    // A plain read froze whatever was true at the parent's last build, which is
+    // how a paid Pro account kept a PRO chip on screen until the whole screen
+    // happened to rebuild.
+    return ListenableBuilder(
+      listenable: SubscriptionService.instance,
+      builder: (context, _) => _buildChip(context),
+    );
+  }
+
+  Widget _buildChip(BuildContext context) {
     if (SubscriptionService.instance.isSubscribed) {
       return const SizedBox.shrink();
     }

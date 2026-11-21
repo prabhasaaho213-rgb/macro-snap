@@ -56,6 +56,19 @@ class MealPhoto extends StatelessWidget {
         width: width ?? size,
         height: size,
         fit: BoxFit.cover,
+        // Decode at the size we actually paint. Without this a 12 MP camera
+        // shot is decoded at full resolution for a 52 dp thumbnail — about
+        // 48 MB per image — and the decode fails on lower-end phones, which is
+        // exactly how a logged meal ended up showing its fallback icon even
+        // though the photo was on disk.
+        cacheWidth: (size * MediaQuery.of(context).devicePixelRatio)
+            .round()
+            .clamp(64, 1080),
+        cacheHeight: (size * MediaQuery.of(context).devicePixelRatio)
+            .round()
+            .clamp(64, 1080),
+        filterQuality: FilterQuality.medium,
+        gaplessPlayback: true,
         errorBuilder: (_, _, _) => fallback,
       ),
     );

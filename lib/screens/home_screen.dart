@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../core/theme.dart';
+import '../core/app_nav.dart';
 import '../navigation/route_observer.dart';
 import '../services/meal_store.dart';
 import '../models/meal_record.dart';
@@ -23,7 +24,6 @@ import '../widgets/streak_flame.dart';
 import '../widgets/weight_trend_chart.dart';
 import '../widgets/confetti_celebration.dart';
 import 'diet_plan_screen.dart';
-import 'scan_screen.dart';
 import 'settings_screen.dart';
 import 'chat_screen.dart';
 import 'subscription_screen.dart';
@@ -225,10 +225,17 @@ class _HomeScreenState extends State<HomeScreen>
     final scans = await ScanGate.getScansRemaining();
 
     if (!mounted) return;
+    // unlocksPro() also applies the admin's lifetime grant, so the owner never
+    // gets the Guru lock on a cold start where the claim lands after the first
+    // frame. Reading isSubscribed alone is what left a Pro account looking
+    // free for the first few seconds.
+    final proOrAdmin = await SubscriptionService.instance.unlocksPro();
+    if (!mounted) return;
     setState(() {
       _name = name;
       _scansLeft = scans;
-      _guruUnlocked = SubscriptionService.instance.isSubscribed;
+      _guruUnlocked = proOrAdmin ||
+          SubscriptionService.instance.isSubscribed;
     });
     userNameNotifier.value = name;
     // Entrance is already visible; glide the rest of the way now that the

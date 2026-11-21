@@ -9,8 +9,17 @@ Route<T> habitFlowRoute<T>(Widget page) {
   return PageRouteBuilder<T>(
     pageBuilder: (_, animation, _) => page,
     transitionsBuilder: (_, animation, _, child) {
+      // Slide only, no page-wide fade.
+      //
+      // The previous version faded the whole route in on top of the one below
+      // it. A fading Scaffold is a *transparent* Scaffold, so for the length of
+      // the transition both screens were painted at once and visibly blended —
+      // the "two interfaces for a second" every pushed page showed, most
+      // obviously Profile and the BMI calculator. A route with an opaque
+      // background and no fade covers the old page immediately, which is what
+      // makes a push read as a push.
       return SlideTransition(
-        position: Tween<Offset>(begin: const Offset(0, 0.08), end: Offset.zero)
+        position: Tween<Offset>(begin: const Offset(0, 0.05), end: Offset.zero)
             .animate(
               CurvedAnimation(
                 parent: animation,
@@ -18,11 +27,11 @@ Route<T> habitFlowRoute<T>(Widget page) {
                 reverseCurve: Curves.easeInCubic,
               ),
             ),
-        child: FadeTransition(opacity: animation, child: child),
+        child: child,
       );
     },
-    transitionDuration: const Duration(milliseconds: 450),
-    reverseTransitionDuration: const Duration(milliseconds: 300),
+    transitionDuration: const Duration(milliseconds: 320),
+    reverseTransitionDuration: const Duration(milliseconds: 240),
   );
 }
 
@@ -40,7 +49,9 @@ Route<T> slideRightRoute<T>(Widget page) {
                 reverseCurve: Curves.easeInCubic,
               ),
             ),
-        child: FadeTransition(opacity: animation, child: child),
+        // No page-wide fade: a translucent page shows the one underneath it
+        // through the whole transition (see [habitFlowRoute]).
+        child: child,
       );
     },
     transitionDuration: const Duration(milliseconds: 350),

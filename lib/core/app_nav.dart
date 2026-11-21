@@ -27,6 +27,13 @@ final ValueNotifier<int> shellTabIndex = ValueNotifier<int>(0);
 /// every visit) showed a second or two of black while the camera re-opened.
 final ValueNotifier<bool> scanTabVisible = ValueNotifier<bool>(false);
 
+/// True while the Health tab is the one on screen in [MainShell].
+///
+/// The dashboard polls Health Connect every few seconds while it is visible;
+/// without this signal it would keep polling from a hidden tab and drain the
+/// battery for a screen nobody is looking at.
+final ValueNotifier<bool> healthTabVisible = ValueNotifier<bool>(false);
+
 /// Switches the app shell to the given tab [index].
 ///
 /// The shell is the app's `home` route for authenticated users, so just

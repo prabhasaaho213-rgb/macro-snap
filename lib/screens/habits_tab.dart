@@ -45,6 +45,10 @@ class _HabitsTabState extends State<HabitsTab> {
   void initState() {
     super.initState();
     store.addListener(_onChanged);
+    // Pro is granted asynchronously (local load → server verify → admin
+    // claim). Re-check when it arrives, otherwise the habit limit kept its
+    // lock on a Pro account until the tab was rebuilt from scratch.
+    SubscriptionService.instance.addListener(_checkSub);
     _checkSub();
   }
 
@@ -53,18 +57,21 @@ class _HabitsTabState extends State<HabitsTab> {
     // the field immediately, so the owner is never gated even during the async
     // subscription-state load that follows (a defensive guard on top of
     // SubscriptionService.load() already granting admins lifetime Pro).
-    _isAdmin = await SubscriptionService.instance.isAdmin();
+    final isAdmin = await SubscriptionService.instance.isAdmin();
     await SubscriptionService.instance.load();
-    if (mounted) {
-      setState(() {
-        _subscribed = SubscriptionService.instance.isSubscribed;
-      });
-    }
+    if (!mounted) return;
+    final subscribed = SubscriptionService.instance.isSubscribed;
+    if (isAdmin == _isAdmin && subscribed == _subscribed) return;
+    setState(() {
+      _isAdmin = isAdmin;
+      _subscribed = subscribed;
+    });
   }
 
   @override
   void dispose() {
     store.removeListener(_onChanged);
+    SubscriptionService.instance.removeListener(_checkSub);
     super.dispose();
   }
 
