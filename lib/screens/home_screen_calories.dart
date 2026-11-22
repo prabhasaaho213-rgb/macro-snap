@@ -9,6 +9,9 @@ extension _HomeCalories on _HomeScreenState {
   /// must not replay the confetti — while the streak banking stays
   /// idempotent (days are banked dates, like habit completions).
   Future<void> _celebrateGoalMet() async {
+    // The calorie-goal bonus for the leaderboard rides on this one event, so
+    // "met the goal" means the same thing in both places.
+    unawaited(LeaderboardService.instance.noteCalorieGoalMet());
     final newStreak = await MealStreakService.noteGoalHitToday();
     if (mounted && newStreak != _calorieStreak) {
       _rebuild(() => _calorieStreak = newStreak);

@@ -5,10 +5,11 @@ import 'package:macro_snap/screens/settings_screen.dart';
 import 'package:macro_snap/services/meal_store.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-/// Profile used to be the first row of Settings. It is its own tab on the
-/// bottom nav now (home · cam · habits · profile), so this file pins two
-/// things: Settings no longer offers it, and the screen itself still renders
-/// on its own.
+/// Profile moved out of Settings when it was a bottom-nav tab, and back into
+/// Settings as a row when Health took that tab (the nav is now home · cam ·
+/// habits · health). This file pins two things: Settings offers Profile as a
+/// normal row of the settings list, and the screen itself still renders on its
+/// own.
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
@@ -21,7 +22,7 @@ void main() {
     await MealStore.instance.reload();
   });
 
-  testWidgets('Profile is gone from Settings and App Version stays gone', (
+  testWidgets('Profile is a Settings row and App Version stays gone', (
     tester,
   ) async {
     await tester.pumpWidget(const MaterialApp(home: SettingsScreen()));
@@ -32,10 +33,10 @@ void main() {
     expect(find.text('App Version'), findsNothing);
     expect(
       find.text('Profile'),
-      findsNothing,
-      reason: 'Profile is a bottom-nav tab now, not a settings row',
+      findsOneWidget,
+      reason: 'Health is the fourth tab, so Profile lives here again',
     );
-    // The subscriber row moved up to take the first slot.
+    expect(find.text('Name, details, BMI, badges and account'), findsOneWidget);
     expect(find.text('Upgrade to Pro'), findsOneWidget);
   });
 

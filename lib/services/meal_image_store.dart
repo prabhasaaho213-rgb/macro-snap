@@ -159,6 +159,46 @@ class MealImageStore {
     }
   }
 
+  /// Copies [sourcePath] in under a throw-away name and returns that path.
+  ///
+  /// Used by the result screen the moment it opens: the photo it is showing
+  /// lives in the OS temp directory, which Android may clear at any time, so
+  /// waiting until the user taps "Log This Meal" can find nothing to copy.
+  /// The staged file is renamed onto the meal id by [claim] when the meal is
+  /// actually logged, and deleted if the screen closes without logging.
+  Future<String?> stage({required String sourcePath}) async {
+    if (sourcePath.isEmpty) return null;
+    final token = 'staged_${DateTime.now().microsecondsSinceEpoch}';
+    return save(mealId: token, sourcePath: sourcePath);
+  }
+
+  /// Moves a file made by [stage] to `{mealId}.{ext}` and returns the final
+  /// path, or null when the staged file is gone.
+  Future<String?> claim({
+    required String mealId,
+    required String stagedPath,
+  }) async {
+    final dir = await _imagesDir();
+    if (dir == null) return null;
+    try {
+      final source = File(stagedPath);
+      if (!await source.exists()) return null;
+      final dest = File('${dir.path}/$mealId${_extensionFor(stagedPath)}');
+      try {
+        await source.rename(dest.path);
+      } catch (_) {
+        // A different filesystem (or a locked file) refuses rename; a copy
+        // produces the same result and the staged file is cleaned up after.
+        await source.copy(dest.path);
+        await source.delete();
+      }
+      return dest.path;
+    } catch (e, st) {
+      logError('MealImageStore.claim', e, st);
+      return null;
+    }
+  }
+
   /// Writes [bytes] into app storage as `{mealId}.{ext}`. The cloud-photo
   /// restore path: the backup arrives as base64 through the backend rather
   /// than as a file on disk, so it needs its own way in — and it must land

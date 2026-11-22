@@ -27,9 +27,42 @@ class HealthToday {
 
   const HealthToday.unavailable()
     : steps = null,
-      caloriesBurned = null,
-      activeCalories = null,
-      ok = false;
+        caloriesBurned = null,
+        activeCalories = null,
+        ok = false;
+}
+
+/// Which health permissions this app actually holds.
+///
+/// Health Connect grants access per record type, and a device can refuse one
+/// type while allowing the rest. Checking the three types as one list —
+/// `hasPermissions([STEPS, TOTAL, ACTIVE])` — answers "are ALL of these
+/// granted?", so a phone that does not grant total-calories (most of them:
+/// many devices never write that record) reported the whole dashboard as
+/// disconnected on every launch, even though steps and active energy were
+/// granted. Hence one flag per type.
+class HealthAccess {
+  final bool steps;
+  final bool activeEnergy;
+  final bool totalEnergy;
+  final bool nutritionWrite;
+
+  const HealthAccess({
+    this.steps = false,
+    this.activeEnergy = false,
+    this.totalEnergy = false,
+    this.nutritionWrite = false,
+  });
+
+  const HealthAccess.none()
+    : steps = false,
+        activeEnergy = false,
+        totalEnergy = false,
+        nutritionWrite = false;
+
+  /// True when at least one activity figure can be read. This — not
+  /// "everything was granted" — is what makes the dashboard connected.
+  bool get canReadActivity => steps || activeEnergy || totalEnergy;
 }
 
 /// Thin wrapper around the `health` package (Health Connect on Android,
@@ -73,62 +106,115 @@ class HealthService {
     }
   }
 
-  /// The kinds of health data MacroSnap reads.
+  /// Asks the platform whether ONE type is granted.
   ///
-  /// TOTAL_CALORIES_BURNED is what we *want* (it includes basal burn), but most
-  /// phones and watches only ever write ACTIVE_ENERGY_BURNED — reading just the
-  /// total is why the dashboard showed an em dash for calories on most devices
-  /// while the phone's own Health Connect app showed a number.
-  static const _readTypes = [
-    HealthDataType.STEPS,
-    HealthDataType.TOTAL_CALORIES_BURNED,
-    HealthDataType.ACTIVE_ENERGY_BURNED,
-  ];
+  /// Each check is its own call because Health Connect answers
+  /// "all of the listed types?" — and throws when the list contains a type
+  /// this build is not allowed to request. A throw is reported as "not
+  /// granted" rather than being allowed to fail the whole check.
+  Future<bool> _has(HealthDataType type) async {
+    try {
+      final result = await _health.hasPermissions([type]);
+      return result ?? false;
+    } catch (e, st) {
+      debugHealthError('hasPermissions(${type.name})', e, st);
+      return false;
+    }
+  }
 
-  /// The types we WRITE (a nutrition meal log).
-  static const _writeTypes = [HealthDataType.NUTRITION];
+  /// Which of the three activity permissions (and the nutrition write) are
+  /// currently granted.
+  Future<HealthAccess> checkAccess() async {
+    if (!isPlatformSupported) return const HealthAccess.none();
+    final steps = await _has(HealthDataType.STEPS);
+    final active = await _has(HealthDataType.ACTIVE_ENERGY_BURNED);
+    final total = await _has(HealthDataType.TOTAL_CALORIES_BURNED);
+    final nutrition = await _has(HealthDataType.NUTRITION);
+    return HealthAccess(
+      steps: steps,
+      activeEnergy: active,
+      totalEnergy: total,
+      nutritionWrite: nutrition,
+    );
+  }
 
   /// Whether the user has already granted MacroSnap read access to steps and
   /// calories burned.
   ///
   /// Best-effort: returns false if the platform is unreachable, the SDK is
   /// missing, or permission was never granted / was revoked.
-  Future<bool> get hasReadPermission async {
-    if (!isPlatformSupported) return false;
+  Future<bool> get hasReadPermission async =>
+      (await checkAccess()).canReadActivity;
+
+  /// Requests one type, swallowing the platform's refusal.
+  ///
+  /// Requesting a SET of types is all-or-nothing in the same way the check is:
+  /// one type the device will not grant (or a build that forgot the matching
+  /// manifest permission) made [requestAuthorization] answer false even after
+  /// the user tapped "Allow" on steps. One call per type means a partial grant
+  /// is reported as the partial grant it really is.
+  Future<bool> _request(HealthDataType type, HealthDataAccess access) async {
     try {
-      final result = await _health.hasPermissions(_readTypes);
-      return result ?? false;
+      return await _health.requestAuthorization([type], permissions: [access]);
     } catch (e, st) {
-      debugHealthError('hasReadPermission', e, st);
+      debugHealthError('requestAuthorization(${type.name})', e, st);
       return false;
     }
   }
 
   /// Ask the user to grant read access to steps + calories burned.
   ///
-  /// Returns true when the user accepted at least the read permissions.
-  /// Returns false when they declined, the SDK is unavailable, or the platform
-  /// does not support health data.
+  /// Everything still missing is requested in ONE dialog (Health Connect shows
+  /// a single permission sheet for the whole set), then the grants are
+  /// re-checked type by type. If that combined request is refused outright —
+  /// one type this device does not support can do that — steps is asked for on
+  /// its own, because a dashboard that shows steps is still useful.
   ///
-  /// On Android this triggers the Health Connect permission dialog; on iOS it
-  /// triggers the HealthKit "allow MacroSnap to read..." dialog.
+  /// The nutrition write is requested too, but a refused write never makes the
+  /// read side look disconnected.
   Future<bool> requestReadPermissions() async {
     if (!isPlatformSupported) return false;
-    try {
-      // Explicit access per type: `permissions` defaults differ between
-      // platforms, and a write-only nutrition grant must not come back as
-      // "connected" while steps and energy stay unreadable.
-      return await _health.requestAuthorization(
-        [ ..._readTypes, ..._writeTypes ],
-        permissions: [
-          for (final _ in _readTypes) HealthDataAccess.READ,
-          HealthDataAccess.WRITE,
-        ],
-      );
-    } catch (e, st) {
-      debugHealthError('requestReadPermissions', e, st);
-      return false;
+    final access = await checkAccess();
+    if (access.canReadActivity) return true;
+
+    final types = <HealthDataType>[];
+    final grants = <HealthDataAccess>[];
+    if (!access.steps) {
+      types.add(HealthDataType.STEPS);
+      grants.add(HealthDataAccess.READ);
     }
+    if (!access.activeEnergy) {
+      types.add(HealthDataType.ACTIVE_ENERGY_BURNED);
+      grants.add(HealthDataAccess.READ);
+    }
+    if (!access.totalEnergy) {
+      types.add(HealthDataType.TOTAL_CALORIES_BURNED);
+      grants.add(HealthDataAccess.READ);
+    }
+    if (!access.nutritionWrite) {
+      types.add(HealthDataType.NUTRITION);
+      grants.add(HealthDataAccess.WRITE);
+    }
+    if (types.isEmpty) return true;
+
+    try {
+      await _health.requestAuthorization(types, permissions: grants);
+    } catch (e, st) {
+      debugHealthError('requestAuthorization(all)', e, st);
+    }
+
+    // A granted dialog is not proof the platform recorded the grant (revoked
+    // mid-session, work profile, ...). This is the same check the dashboard
+    // makes on launch, so "connected" means the same thing in both places.
+    final fresh = await checkAccess();
+    if (fresh.canReadActivity) return true;
+
+    // Steps alone is the last resort: it is the one type the dashboard cannot
+    // work without, and the per-type call cannot be sunk by a sibling type.
+    if (!fresh.steps) {
+      await _request(HealthDataType.STEPS, HealthDataAccess.READ);
+    }
+    return (await checkAccess()).canReadActivity;
   }
 
   /// Today's steps from midnight to now.
@@ -151,8 +237,14 @@ class HealthService {
 
   /// Reads everything the dashboard needs in one pass.
   ///
-  /// [HealthToday.ok] is false only when a read threw or health access is
-  /// unavailable; a day with no activity yet is still `ok` with null values.
+  /// [HealthToday.ok] is false only when no read worked at all; a day with no
+  /// activity yet is still `ok` with null values.
+  ///
+  /// Each type is read in its own call. Health Connect throws for the WHOLE
+  /// request when a single listed type is not granted, so bundling steps with
+  /// two calorie types — one of which most devices never grant — used to make
+  /// the step read fail as well and left the dashboard frozen on an old
+  /// number whenever the calories permission was missing.
   Future<HealthToday> fetchToday() async {
     if (!isPlatformSupported) return const HealthToday.unavailable();
     final now = DateTime.now();
@@ -173,46 +265,46 @@ class HealthService {
       debugHealthError('fetchToday(steps)', e, st);
     }
 
-    try {
-      final data = await _health.getHealthDataFromTypes(
-        types: _readTypes,
-        startTime: startOfDay,
-        endTime: now,
-      );
-      if (steps == null) {
-        final stepPoints = data
-            .where((d) => d.type == HealthDataType.STEPS)
-            .toList();
-        if (stepPoints.isNotEmpty) {
-          var sum = 0.0;
-          for (final d in stepPoints) {
-            final v = d.value is NumericHealthValue
-                ? (d.value as NumericHealthValue).numericValue
-                : null;
-            if (v != null) sum += v;
-          }
-          steps = sum.round();
-        }
-      }
-
-      double? sumOf(HealthDataType type) {
-        final points = data.where((d) => d.type == type).toList();
-        if (points.isEmpty) return null;
+    /// Sums one record type, or null when it is unauthorised / has no data.
+    Future<double?> sumOf(HealthDataType type) async {
+      try {
+        final data = await _health.getHealthDataFromTypes(
+          types: [type],
+          startTime: startOfDay,
+          endTime: now,
+        );
+        if (data.isEmpty) return null;
         var sum = 0.0;
-        for (final d in points) {
+        var found = false;
+        for (final d in data) {
           final v = d.value is NumericHealthValue
               ? (d.value as NumericHealthValue).numericValue
               : null;
-          if (v != null) sum += v;
+          if (v != null) {
+            sum += v;
+            found = true;
+          }
         }
-        return sum;
+        return found ? sum : null;
+      } catch (e, st) {
+        debugHealthError('fetchToday(${type.name})', e, st);
+        return null;
       }
+    }
 
-      totalCalories = sumOf(HealthDataType.TOTAL_CALORIES_BURNED);
-      activeCalories = sumOf(HealthDataType.ACTIVE_ENERGY_BURNED);
-      if (totalCalories != null || activeCalories != null) ok = true;
-    } catch (e, st) {
-      debugHealthError('fetchToday(calories)', e, st);
+    activeCalories = await sumOf(HealthDataType.ACTIVE_ENERGY_BURNED);
+    totalCalories = await sumOf(HealthDataType.TOTAL_CALORIES_BURNED);
+    if (totalCalories != null || activeCalories != null) ok = true;
+
+    // Last resort for steps: if the platform total failed, fall back to the
+    // step records themselves so a phone whose aggregate call is unavailable
+    // still reports movement.
+    if (steps == null) {
+      final recordSum = await sumOf(HealthDataType.STEPS);
+      if (recordSum != null) {
+        steps = recordSum.round();
+        ok = true;
+      }
     }
 
     return HealthToday(

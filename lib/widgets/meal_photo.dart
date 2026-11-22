@@ -48,6 +48,10 @@ class MealPhoto extends StatelessWidget {
         path != null &&
         DateTime.now().difference(meal.date) < MealImageStore.retention;
     if (!stillLive) return fallback;
+    // Checked before asking the decoder to open it: a path whose file is gone
+    // (an OS cleanup, a restored backup, an old record) would otherwise drop
+    // one failed decode per build into the log on its way to the fallback.
+    if (!File(path).existsSync()) return fallback;
 
     return ClipRRect(
       borderRadius: BorderRadius.circular(radius),

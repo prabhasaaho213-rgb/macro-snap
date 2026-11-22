@@ -72,6 +72,21 @@ extension _HomeMeals on _HomeScreenState {
                     }
                   },
                 ),
+                // The leaderboard lives here and nowhere else: it is a
+                // "how am I doing" page you reach from Home, not a fifth tab
+                // competing with Home, Scan, Habits and Health.
+                _quickAction(
+                  Icons.emoji_events_rounded,
+                  'Rank',
+                  MacroSnapTheme.neonOrange,
+                  isDark,
+                  () {
+                    Navigator.push(
+                      context,
+                      habitFlowRoute(const LeaderboardScreen()),
+                    );
+                  },
+                ),
               ],
             ),
           ],

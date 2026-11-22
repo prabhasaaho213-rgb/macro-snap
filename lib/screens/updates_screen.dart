@@ -50,8 +50,21 @@ class _UpdatesScreenState extends State<UpdatesScreen> {
   static const List<_UpdateEntry> _changelog = [
     _UpdateEntry(
       version: UpdatesScreen.latestVersion,
-      date: '2026-11-15',
+      date: '2026-11-22',
       isLatest: true,
+      notes: [
+        'Health stays connected between launches: steps and calories are read separately, so a phone that never grants one of them no longer blanks the whole dashboard',
+        'Steps and burned calories refresh every 5 seconds and catch up the moment you come back to the app',
+        'Set your daily step target from the Health tab in 5,000-step steps, and keep a streak for every day you hit it',
+        'Logged meals keep their photo: the picture is saved as the result opens, so the phone clearing its cache no longer leaves a bare icon',
+        'The serving-size keypad works — clear and backspace actually clear, the first digit replaces the old value, and an invalid weight says so',
+        'Profile opens from Settings as its own page, without the Settings screen showing through it',
+        'New: Fitness Points, opened from Home\'s Quick Actions — points for meals, habits, water, weigh-ins, your calorie goal and your step goal, with daily caps so nothing pays twice',
+      ],
+    ),
+    _UpdateEntry(
+      version: '1.5.17',
+      date: '2026-11-21',
       notes: [
         'Skipping setup no longer makes up numbers for you — until you enter your height, weight and age, the app does not pretend to know your targets',
         'Your calorie streak belongs to your account now: a second account on the same phone no longer inherits it, and a reinstall restores it instead of starting from zero',

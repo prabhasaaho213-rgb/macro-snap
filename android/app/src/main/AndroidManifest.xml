@@ -52,6 +52,11 @@
 
     <!-- Health Connect: read steps + calories burned so the health dashboard can show activity alongside food logs. -->
     <uses-permission android:name="android.permission.health.READ_STEPS"/>
+    <!-- ACTIVE calories, not only the total. Almost every phone and watch
+         writes active energy and never writes the total, so without this
+         permission Health Connect refused the request outright and the
+         dashboard showed "disconnected" on every launch. -->
+    <uses-permission android:name="android.permission.health.READ_ACTIVE_CALORIES_BURNED"/>
     <uses-permission android:name="android.permission.health.READ_TOTAL_CALORIES_BURNED"/>
     <uses-permission android:name="android.permission.health.WRITE_NUTRITION"/>
     <application

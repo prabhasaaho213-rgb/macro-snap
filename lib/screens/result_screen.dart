@@ -80,6 +80,16 @@ class _ResultScreenState extends State<ResultScreen>
   String? _titleOverride;
   int? _healthOverride;
   Tastiness? _tastiness;
+
+  /// A copy of the scanned photo, taken as soon as this screen opens.
+  ///
+  /// The scanner hands us a file in the OS temp/cache directory, and Android
+  /// is free to delete that at any moment — including while the user is
+  /// reading the result or correcting the portion. Logging then copied a file
+  /// that was already gone, quietly returned no path, and the meal card showed
+  /// its icon instead of the photo. Copied here, under a temporary name, and
+  /// renamed to the meal id when the meal is actually logged.
+  String? _stagedImagePath;
   String _analysisStage = 'Analyzing your meal...';
   String _analysisSub =
       'Our AI is identifying each dish\nand calculating nutrition';
@@ -149,9 +159,26 @@ class _ResultScreenState extends State<ResultScreen>
       _isAnalyzing = false;
       _animController.forward();
     } else {
+      unawaited(_stagePhoto());
       _analyze();
       _animateStages();
     }
+  }
+
+  /// Copies the scanned photo into app storage right away so it outlives the
+  /// temp file the camera wrote.
+  Future<void> _stagePhoto() async {
+    if (widget.imagePath.isEmpty) return;
+    final staged = await MealImageStore.instance.stage(
+      sourcePath: widget.imagePath,
+    );
+    if (!mounted) {
+      // The screen went away while the copy was running — the file it just
+      // made has no owner, so clean it up instead of leaving it for the sweep.
+      await MealImageStore.instance.remove(staged);
+      return;
+    }
+    _stagedImagePath = staged;
   }
 
   void _animateStages() {
@@ -441,6 +468,11 @@ class _ResultScreenState extends State<ResultScreen>
     } catch (e, st) {
       logError('ResultScreen.dispose (temp image)', e, st);
     }
+    // An unclaimed staged copy (the user closed the result without logging)
+    // goes with the screen — keeping it would leave a photo of nobody's meal.
+    final staged = _stagedImagePath;
+    _stagedImagePath = null;
+    if (staged != null) unawaited(MealImageStore.instance.remove(staged));
     super.dispose();
   }
 

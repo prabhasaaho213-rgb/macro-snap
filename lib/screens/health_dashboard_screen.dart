@@ -6,7 +6,9 @@ import '../core/app_nav.dart';
 import '../core/haptics.dart';
 import '../core/theme.dart';
 import '../services/health_service.dart';
+import '../services/leaderboard_service.dart';
 import '../services/meal_store.dart';
+import '../services/step_goal_service.dart';
 import '../widgets/animations.dart';
 import '../widgets/glass_card.dart';
 
@@ -38,8 +40,10 @@ class _HealthDashboardScreenState extends State<HealthDashboardScreen>
   /// stats for a foreground screen.
   static const Duration _pollInterval = Duration(seconds: 5);
 
-  /// The daily step goal the ring fills toward.
-  static const int _stepGoal = 10000;
+  /// The daily step goal the ring fills toward. Kept in [StepGoalService]
+  /// (prefs-backed) so the target — and the streak that depends on it — is
+  /// the same every time the tab is rebuilt.
+  int get _stepGoal => StepGoalService.instance.goal;
 
   bool _initialized = false;
   bool _available = false;
@@ -64,6 +68,10 @@ class _HealthDashboardScreenState extends State<HealthDashboardScreen>
     // The "Eaten" figure is read from the meal store, so a meal logged from
     // another tab must repaint this one.
     MealStore.instance.changeNotifier.addListener(_onMealsChanged);
+    // The target and the streak are redrawn from the same store that owns
+    // them, so changing the goal in the picker repaints this screen without
+    // any state being copied twice.
+    StepGoalService.instance.addListener(_onGoalChanged);
     _initialize();
   }
 
@@ -72,6 +80,7 @@ class _HealthDashboardScreenState extends State<HealthDashboardScreen>
     _pollTimer?.cancel();
     healthTabVisible.removeListener(_onTabVisibilityChanged);
     MealStore.instance.changeNotifier.removeListener(_onMealsChanged);
+    StepGoalService.instance.removeListener(_onGoalChanged);
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
@@ -80,10 +89,21 @@ class _HealthDashboardScreenState extends State<HealthDashboardScreen>
     if (mounted) setState(() {});
   }
 
+  void _onGoalChanged() {
+    if (mounted) setState(() {});
+  }
+
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
+    final wasForeground = _appInForeground;
     _appInForeground = state == AppLifecycleState.resumed;
     _syncPolling();
+    // Coming back to the app should show current numbers immediately: the
+    // phone kept counting steps while the app was in the background, and
+    // waiting up to a full poll interval made the dashboard look stuck.
+    if (!wasForeground && _appInForeground && _connected) {
+      unawaited(_loadToday(silent: true));
+    }
   }
 
   void _onTabVisibilityChanged() {
@@ -114,10 +134,13 @@ class _HealthDashboardScreenState extends State<HealthDashboardScreen>
   }
 
   /// One-time check: is Health Connect / HealthKit available on this device,
-  /// and do we already have read permission?
+  /// is the stored step target loaded, and do we already have read permission?
   Future<void> _initialize() async {
     if (!mounted) return;
     setState(() => _initialized = true);
+
+    await StepGoalService.instance.load();
+    if (!mounted) return;
 
     final service = HealthService.instance;
     if (!service.isPlatformSupported) {
@@ -141,12 +164,12 @@ class _HealthDashboardScreenState extends State<HealthDashboardScreen>
 
   Future<void> _checkPermission() async {
     final service = HealthService.instance;
-    final has = await service.hasReadPermission;
+    final access = await service.checkAccess();
     if (!mounted) return;
     setState(() {
-      _hasReadPermission = has;
+      _hasReadPermission = access.canReadActivity;
     });
-    if (has) {
+    if (access.canReadActivity) {
       await _loadToday(silent: true);
     }
     _syncPolling();
@@ -157,13 +180,18 @@ class _HealthDashboardScreenState extends State<HealthDashboardScreen>
   Future<void> _connect() async {
     unawaited(Haptics.light());
     final service = HealthService.instance;
-    final granted = await service.requestReadPermissions();
+    // The request itself is only half of "connected": Health Connect can
+    // accept the dialog and still hold no grant for a type this build asked
+    // for wrongly. The fresh check is what the dashboard trusts.
+    await service.requestReadPermissions();
+    if (!mounted) return;
+    final access = await service.checkAccess();
     if (!mounted) return;
     setState(() {
-      _hasReadPermission = granted;
+      _hasReadPermission = access.canReadActivity;
       _loadFailed = false;
     });
-    if (granted) {
+    if (access.canReadActivity) {
       await _loadToday();
     }
     _syncPolling();
@@ -192,6 +220,17 @@ class _HealthDashboardScreenState extends State<HealthDashboardScreen>
         }
         _refreshing = false;
       });
+      // The streak advances the moment the target is crossed, not at the next
+      // launch — the poll runs while the tab is open, so this is the only
+      // place that sees the crossing happen.
+      final steps = today.steps ?? _steps;
+      if (today.ok && steps != null) {
+        await StepGoalService.instance.recordToday(steps);
+        // The leaderboard's movement points use THIS number — the one the
+        // dashboard shows. It comes from Health Connect, so it is never a
+        // figure the user typed in.
+        await LeaderboardService.instance.noteSteps(steps);
+      }
     } catch (_) {
       if (!mounted) return;
       setState(() {
@@ -210,6 +249,115 @@ class _HealthDashboardScreenState extends State<HealthDashboardScreen>
     }
     unawaited(Haptics.light());
     await _loadToday();
+  }
+
+  /// Lets the user move the daily target in 5,000-step steps.
+  Future<void> _pickGoal() async {
+    unawaited(Haptics.light());
+    final goal = StepGoalService.instance.goal;
+    final chosen = await showModalBottomSheet<int>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) {
+        final isDark = Theme.of(ctx).brightness == Brightness.dark;
+        return Container(
+          decoration: BoxDecoration(
+            color: isDark ? MacroSnapTheme.surfaceDark : Colors.white,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+          ),
+          padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
+          child: SafeArea(
+            top: false,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Center(
+                  child: Container(
+                    width: 42,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: MacroSnapTheme.textTertiary(ctx),
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 18),
+                Row(
+                  children: [
+                    const Icon(
+                      Icons.flag_rounded,
+                      color: MacroSnapTheme.neonGreen,
+                      size: 20,
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      'Daily step target',
+                      style: TextStyle(
+                        fontSize: 17,
+                        fontWeight: FontWeight.w800,
+                        color: isDark ? Colors.white : const Color(0xFF1A1A1A),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'The ring, the percentage and the streak all count toward '
+                  'this number.',
+                  style: TextStyle(
+                    fontSize: 12.5,
+                    height: 1.35,
+                    color: MacroSnapTheme.textTertiary(ctx),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Wrap(
+                  spacing: 10,
+                  runSpacing: 10,
+                  children: [
+                    for (final option in StepGoalService.goalOptions)
+                      ChoiceChip(
+                        label: Text(
+                          '${_thousands(option)} steps',
+                          style: const TextStyle(fontSize: 12.5),
+                        ),
+                        selected: option == goal,
+                        onSelected: (_) => Navigator.pop(ctx, option),
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 18),
+                SizedBox(
+                  width: double.infinity,
+                  child: FilledButton(
+                    onPressed: () => Navigator.pop(ctx),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: MacroSnapTheme.neonGreen,
+                      foregroundColor: Colors.black,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                    ),
+                    child: const Text(
+                      'Done',
+                      style: TextStyle(fontWeight: FontWeight.w800),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+    if (chosen == null) return;
+    await StepGoalService.instance.setGoal(chosen);
+    if (!mounted) return;
+    // A new, smaller target may already be met by today's steps.
+    final steps = _steps;
+    if (steps != null) await StepGoalService.instance.recordToday(steps);
   }
 
   @override
@@ -354,7 +502,7 @@ class _HealthDashboardScreenState extends State<HealthDashboardScreen>
             const SizedBox(height: 14),
             Text(
               'Allow "Steps" and "Calories burned" (or "Active calories") — '
-              'both are needed for this screen.',
+              'either one is enough, and the app keeps the permission.',
               textAlign: TextAlign.center,
               style: TextStyle(
                 fontSize: 12.5,
@@ -373,7 +521,8 @@ class _HealthDashboardScreenState extends State<HealthDashboardScreen>
   Widget _buildDashboard(BuildContext context, bool isDark) {
     final steps = _steps ?? 0;
     final cals = _caloriesBurned;
-    final progress = (steps / _stepGoal).clamp(0.0, 1.0);
+    final goal = _stepGoal;
+    final progress = (steps / goal).clamp(0.0, 1.0);
     final eaten = MealStore.instance.todayCalories;
 
     return RefreshIndicator(
@@ -443,6 +592,11 @@ class _HealthDashboardScreenState extends State<HealthDashboardScreen>
             ),
             const SizedBox(height: 14),
             AnimatedEntrance(
+              delayMs: 160,
+              child: _buildStreakCard(context, isDark),
+            ),
+            const SizedBox(height: 14),
+            AnimatedEntrance(
               delayMs: 190,
               child: _buildBalanceCard(context, isDark, steps, cals, eaten),
             ),
@@ -461,7 +615,9 @@ class _HealthDashboardScreenState extends State<HealthDashboardScreen>
             ],
             const SizedBox(height: 10),
             Text(
-              _lastUpdated == null ? 'Waiting for the first reading…' : _updatedLabel(),
+              _lastUpdated == null
+                  ? 'Waiting for the first reading…'
+                  : _updatedLabel(),
               textAlign: TextAlign.center,
               style: TextStyle(
                 fontSize: 11.5,
@@ -522,14 +678,17 @@ class _HealthDashboardScreenState extends State<HealthDashboardScreen>
   }
 
   /// The hero card: today's steps in a big counting number, with a ring that
-  /// fills toward the 10,000-step goal and a soft pulsing glow.
+  /// fills toward the daily target and a soft pulsing glow. The target itself
+  /// is editable from here — it is the number the ring is measured against, so
+  /// it belongs next to the ring, not buried in Settings.
   Widget _buildStepsHero(
     BuildContext context,
     bool isDark, {
     required int steps,
     required double progress,
   }) {
-    final goalReached = steps >= _stepGoal;
+    final goal = _stepGoal;
+    final goalReached = steps >= goal;
     return Container(
       padding: const EdgeInsets.fromLTRB(20, 18, 20, 18),
       decoration: MacroSnapTheme.habitlyHeroCard(context),
@@ -634,8 +793,8 @@ class _HealthDashboardScreenState extends State<HealthDashboardScreen>
                     const SizedBox(height: 6),
                     Text(
                       goalReached
-                          ? 'You hit your $_stepGoal step goal'
-                          : '${_thousands((_stepGoal - steps).clamp(0, _stepGoal))} steps to go',
+                          ? 'You hit your ${_thousands(goal)} step goal'
+                          : '${_thousands((goal - steps).clamp(0, goal))} steps to go',
                       style: TextStyle(
                         fontSize: 12.5,
                         height: 1.35,
@@ -643,11 +802,147 @@ class _HealthDashboardScreenState extends State<HealthDashboardScreen>
                         color: Colors.white.withValues(alpha: 0.82),
                       ),
                     ),
+                    const SizedBox(height: 8),
+                    // The target, inline and editable.
+                    GestureDetector(
+                      onTap: _pickGoal,
+                      behavior: HitTestBehavior.opaque,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 6,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.16),
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(
+                            color: Colors.white.withValues(alpha: 0.3),
+                          ),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(
+                              Icons.flag_rounded,
+                              size: 13,
+                              color: Colors.white,
+                            ),
+                            const SizedBox(width: 5),
+                            Text(
+                              'Goal ${_thousands(goal)}',
+                              style: const TextStyle(
+                                fontSize: 11.5,
+                                fontWeight: FontWeight.w800,
+                                color: Colors.white,
+                              ),
+                            ),
+                            const SizedBox(width: 4),
+                            const Icon(
+                              Icons.edit_rounded,
+                              size: 12,
+                              color: Colors.white70,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
                   ],
                 ),
               ),
             ],
           ),
+        ],
+      ),
+    );
+  }
+
+  /// The step streak: consecutive days the daily target was reached.
+  Widget _buildStreakCard(BuildContext context, bool isDark) {
+    final service = StepGoalService.instance;
+    final streak = service.streak;
+    final best = service.bestStreak;
+    final reachedToday = service.reachedToday;
+    final titleColour = isDark ? Colors.white : const Color(0xFF1A1A1A);
+
+    return GlassCard(
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+      child: Row(
+        children: [
+          Container(
+            width: 44,
+            height: 44,
+            decoration: BoxDecoration(
+              color: MacroSnapTheme.neonOrange.withValues(alpha: 0.14),
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: const Icon(
+              Icons.local_fire_department_rounded,
+              color: MacroSnapTheme.neonOrange,
+              size: 24,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Text(
+                      '$streak',
+                      style: TextStyle(
+                        fontSize: 22,
+                        height: 1,
+                        fontWeight: FontWeight.w900,
+                        color: titleColour,
+                      ),
+                    ),
+                    const SizedBox(width: 5),
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 2),
+                      child: Text(
+                        streak == 1 ? 'day streak' : 'day streak',
+                        style: TextStyle(
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.w700,
+                          color: MacroSnapTheme.textSecondary(context),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  reachedToday
+                      ? 'Today is counted — nice work.'
+                      : 'Hit ${_thousands(_stepGoal)} steps today to '
+                            '${streak == 0 ? 'start' : 'keep'} the streak.',
+                  style: TextStyle(
+                    fontSize: 11,
+                    height: 1.35,
+                    color: MacroSnapTheme.textTertiary(context),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          if (best > 0)
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              decoration: BoxDecoration(
+                color: MacroSnapTheme.neonOrange.withValues(alpha: 0.10),
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Text(
+                'Best $best',
+                style: const TextStyle(
+                  fontSize: 10.5,
+                  fontWeight: FontWeight.w800,
+                  color: MacroSnapTheme.neonOrange,
+                ),
+              ),
+            ),
         ],
       ),
     );
@@ -798,7 +1093,9 @@ class _HealthDashboardScreenState extends State<HealthDashboardScreen>
                 child: _miniStat(
                   context,
                   label: 'Burned',
-                  value: burned == null ? '—' : '${_thousands(burn.round())} kcal',
+                  value: burned == null
+                      ? '—'
+                      : '${_thousands(burn.round())} kcal',
                   colour: MacroSnapTheme.neonOrange,
                 ),
               ),

@@ -666,38 +666,45 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
             ),
             const SizedBox(height: 20),
-            const Divider(height: 18),
-            // Profile is a row like every other one on this screen, so it sits
-            // in the same card container. It used to be a bare tile floating
-            // on the page background between two cards — the one button that
-            // did not look like the rest.
-            AnimatedEntrance(
-              delayMs: 80,
-              child: GlassCard(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 4,
-                ),
-                child: _settingTile(
-                  Icons.person_rounded,
-                  'Profile',
-                  'Name, details, BMI, badges and account',
-                  () {
-                    Navigator.push(
-                      context,
-                      habitFlowRoute(const ProfileScreen()),
-                    );
-                  },
-                  isDark,
-                ),
-              ),
-            ),
-            const SizedBox(height: 18),
-            // Settings list card
+            // Settings list card. Profile is the first row here like every
+            // other one: it used to sit in its own card with different padding
+            // and no dividers, which made one button visibly not match the
+            // rest of the list.
             GlassCard(
               padding: const EdgeInsets.all(16),
               child: Column(
                 children: [
+                  AnimatedEntrance(
+                    delayMs: 40,
+                    child: _settingTile(
+                      Icons.person_rounded,
+                      'Profile',
+                      'Name, details, BMI, badges and account',
+                      () async {
+                        // Load the plan and the plan flag BEFORE pushing so the
+                        // page opens with real values. Pushing first made it
+                        // paint "No height, weight or goal saved yet" and then
+                        // swap to the real details a moment later — two
+                        // different-looking profile pages in a row.
+                        await DietPlanService.instance.load();
+                        await SubscriptionService.instance.load();
+                        if (!context.mounted) return;
+                        // Opaque, standard route: a transition that lets the
+                        // page underneath show through is what made the Profile
+                        // and Settings screens appear blended together while
+                        // it opened.
+                        await Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => const ProfileScreen(),
+                          ),
+                        );
+                        if (mounted) setState(() {});
+                      },
+                      isDark,
+                    ),
+                  ),
+                  const Divider(height: 24),
                   AnimatedEntrance(
                     delayMs: 50,
                     child: _settingTile(

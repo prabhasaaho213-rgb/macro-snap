@@ -25,6 +25,7 @@ import 'services/crash_reporting.dart';
 import 'services/badge_service.dart';
 import 'services/meal_streak_service.dart';
 import 'services/pending_sync_queue.dart';
+import 'services/leaderboard_service.dart';
 import 'services/account_partition.dart';
 import 'core/app_nav.dart';
 
@@ -181,6 +182,17 @@ Future<void> _bootstrap() async {
   // every resume so a phone that comes back onto WiFi catches up on its own.
   PendingSyncQueue.instance.mealSource = () => MealStore.instance.allMeals;
   PendingSyncQueue.instance.start();
+
+  // Leaderboard points are derived from the stores loaded above (meals,
+  // habits, water, weigh-ins), so it is attached once they are ready and then
+  // keeps itself current by listening to them. Steps are fed separately by the
+  // health dashboard, which is the only place that reads them.
+  unawaited(
+    _guard(
+      LeaderboardService.instance.attach,
+      'LeaderboardService.attach',
+    ),
+  );
   unawaited(
     _guard(PendingSyncQueue.instance.drain, 'PendingSyncQueue.drain'),
   );

@@ -254,12 +254,39 @@ extension _ResultResults on _ResultScreenState {
                             // copied before the meal is recorded — and the
                             // copy is stamped with the log time, which is
                             // what its 24 hours are measured from.
-                            final keptImage = await MealImageStore.instance
-                                .save(
+                            // Prefer the copy taken when this screen
+                            // opened (it cannot have been swept from the OS
+                            // temp dir); fall back to copying the temp file
+                            // now for a screen that predates the stage.
+                            final staged = _stagedImagePath;
+                            final claimed = staged == null
+                                ? null
+                                : await MealImageStore.instance.claim(
+                                    mealId: id,
+                                    stagedPath: staged,
+                                  );
+                            final keptImage =
+                                claimed ??
+                                await MealImageStore.instance.save(
                                   mealId: id,
                                   sourcePath: widget.imagePath,
                                   at: loggedAt,
                                 );
+                            // The stage is either the meal's photo now or it is
+                            // useless; either way it must not stay behind.
+                            if (staged != null && claimed == null) {
+                              unawaited(MealImageStore.instance.remove(staged));
+                            }
+                            _stagedImagePath = null;
+                            if (keptImage == null) {
+                              logError(
+                                'ResultScreen.log (meal photo)',
+                                StateError(
+                                  'could not keep the scan photo for $id',
+                                ),
+                                StackTrace.current,
+                              );
+                            }
                             // The name the user sees (possibly renamed) is
                             // the name that gets logged, so the meal list and
                             // the card never disagree.
@@ -562,15 +589,10 @@ extension _ResultResults on _ResultScreenState {
   /// On Enter, the new total is committed and every macro is recomputed from
   /// its per-100 g value, including the dish cards and the ingredients list.
   Future<void> _editTotalGrams(bool isDark) async {
-    final controller = TextEditingController(text: _grams.toString());
     final entered = await showDialog<int>(
       context: context,
-      builder: (ctx) => _GramKeypadDialog(
-        controller: controller,
-        initial: _grams,
-      ),
+      builder: (ctx) => _GramKeypadDialog(initial: _grams),
     );
-    controller.dispose();
     if (entered == null || !mounted) return;
     unawaited(HapticFeedback.mediumImpact());
     _setGrams(entered);
@@ -582,11 +604,9 @@ extension _ResultResults on _ResultScreenState {
 /// grams value, gets a visible keypad, types a number, and commits it with the
 /// Enter button ("Save").
 class _GramKeypadDialog extends StatefulWidget {
-  final TextEditingController controller;
   final int initial;
 
-  const _GramKeypadDialog(
-    {required this.controller, required this.initial});
+  const _GramKeypadDialog({required this.initial});
 
   @override
   State<_GramKeypadDialog> createState() => _GramKeypadDialogState();
@@ -594,6 +614,16 @@ class _GramKeypadDialog extends StatefulWidget {
 
 class _GramKeypadDialogState extends State<_GramKeypadDialog> {
   late final TextEditingController _ctrl;
+
+  /// True until the first keypress. The field starts showing the current
+  /// weight, and the first digit typed REPLACES it — otherwise typing "120"
+  /// into a field holding "100" silently produced 100120, which is why the
+  /// keypad looked like it was not working.
+  bool _freshInput = true;
+
+  /// Shown under the number when Save is refused, instead of the old silent
+  /// "reset to 0 and do nothing" (which read as a broken Save button).
+  String? _error;
 
   @override
   void initState() {
@@ -608,33 +638,50 @@ class _GramKeypadDialogState extends State<_GramKeypadDialog> {
   }
 
   void _append(String digit) {
-    if (digit == '.' && _ctrl.text.contains('.')) return;
-    final raw = _ctrl.text;
-    if (digit == '.' && raw.endsWith('.')) return;
-    final candidate = raw + digit;
-    if (int.tryParse(candidate) == null && !candidate.contains('.')) return;
-    final parsed = double.tryParse(candidate);
-    if (parsed == null) return;
-    // Keep reasonable bounds: 1 g to 10000 g.
-    if (parsed < 1 || parsed > 10000) return;
-    // setState, not only the controller write: the preview above the keypad
-    // renders [_ctrl.text], and assigning to the controller does not rebuild
-    // this dialog. Without it the digits never appeared, every tap landed on
-    // a hidden buffer, and the grams edit looked like it did nothing at all.
+    // Everything happens inside one setState: the preview above the keypad
+    // renders [_ctrl.text], and a bare controller write does not rebuild this
+    // dialog, so digits used to land in a buffer nobody could see.
     setState(() {
-      _ctrl.text = parsed == parsed.roundToDouble()
-          ? parsed.round().toString()
-          : parsed.toString();
+      _error = null;
+      if (_freshInput) {
+        _ctrl.text = '';
+        _freshInput = false;
+      }
+      final raw = _ctrl.text;
+      if (digit == '.') {
+        if (raw.contains('.')) return;
+        _ctrl.text = raw.isEmpty ? '0.' : '$raw.';
+      } else {
+        // "0" is a placeholder, not a digit: 0 then 5 is 5, not 05.
+        final base = raw == '0' ? '' : raw;
+        // 10,000 needs five digits; longer input is rejected here rather than
+        // silently dropped on Save.
+        if (base.replaceAll('.', '').length >= 5) return;
+        _ctrl.text = '$base$digit';
+      }
       _ctrl.selection = TextSelection.collapsed(offset: _ctrl.text.length);
     });
   }
 
   void _backspace() {
-    if (_ctrl.text.isEmpty) return;
+    // This used to call trimRight(), which strips whitespace — so it removed
+    // nothing at all and the ⌫ key did nothing.
     setState(() {
-      _ctrl.text = _ctrl.text.trimRight();
-      if (_ctrl.text.isEmpty) _ctrl.text = '0';
+      _error = null;
+      _freshInput = false;
+      if (_ctrl.text.isEmpty) return;
+      _ctrl.text = _ctrl.text.substring(0, _ctrl.text.length - 1);
       _ctrl.selection = TextSelection.collapsed(offset: _ctrl.text.length);
+    });
+  }
+
+  /// Empties the field. The preview shows "0" for an empty entry.
+  void _clear() {
+    setState(() {
+      _error = null;
+      _freshInput = false;
+      _ctrl.text = '';
+      _ctrl.selection = const TextSelection.collapsed(offset: 0);
     });
   }
 
@@ -724,6 +771,18 @@ class _GramKeypadDialogState extends State<_GramKeypadDialog> {
               color: MacroSnapTheme.textTertiary(context),
             ),
           ),
+          if (_error != null) ...[
+            const SizedBox(height: 8),
+            Text(
+              _error!,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: MacroSnapTheme.neonPink,
+              ),
+            ),
+          ],
           const SizedBox(height: 16),
           // Numeric keypad.
           Wrap(
@@ -763,7 +822,7 @@ class _GramKeypadDialogState extends State<_GramKeypadDialog> {
               _KeypadButton(
                 label: 'Clear',
                 onTap: () {
-                  _ctrl.text = '0';
+                  _clear();
                   HapticFeedback.selectionClick();
                 },
               ),
@@ -780,8 +839,12 @@ class _GramKeypadDialogState extends State<_GramKeypadDialog> {
           onPressed: () {
             final value = _commit();
             if (value == null) {
+              // Say why nothing happened instead of clearing the field and
+              // closing over nothing (what the Save button used to do).
+              setState(
+                () => _error = 'Enter a weight between 1 and 10,000 g.',
+              );
               HapticFeedback.selectionClick();
-              _ctrl.text = '0';
               return;
             }
             HapticFeedback.mediumImpact();
