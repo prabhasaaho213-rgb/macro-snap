@@ -1,0 +1,6 @@
+[submodule "app"]
+	path = app
+	url = https://github.com/prabhasaaho213-rgb/macro-snap.git
+[submodule "backend"]
+	path = backend
+	url = https://github.com/prabhasaaho213-rgb/macro-snap-backend.git
