@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../core/haptics.dart';
 import '../core/theme.dart';
+import '../data/india_districts.dart';
 import '../services/leaderboard_remote.dart';
 import '../services/leaderboard_service.dart';
 import '../widgets/animations.dart';
@@ -38,6 +39,10 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
   /// A score change that landed while a write was in flight, so the newer total
   /// is not dropped.
   bool _pendingPublish = false;
+
+  /// Bumped on every (re)subscribe so a snapshot from the board that was on
+  /// screen before a tab switch cannot paint itself under the new tab.
+  int _listenToken = 0;
 
   /// The live board listener and the debounce for republishing our own score.
   StreamSubscription<LeaderboardBoard>? _boardSub;
@@ -118,21 +123,23 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
   /// and the district/state boards once an area is set. Joining is what puts
   /// this user's own score on them.
   Future<void> _listen() async {
+    final token = ++_listenToken;
     await _boardSub?.cancel();
     _boardSub = null;
+    if (token != _listenToken) return;
     final remote = LeaderboardRemote.instance;
     final canBrowse =
         remote.canJoin &&
         (_scope == LeaderboardScope.india || _service.hasLocation);
     if (!canBrowse) {
-      if (!mounted) return;
+      if (!mounted || token != _listenToken) return;
       setState(() {
         _board = LeaderboardBoard.empty;
         _loadingBoard = false;
       });
       return;
     }
-    if (!mounted) return;
+    if (!mounted || token != _listenToken) return;
     setState(() => _loadingBoard = true);
     _boardSub = remote
         .watch(
@@ -142,7 +149,7 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
           districtKey: LeaderboardRemote.slug(_service.district ?? ''),
         )
         .listen((board) {
-          if (!mounted) return;
+          if (!mounted || token != _listenToken) return;
           setState(() {
             _board = board;
             _loadingBoard = false;
@@ -155,7 +162,12 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
     final result = await showModalBottomSheet<_LeaderboardLocation>(
       context: context,
       isScrollControlled: true,
+      // An opaque sheet over a dimmed page. A transparent route made the page
+      // underneath repaint through the sheet while it opened, closed or made
+      // room for the keyboard — the two screens blended for a moment.
       backgroundColor: Colors.transparent,
+      barrierColor: Colors.black54,
+      useSafeArea: true,
       builder: (_) => _JoinSheet(
         initialStateKey: _service.stateKey,
         initialDistrict: _service.district,
@@ -181,10 +193,7 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
       // Every row this account put up this week: the current area's three, plus
       // any board remembered from before a move.
       final scopes = {
-        ...LeaderboardRemote.boardsFor(
-          stateKey: stateKey,
-          district: district,
-        ),
+        ...LeaderboardRemote.boardsFor(stateKey: stateKey, district: district),
         ..._service.publishedScopes(week),
       }.toList();
 
@@ -209,6 +218,10 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
     unawaited(Haptics.light());
     setState(() {
       _scope = scope;
+      // Drop the previous board's rows and rank at once: showing the district's
+      // numbers under the India tab for a frame is the "two screens" look a
+      // switch used to have.
+      _board = LeaderboardBoard.empty;
       _loadingBoard = true;
     });
     unawaited(_listen());
@@ -258,18 +271,21 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
           physics: const AlwaysScrollableScrollPhysics(),
           padding: const EdgeInsets.fromLTRB(20, 6, 20, 28),
           children: [
-            AnimatedEntrance(delayMs: 20, child: _buildHero(context, isDark)),
+            // The board is the page's headline: it leads, on the same violet
+            // hero gradient as Home, Habits and Health. The week total, the
+            // breakdown and the rules follow it.
+            AnimatedEntrance(delayMs: 20, child: _buildRankings(context)),
             const SizedBox(height: 14),
-            AnimatedEntrance(delayMs: 70, child: _buildWeekStrip(context, isDark)),
+            AnimatedEntrance(delayMs: 70, child: _buildHero(context, isDark)),
             const SizedBox(height: 14),
             AnimatedEntrance(
               delayMs: 120,
-              child: _buildBreakdown(context, isDark),
+              child: _buildWeekStrip(context, isDark),
             ),
             const SizedBox(height: 14),
             AnimatedEntrance(
               delayMs: 170,
-              child: _buildRankings(context, isDark),
+              child: _buildBreakdown(context, isDark),
             ),
             const SizedBox(height: 14),
             AnimatedEntrance(delayMs: 210, child: _buildRules(context, isDark)),
@@ -389,11 +405,7 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
           const SizedBox(height: 12),
           Row(
             children: [
-              const Icon(
-                Icons.today_rounded,
-                size: 15,
-                color: Colors.white70,
-              ),
+              const Icon(Icons.today_rounded, size: 15, color: Colors.white70),
               const SizedBox(width: 6),
               Text(
                 '$today points today',
@@ -505,48 +517,58 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
   /// Where today's points came from, against each bucket's daily ceiling.
   Widget _buildBreakdown(BuildContext context, bool isDark) {
     final points = _service.dayPoints(DateTime.now());
-    final rows = <({IconData icon, Color colour, String label, String hint, int value, int cap})>[
-      (
-        icon: Icons.directions_walk_rounded,
-        colour: MacroSnapTheme.neonCyan,
-        label: 'Movement',
-        hint: 'Daily step goal reached',
-        value: points.movement,
-        cap: LeaderboardService.stepGoalDailyCap,
-      ),
-      (
-        icon: Icons.restaurant_rounded,
-        colour: MacroSnapTheme.neonPurple,
-        label: 'Nutrition',
-        hint: 'Meals logged + calorie goal',
-        value: points.nutrition,
-        cap: LeaderboardService.nutritionDailyCap,
-      ),
-      (
-        icon: Icons.checklist_rounded,
-        colour: MacroSnapTheme.neonGreen,
-        label: 'Habits',
-        hint: 'Completed habits',
-        value: points.habits,
-        cap: LeaderboardService.habitDailyCap,
-      ),
-      (
-        icon: Icons.water_drop_rounded,
-        colour: MacroSnapTheme.neonCyan,
-        label: 'Hydration',
-        hint: 'Water logged + daily goal',
-        value: points.hydration,
-        cap: LeaderboardService.hydrationDailyCap,
-      ),
-      (
-        icon: Icons.monitor_weight_rounded,
-        colour: MacroSnapTheme.neonOrange,
-        label: 'Body',
-        hint: 'A weigh-in',
-        value: points.body,
-        cap: LeaderboardService.weighInPoints,
-      ),
-    ];
+    final rows =
+        <
+          ({
+            IconData icon,
+            Color colour,
+            String label,
+            String hint,
+            int value,
+            int cap,
+          })
+        >[
+          (
+            icon: Icons.directions_walk_rounded,
+            colour: MacroSnapTheme.neonCyan,
+            label: 'Movement',
+            hint: 'Daily step goal reached',
+            value: points.movement,
+            cap: LeaderboardService.stepGoalDailyCap,
+          ),
+          (
+            icon: Icons.restaurant_rounded,
+            colour: MacroSnapTheme.neonPurple,
+            label: 'Nutrition',
+            hint: 'Meals logged + calorie goal',
+            value: points.nutrition,
+            cap: LeaderboardService.nutritionDailyCap,
+          ),
+          (
+            icon: Icons.checklist_rounded,
+            colour: MacroSnapTheme.neonGreen,
+            label: 'Habits',
+            hint: 'Completed habits',
+            value: points.habits,
+            cap: LeaderboardService.habitDailyCap,
+          ),
+          (
+            icon: Icons.water_drop_rounded,
+            colour: MacroSnapTheme.neonCyan,
+            label: 'Hydration',
+            hint: 'Water logged + daily goal',
+            value: points.hydration,
+            cap: LeaderboardService.hydrationDailyCap,
+          ),
+          (
+            icon: Icons.monitor_weight_rounded,
+            colour: MacroSnapTheme.neonOrange,
+            label: 'Body',
+            hint: 'A weigh-in',
+            value: points.body,
+            cap: LeaderboardService.weighInPoints,
+          ),
+        ];
 
     return GlassCard(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
@@ -669,17 +691,20 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
   /// Reading a board only needs a signed-in account; joining is the separate
   /// step that puts *you* on it. That order matters: a new user can look at
   /// their district before deciding to share their own score.
-  Widget _buildRankings(BuildContext context, bool isDark) {
+  Widget _buildRankings(BuildContext context) {
     final remote = LeaderboardRemote.instance;
     final canJoin = remote.canJoin;
     final joined = _service.optIn && _service.hasLocation;
     final needsLocation =
         _scope != LeaderboardScope.india && !_service.hasLocation;
-    final titleColour = isDark ? Colors.white : const Color(0xFF1A1A1A);
-    final subtle = MacroSnapTheme.textTertiary(context);
+    // The card sits on the dark violet hero gradient, so its text is white
+    // rather than the theme's on-surface colour.
+    const titleColour = Colors.white;
+    final subtle = Colors.white.withValues(alpha: 0.75);
 
-    return GlassCard(
+    return Container(
       padding: const EdgeInsets.fromLTRB(18, 18, 18, 16),
+      decoration: MacroSnapTheme.habitlyHeroCard(context),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -751,7 +776,7 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
           const SizedBox(height: 16),
 
           // ── Scope tabs ────────────────────────────────────────────
-          _buildScopeTabs(context, isDark, enabled: canJoin, subtle: subtle),
+          _buildScopeTabs(context, enabled: canJoin, subtle: subtle),
 
           if (!canJoin) ...[
             const SizedBox(height: 14),
@@ -844,14 +869,9 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
               )
             else
               for (var i = 0; i < _board.rows.length && i < 10; i++)
-                _buildRankRow(
-                  context,
-                  isDark,
-                  position: i + 1,
-                  row: _board.rows[i],
-                ),
+                _buildRankRow(context, position: i + 1, row: _board.rows[i]),
 
-            const Divider(height: 22),
+            Divider(height: 22, color: Colors.white.withValues(alpha: 0.18)),
 
             if (!joined) ...[
               SizedBox(
@@ -955,72 +975,89 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
     );
   }
 
-  /// Three equal tabs, the selected one filled. Taps are ignored when nobody
-  /// is signed in, because there is no account to read a board with.
+  /// Three equal tabs with a single sliding highlight. Taps are ignored when
+  /// nobody is signed in, because there is no account to read a board with.
+  ///
+  /// The highlight is one background that moves between positions. Giving each
+  /// tab its own AnimatedContainer meant that for the 180 ms of a switch two
+  /// half-transparent pills were on screen at once — a double highlight that
+  /// read as one screen blending into another.
   Widget _buildScopeTabs(
-    BuildContext context,
-    bool isDark, {
+    BuildContext context, {
     required bool enabled,
     required Color subtle,
   }) {
+    final index = LeaderboardScope.values.indexOf(_scope);
     return Container(
       padding: const EdgeInsets.all(4),
       decoration: BoxDecoration(
         color: MacroSnapTheme.borderSubtle(context).withValues(alpha: 0.35),
         borderRadius: BorderRadius.circular(12),
       ),
-      child: Row(
+      child: Stack(
         children: [
-          for (final scope in LeaderboardScope.values)
-            Expanded(
-              child: GestureDetector(
-                behavior: HitTestBehavior.opaque,
-                onTap: enabled && scope != _scope
-                    ? () => _selectScope(scope)
-                    : null,
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 180),
-                  padding: const EdgeInsets.symmetric(vertical: 10),
-                  alignment: Alignment.center,
+          Positioned.fill(
+            child: AnimatedAlign(
+              duration: const Duration(milliseconds: 180),
+              curve: Curves.easeOutCubic,
+              alignment: Alignment(-1 + index.toDouble(), 0),
+              child: FractionallySizedBox(
+                widthFactor: 1 / LeaderboardScope.values.length,
+                heightFactor: 1,
+                child: DecoratedBox(
                   decoration: BoxDecoration(
-                    color: scope == _scope
-                        ? (isDark
-                              ? const Color(0xFF2E2E33)
-                              : Colors.white)
-                        : Colors.transparent,
+                    color: Colors.white,
                     borderRadius: BorderRadius.circular(9),
-                  ),
-                  child: Text(
-                    switch (scope) {
-                      LeaderboardScope.district => 'District',
-                      LeaderboardScope.state => 'State',
-                      LeaderboardScope.india => 'India',
-                    },
-                    style: TextStyle(
-                      fontSize: 12.5,
-                      fontWeight: FontWeight.w800,
-                      color: scope == _scope
-                          ? (isDark ? Colors.white : const Color(0xFF1A1A1A))
-                          : (enabled ? subtle : subtle.withValues(alpha: 0.5)),
-                    ),
                   ),
                 ),
               ),
             ),
+          ),
+          Row(
+            children: [
+              for (final scope in LeaderboardScope.values)
+                Expanded(
+                  child: GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: enabled && scope != _scope
+                        ? () => _selectScope(scope)
+                        : null,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 10),
+                      child: Center(
+                        child: Text(
+                          switch (scope) {
+                            LeaderboardScope.district => 'District',
+                            LeaderboardScope.state => 'State',
+                            LeaderboardScope.india => 'India',
+                          },
+                          style: TextStyle(
+                            fontSize: 12.5,
+                            fontWeight: FontWeight.w800,
+                            color: scope == _scope
+                                ? const Color(0xFF1A1A1A)
+                                : (enabled
+                                      ? subtle
+                                      : subtle.withValues(alpha: 0.5)),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          ),
         ],
       ),
     );
   }
 
   Widget _buildRankRow(
-    BuildContext context,
-    bool isDark, {
+    BuildContext context, {
     required int position,
     required LeaderboardRow row,
   }) {
-    final colour = row.isMe
-        ? MacroSnapTheme.neonGreen
-        : (isDark ? Colors.white : const Color(0xFF1A1A1A));
+    final colour = row.isMe ? MacroSnapTheme.neonGreen : Colors.white;
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 7),
       child: Row(
@@ -1138,7 +1175,9 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
                       style: TextStyle(
                         fontSize: 12.5,
                         fontWeight: FontWeight.w600,
-                        color: isDark ? Colors.white70 : const Color(0xFF3A3A3A),
+                        color: isDark
+                            ? Colors.white70
+                            : const Color(0xFF3A3A3A),
                       ),
                     ),
                   ),
@@ -1214,8 +1253,7 @@ class _LiveDotState extends State<_LiveDot>
   }
 }
 
-/// What the join sheet returns: the state to file under, and the district the
-/// user typed.
+/// What the join sheet returns: the state to file under, and the district.
 class _LeaderboardLocation {
   final String stateKey;
   final String district;
@@ -1223,9 +1261,19 @@ class _LeaderboardLocation {
   const _LeaderboardLocation({required this.stateKey, required this.district});
 }
 
-/// One-step join: state from a fixed list (so the same state is not spelled
-/// five ways) plus a free-text district (India has thousands, and a stale
-/// list would quietly drop people off their own board).
+/// District dropdown value that swaps the list for a text field.
+const String _kOtherDistrict = '__other__';
+
+/// One-step join: a state from a fixed list, then one of that state's districts.
+///
+/// The district is picked from a list rather than typed because it is part of
+/// the board's path: "Pune", "pune" and "Poona" typed by three people made
+/// three half-empty boards. "Other (type it)" keeps an area the list does not
+/// carry possible, filed exactly as the old free-text field did.
+///
+/// The sheet is opaque and scrollable on purpose. The page underneath kept
+/// repainting through the transparent route while the sheet opened, closed or
+/// moved for the keyboard, which looked like two screens blended together.
 class _JoinSheet extends StatefulWidget {
   final String? initialStateKey;
   final String? initialDistrict;
@@ -1238,177 +1286,503 @@ class _JoinSheet extends StatefulWidget {
 
 class _JoinSheetState extends State<_JoinSheet> {
   late String? _stateKey = widget.initialStateKey;
-  late final TextEditingController _district = TextEditingController(
-    text: widget.initialDistrict ?? '',
-  );
-  String? _error;
+  String _country = 'India';
+  String? _pickedDistrict;
+  bool _customDistrict = false;
+  final TextEditingController _districtText = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    final initial = widget.initialDistrict?.trim() ?? '';
+    if (initial.isEmpty) return;
+    final slug = LeaderboardRemote.slug(initial);
+    final match = LeaderboardRemote.districtsFor(
+      _stateKey,
+    ).where((d) => LeaderboardRemote.slug(d) == slug);
+    if (match.isNotEmpty) {
+      _pickedDistrict = match.first;
+    } else {
+      // Filed before this list existed, or an area the list does not carry.
+      // Keep the name, shown as the typed value it is.
+      _customDistrict = true;
+      _districtText.text = initial;
+    }
+  }
 
   @override
   void dispose() {
-    _district.dispose();
+    _districtText.dispose();
     super.dispose();
   }
 
-  bool get _canSave =>
-      _stateKey != null && LeaderboardRemote.slug(_district.text).length >= 3;
+  bool get _hasDistrict => _customDistrict
+      ? LeaderboardRemote.slug(_districtText.text).length >= 3
+      : _pickedDistrict != null;
+
+  bool get _canSave => _stateKey != null && _hasDistrict;
+
+  /// Country, state and district each open the same searchable list: Uttar
+  /// Pradesh alone has 75 districts, and scrolling a dropdown to reach one is
+  /// worse than typing two letters.
+  Future<void> _pickCountry() async {
+    final picked = await _showSearchPicker<String>(
+      context: context,
+      title: 'Country',
+      hint: 'Search a country',
+      items: const ['India'],
+      labelOf: (country) => country,
+      selected: _country,
+      note:
+          'MacroSnap boards cover India today. Every other country needs its '
+          'own boards before it can appear here.',
+    );
+    if (picked == null || !mounted) return;
+    setState(() => _country = picked);
+  }
+
+  Future<void> _pickState() async {
+    ({String key, String name})? selected;
+    for (final state in LeaderboardRemote.states) {
+      if (state.key == _stateKey) selected = state;
+    }
+    final picked = await _showSearchPicker<({String key, String name})>(
+      context: context,
+      title: 'State or UT',
+      hint: 'Search a state or union territory',
+      items: LeaderboardRemote.states,
+      labelOf: (state) => state.name,
+      selected: selected,
+    );
+    if (picked == null || !mounted || picked.key == _stateKey) return;
+    setState(() {
+      _stateKey = picked.key;
+      // A district belongs to one state: a leftover pick would file the user
+      // under a district that state does not have.
+      _pickedDistrict = null;
+      _customDistrict = false;
+      _districtText.clear();
+    });
+  }
+
+  Future<void> _pickDistrict() async {
+    final picked = await _showSearchPicker<String>(
+      context: context,
+      title: 'District',
+      hint: 'Search a district',
+      items: [...LeaderboardRemote.districtsFor(_stateKey), _kOtherDistrict],
+      labelOf: (district) =>
+          district == _kOtherDistrict ? 'Other (type it)' : district,
+      selected: _customDistrict ? _kOtherDistrict : _pickedDistrict,
+    );
+    if (picked == null || !mounted) return;
+    setState(() {
+      _customDistrict = picked == _kOtherDistrict;
+      if (_customDistrict) {
+        _pickedDistrict = null;
+      } else {
+        _pickedDistrict = picked;
+        _districtText.clear();
+      }
+    });
+  }
 
   void _submit() {
     if (!_canSave) return;
     unawaited(Haptics.light());
-    Navigator.of(context).pop(
-      _LeaderboardLocation(
-        stateKey: _stateKey!,
-        district: _district.text.trim(),
-      ),
-    );
+    final district =
+        (_customDistrict ? _districtText.text : (_pickedDistrict ?? '')).trim();
+    Navigator.of(
+      context,
+    ).pop(_LeaderboardLocation(stateKey: _stateKey!, district: district));
   }
 
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final surface = Theme.of(context).colorScheme.surface;
+    final sheetColour = isDark
+        ? MacroSnapTheme.surfaceDark
+        : MacroSnapTheme.surfaceLight;
     final titleColour = isDark ? Colors.white : const Color(0xFF1A1A1A);
     final subtle = MacroSnapTheme.textTertiary(context);
+    final keyboard = MediaQuery.viewInsetsOf(context).bottom;
+    final maxHeight = (MediaQuery.sizeOf(context).height * 0.88 - keyboard)
+        .clamp(320.0, MediaQuery.sizeOf(context).height);
 
     return Padding(
-      padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
-      child: Container(
-        decoration: BoxDecoration(
-          color: surface,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-        ),
-        padding: const EdgeInsets.fromLTRB(20, 10, 20, 20),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Center(
-              child: Container(
-                width: 36,
-                height: 4,
-                margin: const EdgeInsets.only(bottom: 16),
-                decoration: BoxDecoration(
-                  color: MacroSnapTheme.borderSubtle(context),
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-            ),
-            Text(
-              'Join the leaderboard',
-              style: TextStyle(
-                fontSize: 17,
-                fontWeight: FontWeight.w900,
-                color: titleColour,
-              ),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              'Your name and weekly points appear on your district, state and '
-              'India boards. Nothing else is shared.',
-              style: TextStyle(fontSize: 12, height: 1.45, color: subtle),
-            ),
-            const SizedBox(height: 16),
-            // Country is fixed: MacroSnap's points board is India-only today.
-            // Showing it as a read-only row is honest about that, rather than
-            // offering a picker with one option.
-            Container(
-              margin: const EdgeInsets.only(bottom: 14),
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-              decoration: BoxDecoration(
-                border: Border.all(
-                  color: MacroSnapTheme.borderSubtle(context),
-                ),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Row(
+      padding: EdgeInsets.only(bottom: keyboard),
+      child: ConstrainedBox(
+        constraints: BoxConstraints(maxHeight: maxHeight),
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            color: sheetColour,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          child: SafeArea(
+            top: false,
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(20, 10, 20, 20),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Expanded(
-                    child: Text(
-                      'Country',
-                      style: TextStyle(fontSize: 13, color: subtle),
+                  Center(
+                    child: Container(
+                      width: 36,
+                      height: 4,
+                      margin: const EdgeInsets.only(bottom: 16),
+                      decoration: BoxDecoration(
+                        color: MacroSnapTheme.borderSubtle(context),
+                        borderRadius: BorderRadius.circular(2),
+                      ),
                     ),
                   ),
                   Text(
-                    'India',
+                    'Join the leaderboard',
                     style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w700,
+                      fontSize: 17,
+                      fontWeight: FontWeight.w900,
                       color: titleColour,
                     ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Your name and weekly points appear on your district, '
+                    'state and India boards. Nothing else is shared.',
+                    style: TextStyle(fontSize: 12, height: 1.45, color: subtle),
+                  ),
+                  const SizedBox(height: 14),
+                  _LocationField(
+                    label: 'Country',
+                    value: _country,
+                    hint: 'Search your country',
+                    icon: Icons.public_rounded,
+                    onTap: _pickCountry,
+                  ),
+                  const SizedBox(height: 14),
+                  _LocationField(
+                    label: 'State or UT',
+                    value: _stateKey == null
+                        ? null
+                        : LeaderboardRemote.stateName(_stateKey!),
+                    hint: 'Search your state',
+                    icon: Icons.map_rounded,
+                    onTap: _pickState,
+                  ),
+                  const SizedBox(height: 14),
+                  _LocationField(
+                    label: 'District',
+                    value: _customDistrict
+                        ? 'Other (type it)'
+                        : _pickedDistrict,
+                    hint: _stateKey == null
+                        ? 'Select your state first'
+                        : 'Search your district',
+                    icon: Icons.location_on_rounded,
+                    onTap: _stateKey == null ? null : _pickDistrict,
+                  ),
+                  if (_customDistrict) ...[
+                    const SizedBox(height: 14),
+                    TextField(
+                      controller: _districtText,
+                      textCapitalization: TextCapitalization.words,
+                      maxLength: 40,
+                      decoration: const InputDecoration(
+                        labelText: 'District or city',
+                        hintText: 'e.g. Pune',
+                        counterText: '',
+                      ),
+                      onChanged: (_) => setState(() {}),
+                      onSubmitted: (_) => _submit(),
+                    ),
+                  ],
+                  const SizedBox(height: 18),
+                  SizedBox(
+                    width: double.infinity,
+                    child: FilledButton(
+                      onPressed: _canSave ? _submit : null,
+                      style: FilledButton.styleFrom(
+                        backgroundColor: MacroSnapTheme.neonOrange,
+                        foregroundColor: Colors.black,
+                        disabledBackgroundColor: MacroSnapTheme.borderSubtle(
+                          context,
+                        ).withValues(alpha: 0.4),
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                      ),
+                      child: const Text(
+                        'Join leaderboard',
+                        style: TextStyle(fontWeight: FontWeight.w900),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Text(
+                    'You can leave any time; leaving removes your entry from '
+                    "the current week's boards.",
+                    style: TextStyle(fontSize: 10.5, color: subtle),
                   ),
                 ],
               ),
             ),
-            DropdownButtonFormField<String>(
-              initialValue: _stateKey,
-              isExpanded: true,
-              menuMaxHeight: 360,
-              decoration: const InputDecoration(labelText: 'State or UT'),
-              hint: const Text('Select your state'),
-              items: [
-                for (final state in LeaderboardRemote.states)
-                  DropdownMenuItem(
-                    value: state.key,
-                    child: Text(state.name, overflow: TextOverflow.ellipsis),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// A read-only field that opens a searchable list. It is drawn like the sheet's
+/// text fields so country, state and district read as one set of answers rather
+/// than a mix of menus and boxes.
+class _LocationField extends StatelessWidget {
+  final String label;
+  final String? value;
+  final String hint;
+  final IconData icon;
+  final VoidCallback? onTap;
+
+  const _LocationField({
+    required this.label,
+    required this.value,
+    required this.hint,
+    required this.icon,
+    this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final titleColour = Theme.of(context).brightness == Brightness.dark
+        ? Colors.white
+        : const Color(0xFF1A1A1A);
+    final subtle = MacroSnapTheme.textTertiary(context);
+    final filled = (value ?? '').isNotEmpty;
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: InputDecorator(
+        isEmpty: !filled,
+        decoration: InputDecoration(
+          labelText: label,
+          enabled: onTap != null,
+          prefixIcon: Icon(icon, size: 18),
+          suffixIcon: Icon(Icons.search_rounded, size: 18, color: subtle),
+          border: const OutlineInputBorder(),
+        ),
+        child: Text(
+          filled ? value! : hint,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(
+            fontSize: 14,
+            fontWeight: filled ? FontWeight.w700 : FontWeight.w400,
+            color: filled ? titleColour : subtle,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Opens [items] under a search box and returns the picked one, or null when
+/// the sheet is dismissed.
+Future<T?> _showSearchPicker<T>({
+  required BuildContext context,
+  required String title,
+  required String hint,
+  required List<T> items,
+  required String Function(T item) labelOf,
+  T? selected,
+  String? note,
+}) {
+  return showModalBottomSheet<T>(
+    context: context,
+    isScrollControlled: true,
+    useSafeArea: true,
+    backgroundColor: Colors.transparent,
+    barrierColor: Colors.black54,
+    builder: (_) => _SearchPickerSheet<T>(
+      title: title,
+      hint: hint,
+      items: items,
+      labelOf: labelOf,
+      selected: selected,
+      note: note,
+    ),
+  );
+}
+
+/// A searchable list in a sheet. The query filters as it is typed; an empty
+/// query shows everything, so the list is still browsable.
+///
+/// Searching matters most for districts: Uttar Pradesh has 75 of them, and a
+/// dropdown of 75 rows is a scroll with no way to jump.
+class _SearchPickerSheet<T> extends StatefulWidget {
+  final String title;
+  final String hint;
+  final List<T> items;
+  final String Function(T item) labelOf;
+  final T? selected;
+  final String? note;
+
+  const _SearchPickerSheet({
+    required this.title,
+    required this.hint,
+    required this.items,
+    required this.labelOf,
+    this.selected,
+    this.note,
+  });
+
+  @override
+  State<_SearchPickerSheet<T>> createState() => _SearchPickerSheetState<T>();
+}
+
+class _SearchPickerSheetState<T> extends State<_SearchPickerSheet<T>> {
+  final TextEditingController _query = TextEditingController();
+
+  @override
+  void dispose() {
+    _query.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final surface = isDark
+        ? MacroSnapTheme.surfaceDark
+        : MacroSnapTheme.surfaceLight;
+    final titleColour = isDark ? Colors.white : const Color(0xFF1A1A1A);
+    final subtle = MacroSnapTheme.textTertiary(context);
+    final keyboard = MediaQuery.viewInsetsOf(context).bottom;
+    final maxHeight = (MediaQuery.sizeOf(context).height * 0.75 - keyboard)
+        .clamp(260.0, MediaQuery.sizeOf(context).height);
+    final matches = [
+      for (final item in widget.items)
+        if (matchesSearch(widget.labelOf(item), _query.text)) item,
+    ];
+
+    return Padding(
+      padding: EdgeInsets.only(bottom: keyboard),
+      child: ConstrainedBox(
+        constraints: BoxConstraints(maxHeight: maxHeight),
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            color: surface,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          child: SafeArea(
+            top: false,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Center(
+                  child: Container(
+                    width: 36,
+                    height: 4,
+                    margin: const EdgeInsets.only(top: 10, bottom: 14),
+                    decoration: BoxDecoration(
+                      color: MacroSnapTheme.borderSubtle(context),
+                      borderRadius: BorderRadius.circular(2),
+                    ),
                   ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  child: Text(
+                    widget.title,
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w900,
+                      color: titleColour,
+                    ),
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 12, 20, 6),
+                  child: TextField(
+                    controller: _query,
+                    autofocus: true,
+                    textInputAction: TextInputAction.search,
+                    onChanged: (_) => setState(() {}),
+                    decoration: InputDecoration(
+                      hintText: widget.hint,
+                      prefixIcon: const Icon(Icons.search_rounded, size: 20),
+                      suffixIcon: _query.text.isEmpty
+                          ? null
+                          : IconButton(
+                              tooltip: 'Clear search',
+                              icon: const Icon(Icons.close_rounded, size: 18),
+                              onPressed: () {
+                                _query.clear();
+                                setState(() {});
+                              },
+                            ),
+                      border: const OutlineInputBorder(),
+                    ),
+                  ),
+                ),
+                if (widget.note != null)
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 2, 20, 8),
+                    child: Text(
+                      widget.note!,
+                      style: TextStyle(
+                        fontSize: 11,
+                        height: 1.4,
+                        color: subtle,
+                      ),
+                    ),
+                  ),
+                Flexible(
+                  child: matches.isEmpty
+                      ? Padding(
+                          padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
+                          child: Text(
+                            'No match for "${_query.text.trim()}".',
+                            style: TextStyle(fontSize: 12.5, color: subtle),
+                          ),
+                        )
+                      : ListView.builder(
+                          shrinkWrap: true,
+                          padding: const EdgeInsets.only(bottom: 12),
+                          itemCount: matches.length,
+                          itemBuilder: (context, index) {
+                            final item = matches[index];
+                            final isSelected = item == widget.selected;
+                            return ListTile(
+                              dense: true,
+                              title: Text(
+                                widget.labelOf(item),
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: isSelected
+                                      ? FontWeight.w800
+                                      : FontWeight.w500,
+                                  color: isSelected
+                                      ? MacroSnapTheme.neonGreen
+                                      : titleColour,
+                                ),
+                              ),
+                              trailing: isSelected
+                                  ? const Icon(
+                                      Icons.check_circle_rounded,
+                                      size: 20,
+                                      color: MacroSnapTheme.neonGreen,
+                                    )
+                                  : null,
+                              onTap: () => Navigator.of(context).pop(item),
+                            );
+                          },
+                        ),
+                ),
               ],
-              onChanged: (value) => setState(() => _stateKey = value),
             ),
-            const SizedBox(height: 14),
-            TextField(
-              controller: _district,
-              textCapitalization: TextCapitalization.words,
-              maxLength: 40,
-              decoration: const InputDecoration(
-                labelText: 'District or city',
-                hintText: 'e.g. Pune',
-                counterText: '',
-              ),
-              onChanged: (_) {
-                if (_error != null) setState(() => _error = null);
-                setState(() {});
-              },
-              onSubmitted: (_) => _submit(),
-            ),
-            if (_error != null) ...[
-              const SizedBox(height: 8),
-              Text(
-                _error!,
-                style: const TextStyle(
-                  fontSize: 11.5,
-                  color: MacroSnapTheme.neonPink,
-                ),
-              ),
-            ],
-            const SizedBox(height: 18),
-            SizedBox(
-              width: double.infinity,
-              child: FilledButton(
-                onPressed: _canSave ? _submit : null,
-                style: FilledButton.styleFrom(
-                  backgroundColor: MacroSnapTheme.neonOrange,
-                  foregroundColor: Colors.black,
-                  disabledBackgroundColor: MacroSnapTheme.borderSubtle(
-                    context,
-                  ).withValues(alpha: 0.4),
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                ),
-                child: const Text(
-                  'Join leaderboard',
-                  style: TextStyle(fontWeight: FontWeight.w900),
-                ),
-              ),
-            ),
-            const SizedBox(height: 10),
-            Text(
-              'You can leave any time; leaving removes your entry from the '
-              'current week\'s boards.',
-              style: TextStyle(fontSize: 10.5, color: subtle),
-            ),
-          ],
+          ),
         ),
       ),
     );

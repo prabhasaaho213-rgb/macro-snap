@@ -53,6 +53,17 @@ class _UpdatesScreenState extends State<UpdatesScreen> {
       date: '2026-11-22',
       isLatest: true,
       notes: [
+        'The leaderboard is the first card on the Fitness Points page now, on the same violet gradient as the rest of the app',
+        'Joining is a search: type a couple of letters to pick your country, state or district instead of scrolling a long menu',
+        'Every state\'s districts are listed by name, so "Pune", "pune" and "Poona" no longer split into three half-empty boards — and Other still lets you type a place the list does not carry',
+        'Quick Actions keeps all four tiles on one row on narrow phones, where Rank used to drop onto a line of its own',
+        'Changing district still moves your row, and leaving still removes you from all three boards',
+      ],
+    ),
+    _UpdateEntry(
+      version: '1.5.19',
+      date: '2026-11-22',
+      notes: [
         'New: a live leaderboard on the Fitness Points page — District, State and India boards, still opened from Home\'s Quick Actions',
         'Pick your state and district to join; only your name and weekly points are shared, never your meals, health data or contact details',
         'The board updates by itself when anyone\'s score changes, with no refresh needed',

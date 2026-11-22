@@ -29,26 +29,40 @@ void main() {
 
     expect(tester.takeException(), isNull);
     expect(find.text('Leaderboard'), findsOneWidget);
-    expect(find.text('Movement'), findsOneWidget);
-    expect(find.text("Today's points"), findsOneWidget);
 
-    // The ranking and rules cards start below the fold, so they only build
-    // once scrolled into view.
-    await tester.scrollUntilVisible(
-      find.text('How points work'),
-      260,
-      scrollable: find.byType(Scrollable).first,
-    );
-    await tester.pump(const Duration(milliseconds: 300));
-    expect(tester.takeException(), isNull);
-    expect(find.text('How points work'), findsOneWidget);
-    // The board card: guests see the join prompt, not a fabricated ranking.
+    // The board leads the page, so it — not the week total — is what is on
+    // screen without scrolling. Guests see the join prompt, not a fabricated
+    // ranking.
     expect(find.text('Fitness leaderboard'), findsOneWidget);
     expect(find.text('District'), findsOneWidget);
     expect(
       find.textContaining('Sign in with Google to see the board'),
       findsOneWidget,
     );
+
+    // The week total, the breakdown and the rules cards follow below the fold,
+    // so they only build once scrolled into view.
+    final list = find.byType(Scrollable).first;
+    await tester.scrollUntilVisible(
+      find.text("Today's points"),
+      260,
+      scrollable: list,
+    );
+    expect(find.text("Today's points"), findsOneWidget);
+    await tester.scrollUntilVisible(
+      find.text('Movement'),
+      260,
+      scrollable: list,
+    );
+    expect(find.text('Movement'), findsOneWidget);
+    await tester.scrollUntilVisible(
+      find.text('How points work'),
+      260,
+      scrollable: list,
+    );
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(tester.takeException(), isNull);
+    expect(find.text('How points work'), findsOneWidget);
   });
 
   test('the day ceiling is the sum of the bucket caps', () {

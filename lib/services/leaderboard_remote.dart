@@ -5,6 +5,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../data/india_districts.dart';
 import 'crash_reporting.dart';
 import 'leaderboard_service.dart';
 
@@ -85,7 +86,10 @@ class LeaderboardRemote {
     (key: 'bihar', name: 'Bihar'),
     (key: 'chandigarh', name: 'Chandigarh'),
     (key: 'chhattisgarh', name: 'Chhattisgarh'),
-    (key: 'dadra-nagar-haveli-daman-diu', name: 'Dadra & Nagar Haveli and Daman & Diu'),
+    (
+      key: 'dadra-nagar-haveli-daman-diu',
+      name: 'Dadra & Nagar Haveli and Daman & Diu',
+    ),
     (key: 'delhi', name: 'Delhi'),
     (key: 'goa', name: 'Goa'),
     (key: 'gujarat', name: 'Gujarat'),
@@ -118,11 +122,14 @@ class LeaderboardRemote {
   ];
 
   static String stateName(String key) => states
-      .firstWhere(
-        (s) => s.key == key,
-        orElse: () => (key: key, name: key),
-      )
+      .firstWhere((s) => s.key == key, orElse: () => (key: key, name: key))
       .name;
+
+  /// The districts of [stateKey], sorted for the picker. Empty when the state
+  /// is unknown, which the join sheet renders as a disabled district field
+  /// rather than an empty menu.
+  static List<String> districtsFor(String? stateKey) =>
+      stateKey == null ? const [] : (kDistrictsByState[stateKey] ?? const []);
 
   /// Whether there is an account to attach points to. Guests (no Firebase
   /// user) cannot join: a board needs a stable identity, and an anonymous
@@ -267,7 +274,10 @@ class LeaderboardRemote {
     // stale higher number on the board for the rest of the week.
     final deletes = writes
         ? staleScopes(previousScopes, current)
-        : [for (final scope in previousScopes) if (isValidScope(scope)) scope];
+        : [
+            for (final scope in previousScopes)
+              if (isValidScope(scope)) scope,
+          ];
     if (!writes && deletes.isEmpty) return false;
 
     try {
@@ -277,7 +287,11 @@ class LeaderboardRemote {
 
       for (final scope in writes ? current : const <String>[]) {
         batch.set(
-          weekRef.collection('scopes').doc(scope).collection('entries').doc(user),
+          weekRef
+              .collection('scopes')
+              .doc(scope)
+              .collection('entries')
+              .doc(user),
           {
             'uid': user,
             'name': name,
@@ -296,7 +310,11 @@ class LeaderboardRemote {
       // away from, or every row when there is no score to publish.
       for (final stale in deletes) {
         batch.delete(
-          weekRef.collection('scopes').doc(stale).collection('entries').doc(user),
+          weekRef
+              .collection('scopes')
+              .doc(stale)
+              .collection('entries')
+              .doc(user),
         );
       }
       await batch.commit();
@@ -312,9 +330,7 @@ class LeaderboardRemote {
   static Future<String> publicName() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      final raw = (prefs.getString('nickname') ??
-              prefs.getString('name') ??
-              '')
+      final raw = (prefs.getString('nickname') ?? prefs.getString('name') ?? '')
           .trim();
       if (raw.isEmpty) return 'MacroSnap user';
       return raw.length > 40 ? raw.substring(0, 40) : raw;
@@ -365,7 +381,9 @@ class LeaderboardRemote {
       // written, nothing when the write was only a cleanup.
       await service.rememberPublished(
         week,
-        points > 0 ? boardsFor(stateKey: stateKey, district: district) : const [],
+        points > 0
+            ? boardsFor(stateKey: stateKey, district: district)
+            : const [],
       );
     }
     return ok;
@@ -559,7 +577,10 @@ class LeaderboardRemote {
       if (myRank == null) {
         // Outside the visible slice (or not on this board). Still report an
         // honest position by counting the board's top slice only.
-        final mine = await _entries(week, scopeKey(scope, stateKey: stateKey, districtKey: districtKey)).doc(me).get();
+        final mine = await _entries(
+          week,
+          scopeKey(scope, stateKey: stateKey, districtKey: districtKey),
+        ).doc(me).get();
         if (mine.exists) myRank = -1; // has an entry, below the visible slice
       }
       return LeaderboardBoard(rows: rows, myRank: myRank);

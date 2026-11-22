@@ -22,72 +22,92 @@ extension _HomeMeals on _HomeScreenState {
               ),
             ),
             const SizedBox(height: 16),
-            // Wrap, not Row: three actions must still fit a 320dp phone at 2x
-            // system font without a RenderFlex overflow.
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              alignment: WrapAlignment.spaceAround,
-              children: [
-                _quickAction(
-                  Icons.camera_alt_rounded,
-                  'Snap',
-                  MacroSnapTheme.neonGreen,
-                  isDark,
-                  () {
-                    // Switch to the Scan TAB instead of pushing a second
-                    // ScanScreen on top of the shell. Two live ScanScreens
-                    // meant two CameraControllers fighting for the same
-                    // hardware — the whole app came back black when the pushed
-                    // copy was closed. The tab already exists and resumes its
-                    // paused preview instantly.
-                    _refresh();
-                    openShellTab(1);
-                  },
-                ),
-                _quickAction(
-                  Icons.qr_code_scanner_rounded,
-                  'Barcode',
-                  MacroSnapTheme.neonCyan,
-                  isDark,
-                  () {
-                    Navigator.push(
-                      context,
-                      habitFlowRoute(const BarcodeScanScreen()),
-                    );
-                  },
-                ),
-                _quickAction(
-                  Icons.auto_awesome_rounded,
-                  'Diet',
-                  MacroSnapTheme.neonPurple,
-                  isDark,
-                  () async {
-                    await DietPlanService.instance.load();
-                    if (context.mounted) {
-                      Navigator.push(
-                        context,
-                        habitFlowRoute(const DietPlanScreen()),
-                      );
-                    }
-                  },
-                ),
-                // The leaderboard lives here and nowhere else: it is a
-                // "how am I doing" page you reach from Home, not a fifth tab
-                // competing with Home, Scan, Habits and Health.
-                _quickAction(
-                  Icons.emoji_events_rounded,
-                  'Rank',
-                  MacroSnapTheme.neonOrange,
-                  isDark,
-                  () {
-                    Navigator.push(
-                      context,
-                      habitFlowRoute(const LeaderboardScreen()),
-                    );
-                  },
-                ),
-              ],
+            // The tiles share the width that is actually available instead of
+            // each declaring 72dp. On a 360dp phone the card's inner width is
+            // about 272dp, so four 72dp tiles plus gaps (312dp) wrapped into
+            // three plus a lonely "Rank" on its own line — which read as a
+            // broken row. Sharing the width keeps all four on one line from
+            // 320dp up; the Wrap still wraps rather than overflowing if the
+            // system font is scaled far enough to need it.
+            LayoutBuilder(
+              builder: (context, constraints) {
+                const spacing = 8.0;
+                const tileCount = 4;
+                final tileWidth =
+                    ((constraints.maxWidth - spacing * (tileCount - 1)) /
+                            tileCount)
+                        .clamp(48.0, _quickActionWidth)
+                        .toDouble();
+                return Wrap(
+                  spacing: spacing,
+                  runSpacing: spacing,
+                  alignment: WrapAlignment.spaceAround,
+                  children: [
+                    _quickAction(
+                      Icons.camera_alt_rounded,
+                      'Snap',
+                      MacroSnapTheme.neonGreen,
+                      isDark,
+                      () {
+                        // Switch to the Scan TAB instead of pushing a second
+                        // ScanScreen on top of the shell. Two live ScanScreens
+                        // meant two CameraControllers fighting for the same
+                        // hardware — the whole app came back black when the
+                        // pushed copy was closed. The tab already exists and
+                        // resumes its paused preview instantly.
+                        _refresh();
+                        openShellTab(1);
+                      },
+                      width: tileWidth,
+                    ),
+                    _quickAction(
+                      Icons.qr_code_scanner_rounded,
+                      'Barcode',
+                      MacroSnapTheme.neonCyan,
+                      isDark,
+                      () {
+                        Navigator.push(
+                          context,
+                          habitFlowRoute(const BarcodeScanScreen()),
+                        );
+                      },
+                      width: tileWidth,
+                    ),
+                    _quickAction(
+                      Icons.auto_awesome_rounded,
+                      'Diet',
+                      MacroSnapTheme.neonPurple,
+                      isDark,
+                      () async {
+                        await DietPlanService.instance.load();
+                        if (context.mounted) {
+                          Navigator.push(
+                            context,
+                            habitFlowRoute(const DietPlanScreen()),
+                          );
+                        }
+                      },
+                      width: tileWidth,
+                    ),
+                    // The leaderboard lives here and nowhere else: it is a
+                    // "how am I doing" page you reach from Home, not a fifth
+                    // tab competing with Home, Scan, Habits and Health.
+                    _quickAction(
+                      Icons.emoji_events_rounded,
+                      'Rank',
+                      MacroSnapTheme.neonOrange,
+                      isDark,
+                      () {
+                        Navigator.push(
+                          context,
+                          habitFlowRoute(const LeaderboardScreen()),
+                        );
+                      },
+                      width: tileWidth,
+                    ),
+                  ],
+                );
+              },
             ),
           ],
         ),
@@ -95,9 +115,9 @@ extension _HomeMeals on _HomeScreenState {
     );
   }
 
-  /// Uniform tile width for the Quick Actions row. Narrow enough that five
-  /// tiles fit a 320dp phone (the Wrap still wraps rather than overflowing if
-  /// the system font is scaled up), wide enough for "Barcode" at 11sp.
+  /// The widest a Quick Actions tile grows. The row divides the width it
+  /// actually has by the number of tiles and clamps to this, so four tiles stay
+  /// on one line on every phone and wider screens keep the original 72dp look.
   static const double _quickActionWidth = 72;
 
   Widget _quickAction(
@@ -105,13 +125,14 @@ extension _HomeMeals on _HomeScreenState {
     String label,
     Color color,
     bool isDark,
-    VoidCallback onTap,
-  ) {
-    // Fixed width, not intrinsic: sizing the tile to its label made every
-    // action a different width ("Snap" narrow) with the icon
-    // floating in a skinny pill and the label spilling past the tile edges —
-    // which is what made the row look broken. Every tile is now identical and
-    // the label ellipsises instead of overflowing.
+    VoidCallback onTap, {
+    double width = _quickActionWidth,
+  }) {
+    // An explicit width, not intrinsic: sizing the tile to its label made every
+    // action a different width ("Snap" narrow) with the icon floating in a
+    // skinny pill and the label spilling past the tile edges — which is what
+    // made the row look broken. The caller passes one width for all of them, so
+    // every tile is identical and the label ellipsises instead of overflowing.
     return ScaleOnPress(
       // Tap feedback for every quick action (Snap, Barcode, Diet, ...).
       onTap: () {
@@ -120,7 +141,7 @@ extension _HomeMeals on _HomeScreenState {
       },
       scaleAmount: 0.93,
       child: Container(
-        width: _quickActionWidth,
+        width: width,
         padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 4),
         decoration: BoxDecoration(
           color: color.withValues(alpha: 0.1),
