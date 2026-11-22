@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # Miscellaneous
 *.class
 *.log
@@ -62,3 +63,10 @@ nul
 *.tar.gz
 *.zip
 update_card_colors.py
+=======
+# source trees — the app and backend are git subtrees/submodules in the real
+# repository; the release pipeline records their artifacts in releases/, not the
+# working copies.
+/app
+/backend
+>>>>>>> 88b14d2 (track: add .gitignore for app + backend subtrees)
