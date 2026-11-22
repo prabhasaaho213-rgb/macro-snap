@@ -72,6 +72,11 @@ class LeaderboardService extends ChangeNotifier {
   static const String _daysKey = 'leaderboard_days_v1';
   static const String _stepsDayKey = 'leaderboard_steps_day';
   static const String _stepsValueKey = 'leaderboard_steps_value';
+  static const String _optInKey = 'leaderboard_opt_in';
+  static const String _statePrefKey = 'leaderboard_state_key';
+  static const String _districtPrefKey = 'leaderboard_district';
+  static const String _publishedKey = 'leaderboard_published_v1';
+  static const String _pendingLeaveKey = 'leaderboard_pending_leave_v1';
 
   /// How much history is kept. A season/quarter is plenty for "this week"
   /// plus a few weeks of context, and it keeps the stored JSON tiny.
@@ -84,6 +89,31 @@ class LeaderboardService extends ChangeNotifier {
   /// Steps the health dashboard last read today, in the app's own words.
   int _stepsToday = 0;
   String? _stepsDay;
+
+  /// Public leaderboard identity. Off by default: joining puts the user's
+  /// name and weekly score on a board other accounts can read, so it is the
+  /// user's decision, not a side effect of logging a meal.
+  bool _optIn = false;
+  String? _stateKey;
+  String? _district;
+
+  /// Which boards were written for which week, so a district change can
+  /// remove the stale document instead of leaving the user on two boards.
+  final Map<String, List<String>> _published = {};
+
+  /// A leave that has not reached Firestore yet (offline). Retried at the next
+  /// launch so "Leave" cannot be a no-op.
+  ({String week, List<String> scopes})? _pendingLeave;
+
+  ({String week, List<String> scopes})? get pendingLeave => _pendingLeave;
+
+  bool get optIn => _optIn;
+  String? get stateKey => _stateKey;
+  String? get district => _district;
+
+  /// True when there is enough profile to place the user on a board.
+  bool get hasLocation =>
+      (_stateKey?.isNotEmpty ?? false) && (_district?.isNotEmpty ?? false);
 
   bool get loaded => _loaded;
 
@@ -158,6 +188,30 @@ class LeaderboardService extends ChangeNotifier {
         // Yesterday's step total must not count toward today's goal.
         _stepsToday = 0;
         _stepsDay = null;
+      }
+      _optIn = prefs.getBool(_optInKey) ?? false;
+      _stateKey = prefs.getString(_statePrefKey);
+      _district = prefs.getString(_districtPrefKey);
+      final publishedRaw = prefs.getString(_publishedKey);
+      if (publishedRaw != null && publishedRaw.isNotEmpty) {
+        final data = jsonDecode(publishedRaw);
+        if (data is Map) {
+          data.forEach((key, value) {
+            if (value is List) {
+              _published[key as String] = value.whereType<String>().toList();
+            }
+          });
+        }
+      }
+      final leaveRaw = prefs.getString(_pendingLeaveKey);
+      if (leaveRaw != null && leaveRaw.isNotEmpty) {
+        final data = jsonDecode(leaveRaw);
+        if (data is Map && data['week'] is String && data['scopes'] is List) {
+          _pendingLeave = (
+            week: data['week'] as String,
+            scopes: (data['scopes'] as List).whereType<String>().toList(),
+          );
+        }
       }
       _prune();
     } catch (e, st) {
@@ -320,6 +374,100 @@ class LeaderboardService extends ChangeNotifier {
       logError('LeaderboardService.noteSteps', e, st);
     }
     await sync();
+  }
+
+  /// Saves the public leaderboard profile.
+  ///
+  /// Kept on the device rather than in `users/{uid}` on purpose: that document
+  /// is read-only for clients (it holds entitlements), so a leaderboard
+  /// location belongs with the score it places.
+  Future<void> setProfile({
+    required bool optIn,
+    String? stateKey,
+    String? district,
+  }) async {
+    await load();
+    _optIn = optIn;
+    _stateKey = stateKey ?? _stateKey;
+    _district = district ?? _district;
+    notifyListeners();
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool(_optInKey, _optIn);
+      if (_stateKey == null) {
+        await prefs.remove(_statePrefKey);
+      } else {
+        await prefs.setString(_statePrefKey, _stateKey!);
+      }
+      if (_district == null) {
+        await prefs.remove(_districtPrefKey);
+      } else {
+        await prefs.setString(_districtPrefKey, _district!);
+      }
+    } catch (e, st) {
+      logError('LeaderboardService.setProfile', e, st);
+    }
+  }
+
+  /// The boards written for [week] last time, so a move can clear the old one.
+  List<String> publishedScopes(String week) =>
+      List.unmodifiable(_published[week] ?? const <String>[]);
+
+  /// Forgets the boards remembered for [week] — used after they were deleted,
+  /// so a later publish does not chase documents that no longer exist.
+  Future<void> clearPublished(String week) async {
+    _published.remove(week);
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(
+        _publishedKey,
+        jsonEncode({for (final e in _published.entries) e.key: e.value}),
+      );
+    } catch (e, st) {
+      logError('LeaderboardService.clearPublished', e, st);
+    }
+  }
+
+  /// Remembers a leave that still has to be sent, so it survives an app kill
+  /// and is retried on the next launch.
+  Future<void> setPendingLeave({
+    required String week,
+    required List<String> scopes,
+  }) async {
+    _pendingLeave = (week: week, scopes: List<String>.from(scopes));
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(
+        _pendingLeaveKey,
+        jsonEncode({'week': week, 'scopes': scopes}),
+      );
+    } catch (e, st) {
+      logError('LeaderboardService.setPendingLeave', e, st);
+    }
+  }
+
+  Future<void> clearPendingLeave() async {
+    _pendingLeave = null;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove(_pendingLeaveKey);
+    } catch (e, st) {
+      logError('LeaderboardService.clearPendingLeave', e, st);
+    }
+  }
+
+  Future<void> rememberPublished(String week, List<String> scopes) async {
+    _published.clear();
+    _published[week] = List<String>.from(scopes);
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(
+        _publishedKey,
+        jsonEncode({for (final e in _published.entries) e.key: e.value}),
+      );
+    } catch (e, st) {
+      logError('LeaderboardService.rememberPublished', e, st);
+    }
   }
 
   /// Called when the daily calorie tracking goal is met (Home already detects

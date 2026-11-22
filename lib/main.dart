@@ -25,6 +25,7 @@ import 'services/crash_reporting.dart';
 import 'services/badge_service.dart';
 import 'services/meal_streak_service.dart';
 import 'services/pending_sync_queue.dart';
+import 'services/leaderboard_remote.dart';
 import 'services/leaderboard_service.dart';
 import 'services/account_partition.dart';
 import 'core/app_nav.dart';
@@ -191,6 +192,15 @@ Future<void> _bootstrap() async {
     _guard(
       LeaderboardService.instance.attach,
       'LeaderboardService.attach',
+    ).then(
+      // Once the points are loaded, put this week's total on the boards if the
+      // user has joined — otherwise a score earned on Home would only reach the
+      // leaderboard when the Rank page was next opened.
+      (_) => _guard(() async {
+        await LeaderboardRemote.instance.publishIfJoined(
+          points: LeaderboardService.instance.weekPoints,
+        );
+      }, 'LeaderboardRemote.publishIfJoined'),
     ),
   );
   unawaited(

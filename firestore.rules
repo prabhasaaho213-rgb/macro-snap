@@ -252,5 +252,51 @@ service cloud.firestore {
         && resource.data.uid == request.auth.uid;
       allow update, delete: if false;
     }
+
+    // ─── leaderboard/{week}/scopes/{scopeKey}/entries/{uid} ──────────────
+    // Weekly fitness points, one document per user per scope (india,
+    // state_<key>, district_<stateKey>_<districtKey>).
+    //
+    // The scope is part of the PATH, not a filter, so a board is read with a
+    // single orderBy on `points` and needs no composite index: a composite
+    // (week, scope, points) index would have to be deployed before the very
+    // first query worked.
+    //
+    // A user may write only their own entry, and only a small, well-typed
+    // payload. `points` is bounded to 1000 — the daily ceiling is 90, so a
+    // week is 630; the extra headroom leaves room for future buckets without
+    // letting a document carry a nonsense total.
+    //
+    // BE CLEAR ABOUT WHAT THIS DOES NOT DO: it does not verify the score. The
+    // client reports its own points, so a modified app can claim any value up
+    // to the cap, or write an entry for a district it is not in. Only a
+    // server-side scoring endpoint that recomputes from event documents can
+    // close that. The bounds below limit the damage, they do not prevent it.
+    function validLeaderboardEntry(uid) {
+      let d = request.resource.data;
+      return d.uid == uid
+        && d.points is int
+        && d.points >= 0
+        && d.points <= 1000
+        && d.week is string
+        && d.week.size() <= 12
+        && d.scope is string
+        && d.scope.size() <= 80
+        && d.name is string
+        && d.name.size() <= 40
+        && (!('stateKey' in d)
+          || (d.stateKey is string && d.stateKey.size() <= 60))
+        && (!('districtKey' in d)
+          || (d.districtKey is string && d.districtKey.size() <= 60));
+    }
+
+    match /leaderboard/{week}/scopes/{scopeKey}/entries/{uid} {
+      // Public inside the app: that is what a leaderboard is. Only a signed-in
+      // account can read it, so the board is not an open directory.
+      allow read: if signedIn();
+      allow write: if signedIn()
+        && isOwner(uid)
+        && validLeaderboardEntry(uid);
+    }
   }
 }

@@ -53,6 +53,17 @@ class _UpdatesScreenState extends State<UpdatesScreen> {
       date: '2026-11-22',
       isLatest: true,
       notes: [
+        'New: a live leaderboard on the Fitness Points page — District, State and India boards, still opened from Home\'s Quick Actions',
+        'Pick your state and district to join; only your name and weekly points are shared, never your meals, health data or contact details',
+        'The board updates by itself when anyone\'s score changes, with no refresh needed',
+        'You can look at your district before joining, and your points stay private on your phone until you do',
+        'Changing district moves your row to the new board, and leaving removes it',
+      ],
+    ),
+    _UpdateEntry(
+      version: '1.5.18',
+      date: '2026-11-22',
+      notes: [
         'Health stays connected between launches: steps and calories are read separately, so a phone that never grants one of them no longer blanks the whole dashboard',
         'Steps and burned calories refresh every 5 seconds and catch up the moment you come back to the app',
         'Set your daily step target from the Health tab in 5,000-step steps, and keep a streak for every day you hit it',

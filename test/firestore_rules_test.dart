@@ -168,6 +168,32 @@ void main() {
     });
   });
 
+  group('leaderboard entries', () {
+    test('a user can read the board but only write their own row', () {
+      final board = blockBody(
+        'leaderboard/{week}/scopes/{scopeKey}/entries/{uid}',
+      );
+      expect(board, contains('allow read: if signedIn();'));
+      expect(
+        board,
+        contains('isOwner(uid)'),
+        reason: 'the document id must be the caller, so no one can write a '
+            'score for someone else',
+      );
+      expect(board, contains('validLeaderboardEntry(uid)'));
+    });
+
+    test('the reported score is typed and bounded', () {
+      expect(rules, contains('d.points is int'));
+      expect(
+        rules,
+        contains('d.points <= 1000'),
+        reason: 'a week document cannot carry a nonsense total',
+      );
+      expect(rules, contains('d.name.size() <= 40'));
+    });
+  });
+
   test('owner-only user data is still owner-only', () {
     for (final path in [
       'habitData/{uid}',

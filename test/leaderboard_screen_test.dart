@@ -42,7 +42,13 @@ void main() {
     await tester.pump(const Duration(milliseconds: 300));
     expect(tester.takeException(), isNull);
     expect(find.text('How points work'), findsOneWidget);
-    expect(find.text('Rankings'), findsOneWidget);
+    // The board card: guests see the join prompt, not a fabricated ranking.
+    expect(find.text('Fitness leaderboard'), findsOneWidget);
+    expect(find.text('District'), findsOneWidget);
+    expect(
+      find.textContaining('Sign in with Google to see the board'),
+      findsOneWidget,
+    );
   });
 
   test('the day ceiling is the sum of the bucket caps', () {
