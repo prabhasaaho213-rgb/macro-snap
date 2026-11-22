@@ -10,6 +10,41 @@ final ValueNotifier<String> userNameNotifier = ValueNotifier('');
 /// saturated burnt-orange accent used for coins/rewards/CTAs. Public API
 /// (color/method names) is unchanged so existing screens keep compiling;
 /// only the underlying values moved off the old neon-rainbow palette.
+/// Slides a pushed page in from the right without ever making it
+/// semi-transparent.
+///
+/// Replaces the platform default (see
+/// [MacroSnapTheme._opaquePageTransitions]). A fade on a route means the route
+/// underneath shows through while it runs, and two screens drawn over each
+/// other is what reads as a rendering glitch rather than a transition.
+class OpaqueSlidePageTransitionsBuilder extends PageTransitionsBuilder {
+  const OpaqueSlidePageTransitionsBuilder();
+
+  @override
+  Widget buildTransitions<T>(
+    PageRoute<T> route,
+    BuildContext context,
+    Animation<double> animation,
+    Animation<double> secondaryAnimation,
+    Widget child,
+  ) {
+    return SlideTransition(
+      position:
+          Tween<Offset>(
+            begin: const Offset(0.15, 0),
+            end: Offset.zero,
+          ).animate(
+            CurvedAnimation(
+              parent: animation,
+              curve: Curves.easeOutCubic,
+              reverseCurve: Curves.easeInCubic,
+            ),
+          ),
+      child: child,
+    );
+  }
+}
+
 class MacroSnapTheme {
   // ─── POP Palette ───────────────────────────────────────────
   /// Primary accent — POPcoin orange. Used for CTAs, streaks, highlight
@@ -298,6 +333,7 @@ class MacroSnapTheme {
         error: neonPink,
       ),
       scaffoldBackgroundColor: surfaceLight,
+      pageTransitionsTheme: _opaquePageTransitions,
       inputDecorationTheme: _inputTheme(false),
       filledButtonTheme: FilledButtonThemeData(
         style: FilledButton.styleFrom(
@@ -410,6 +446,7 @@ class MacroSnapTheme {
         error: neonRed,
       ),
       scaffoldBackgroundColor: surfaceDark,
+      pageTransitionsTheme: _opaquePageTransitions,
       inputDecorationTheme: _inputTheme(true),
       filledButtonTheme: FilledButtonThemeData(
         style: FilledButton.styleFrom(
@@ -519,6 +556,29 @@ class MacroSnapTheme {
       ),
     );
   }
+
+  /// Page transitions with no cross-fade, on every platform.
+  ///
+  /// Android's Material 3 default is [ZoomPageTransitionsBuilder], which fades
+  /// the entering page in from `opacity: 0` while the page below stays drawn
+  /// behind it. For the length of the push both screens are painted at once,
+  /// which is the "two interfaces blended together" flash seen when opening
+  /// Profile from Settings, and on every other pushed page.
+  ///
+  /// [OpaqueSlidePageTransitionsBuilder] only slides: the new page is fully
+  /// opaque from its first frame and covers the old one, so a push reads as a
+  /// push instead of a dissolve.
+  static const PageTransitionsTheme _opaquePageTransitions =
+      PageTransitionsTheme(
+        builders: <TargetPlatform, PageTransitionsBuilder>{
+          TargetPlatform.android: OpaqueSlidePageTransitionsBuilder(),
+          TargetPlatform.iOS: OpaqueSlidePageTransitionsBuilder(),
+          TargetPlatform.fuchsia: OpaqueSlidePageTransitionsBuilder(),
+          TargetPlatform.linux: OpaqueSlidePageTransitionsBuilder(),
+          TargetPlatform.macOS: OpaqueSlidePageTransitionsBuilder(),
+          TargetPlatform.windows: OpaqueSlidePageTransitionsBuilder(),
+        },
+      );
 
   // ─── Glass Decoration (unified) ────────────────────────────
   static BoxDecoration glassDecoration(BuildContext context) {

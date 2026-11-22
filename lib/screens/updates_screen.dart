@@ -53,6 +53,16 @@ class _UpdatesScreenState extends State<UpdatesScreen> {
       date: '2026-11-22',
       isLatest: true,
       notes: [
+        'The Rank page shows the top 5 and a View more button, which opens the full top-100 board on its own page',
+        'Opening a page no longer blends two screens: Profile, Subscription and every other page slide in fully opaque instead of cross-fading',
+        'Launching the app shows one logo, not the launcher icon fading out over the splash',
+        'Joining the leaderboard: Country, State and District labels no longer print on top of their values',
+      ],
+    ),
+    _UpdateEntry(
+      version: '1.5.20',
+      date: '2026-11-22',
+      notes: [
         'The leaderboard is the first card on the Fitness Points page now, on the same violet gradient as the rest of the app',
         'Joining is a search: type a couple of letters to pick your country, state or district instead of scrolling a long menu',
         'Every state\'s districts are listed by name, so "Pune", "pune" and "Poona" no longer split into three half-empty boards — and Other still lets you type a place the list does not carry',

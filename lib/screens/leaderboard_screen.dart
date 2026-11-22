@@ -9,6 +9,7 @@ import '../services/leaderboard_remote.dart';
 import '../services/leaderboard_service.dart';
 import '../widgets/animations.dart';
 import '../widgets/glass_card.dart';
+import 'leaderboard_ranks_screen.dart';
 
 /// Fitness points — what the user earned this week, where those points came
 /// from, and the leaderboard scopes they will rank in.
@@ -867,9 +868,39 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
                   style: TextStyle(fontSize: 12, height: 1.45, color: subtle),
                 ),
               )
-            else
-              for (var i = 0; i < _board.rows.length && i < 10; i++)
+            else ...[
+              // Five names is what "where do I stand?" needs. The rest of the
+              // board is one tap away instead of pushing the week total,
+              // breakdown and rules off the page.
+              for (
+                var i = 0;
+                i < _board.rows.length && i < LeaderboardRemote.cardRows;
+                i++
+              )
                 _buildRankRow(context, position: i + 1, row: _board.rows[i]),
+              if (_board.rows.length > LeaderboardRemote.cardRows)
+                SizedBox(
+                  width: double.infinity,
+                  child: TextButton.icon(
+                    onPressed: _openFullBoard,
+                    iconAlignment: IconAlignment.end,
+                    style: TextButton.styleFrom(
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      minimumSize: const Size(0, 36),
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    ),
+                    icon: const Icon(Icons.arrow_forward_rounded, size: 15),
+                    label: const Text(
+                      'View more',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                ),
+            ],
 
             Divider(height: 22, color: Colors.white.withValues(alpha: 0.18)),
 
@@ -1118,8 +1149,24 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
   String _myRankLabel() {
     final rank = _board.myRank;
     if (rank == null) return '—';
-    if (rank < 0) return '50+';
+    if (rank < 0) return '${LeaderboardRemote.boardLimit}+';
     return '#$rank';
+  }
+
+  /// Opens the whole board (top [LeaderboardRemote.boardLimit]) for the scope
+  /// on screen. The card keeps showing five rows, so this is the only way to
+  /// see everyone — and it carries the same area and tab the user is on.
+  void _openFullBoard() {
+    unawaited(Haptics.light());
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => LeaderboardRanksScreen(
+          scope: _scope,
+          stateKey: _service.stateKey,
+          district: _service.district,
+        ),
+      ),
+    );
   }
 
   static String _titleCase(String value) => value
@@ -1554,31 +1601,70 @@ class _LocationField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final titleColour = Theme.of(context).brightness == Brightness.dark
-        ? Colors.white
-        : const Color(0xFF1A1A1A);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final titleColour = isDark ? Colors.white : const Color(0xFF1A1A1A);
     final subtle = MacroSnapTheme.textTertiary(context);
     final filled = (value ?? '').isNotEmpty;
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(12),
-      child: InputDecorator(
-        isEmpty: !filled,
-        decoration: InputDecoration(
-          labelText: label,
-          enabled: onTap != null,
-          prefixIcon: Icon(icon, size: 18),
-          suffixIcon: Icon(Icons.search_rounded, size: 18, color: subtle),
-          border: const OutlineInputBorder(),
-        ),
-        child: Text(
-          filled ? value! : hint,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: TextStyle(
-            fontSize: 14,
-            fontWeight: filled ? FontWeight.w700 : FontWeight.w400,
-            color: filled ? titleColour : subtle,
+    final enabled = onTap != null;
+    // Drawn by hand instead of with [InputDecorator]. A read-only field with a
+    // child and `isEmpty: true` put the decoration's own label inline, on top
+    // of the value text: on the join sheet "State or UT" printed over "Choose
+    // your state". A small label stacked above the value cannot collide at any
+    // text scale, and it reads the same as the sheet's other fields.
+    return Opacity(
+      opacity: enabled ? 1 : 0.55,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(12),
+          child: Container(
+            constraints: const BoxConstraints(minHeight: 58),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: MacroSnapTheme.borderSubtle(context)),
+            ),
+            child: Row(
+              children: [
+                Icon(icon, size: 18, color: subtle),
+                const SizedBox(width: 11),
+                Expanded(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        label,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 10.5,
+                          height: 1.1,
+                          letterSpacing: 0.2,
+                          fontWeight: FontWeight.w700,
+                          color: subtle,
+                        ),
+                      ),
+                      const SizedBox(height: 3),
+                      Text(
+                        filled ? value! : hint,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 14,
+                          height: 1.2,
+                          fontWeight: filled ? FontWeight.w700 : FontWeight.w400,
+                          color: filled ? titleColour : subtle,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Icon(Icons.search_rounded, size: 18, color: subtle),
+              ],
+            ),
           ),
         ),
       ),

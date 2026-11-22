@@ -74,8 +74,12 @@ class LeaderboardRemote {
   /// Points ceiling the rules enforce on a single week document.
   static const int maxWeekPoints = 1000;
 
-  /// Board size the app will read back.
-  static const int boardLimit = 50;
+  /// Board size the app will read back, and the slice the Rank page's
+  /// "View more" shows. The Rank card itself renders only the first few rows.
+  static const int boardLimit = 100;
+
+  /// Rows the Rank card shows before "View more".
+  static const int cardRows = 5;
 
   /// The states and union territories offered in the picker. The key is what
   /// goes into the Firestore path, so it must stay stable once released.
@@ -397,8 +401,8 @@ class LeaderboardRemote {
   /// and would drain the battery — Firestore's listener is pushed to instead.
   ///
   /// The caller's own document is watched separately from the top slice, so a
-  /// user outside the top 50 still sees that they are on the board (rank 50+)
-  /// rather than "not ranked".
+  /// user outside the top [boardLimit] still sees that they are on the board
+  /// (rank 100+) rather than "not ranked".
   Stream<LeaderboardBoard> watch({
     required String week,
     required LeaderboardScope scope,

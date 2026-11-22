@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The Android 12+ system splash draws its icon, then animates it out ON TOP
+     of whatever the app has already painted. The in-app StartupSplash paints
+     its own mark (gradient flame tile + "MacroSnap" wordmark) in the same
+     centre of the screen, so the launcher icon used to fade out over it — two
+     logos composited together for a few frames, seen as a "blend" flash on
+     launch (and only on some launches, depending on how fast the first frame
+     lands).
+
+     A transparent icon keeps the system splash to its background colour only,
+     which is pinned to @color/window_background (#0A0A0A) — the exact colour
+     the Dart splash paints. The hand-off is then one continuous dark screen
+     and the only logo on it is the app's own. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <solid android:color="@android:color/transparent" />
+</shape>
