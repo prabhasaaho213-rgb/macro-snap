@@ -15,6 +15,10 @@ class RecipeService extends ChangeNotifier {
   List<Recipe> get recipes => List.unmodifiable(_recipes);
 
   Future<void> load() async {
+    // Clear FIRST. The previous version only replaced the list when the new
+    // account had a non-empty saved value, so switching to an account with no
+    // recipes kept showing the previous account's recipes.
+    _recipes = [];
     try {
       final prefs = await SharedPreferences.getInstance();
       final suffix =

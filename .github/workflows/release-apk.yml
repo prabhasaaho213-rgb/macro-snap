@@ -11,6 +11,13 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        # Build the REAL app. This workflow used to run at the repo root, whose
+        # pubspec.yaml was a stale 1.4.90+90 copy of the client, so a tag
+        # published an old build with an old version code. The root tree is
+        # legacy; `app/` is the single authoritative source.
+        working-directory: app
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -72,8 +79,8 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            macro-snap-${{ github.ref_name }}.aab
-            macro-snap-${{ github.ref_name }}.apk
+            app/macro-snap-${{ github.ref_name }}.aab
+            app/macro-snap-${{ github.ref_name }}.apk
           draft: false
           prerelease: false
         env:
