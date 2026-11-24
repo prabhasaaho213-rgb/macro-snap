@@ -245,33 +245,40 @@ extension _HabitsCards on _HabitsTabState {
                   ),
                 ],
               ),
-              // Tappable: the goal was fixed at 8 glasses because
-              // `setWaterGoal` had no caller anywhere in the app.
-              Semantics(
-                button: true,
-                label: 'Daily water goal, $goal glasses. Change it',
-                child: GestureDetector(
-                  onTap: () => _editWaterGoal(context, isDark),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        '$glasses / $goal',
-                        style: const TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w800,
-                          color: MacroSnapTheme.neonCyan,
-                        ),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // Tappable: the goal was fixed at 8 glasses because
+                  // `setWaterGoal` had no caller anywhere in the app.
+                  Semantics(
+                    button: true,
+                    label: 'Daily water goal, $goal glasses. Change it',
+                    child: GestureDetector(
+                      onTap: () => _editWaterGoal(context, isDark),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            '$glasses / $goal',
+                            style: const TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w800,
+                              color: MacroSnapTheme.neonCyan,
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                          const Icon(
+                            Icons.edit_rounded,
+                            size: 14,
+                            color: MacroSnapTheme.neonCyan,
+                          ),
+                        ],
                       ),
-                      const SizedBox(width: 6),
-                      const Icon(
-                        Icons.edit_rounded,
-                        size: 14,
-                        color: MacroSnapTheme.neonCyan,
-                      ),
-                    ],
+                    ),
                   ),
-                ),
+                  const SizedBox(width: 8),
+                  const AnalysisButton(section: AnalysisSection.water),
+                ],
               ),
             ],
           ),

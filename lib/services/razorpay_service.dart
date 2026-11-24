@@ -249,6 +249,26 @@ class RazorpayService {
     final subscriptionId =
         (response.data?['razorpay_subscription_id'] as String?) ??
         _subscriptionId;
+    // A subscription signature is built from the subscription id, and the field
+    // used to be written as a null-aware map entry (`'...': ?subscriptionId`).
+    // That spelling is not valid in every Dart the release builds use, and it
+    // also silently dropped the field when the id was missing. Making the
+    // absence an explicit state means both problems go away: nothing is sent
+    // half-formed, and a paid user still gets Pro via the status check below.
+    if (subscriptionId == null || subscriptionId.isEmpty) {
+      debugPrint('Payment verification skipped: no subscription id');
+      if (await refreshStatus()) {
+        _finish(const PaymentResult.success());
+        return;
+      }
+      _finish(
+        const PaymentResult.pending(
+          'We could not confirm the payment yet. If money was deducted, Pro '
+          'switches on by itself within a few minutes.',
+        ),
+      );
+      return;
+    }
     bool verified = false;
     // A 202 means the payment was genuine but could not be SAVED yet, and the
     // server explains why — quoting it is far more useful than a generic
@@ -258,8 +278,8 @@ class RazorpayService {
       final res = await AuthHttp.post(
         Uri.parse('${GeminiService.serverUrl}/payment/verify'),
         headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({
-          'razorpay_subscription_id': ?subscriptionId,
+        body: jsonEncode(<String, dynamic>{
+          'razorpay_subscription_id': subscriptionId,
           'razorpay_payment_id': response.paymentId,
           'razorpay_signature': response.signature,
         }),

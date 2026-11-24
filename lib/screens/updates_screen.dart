@@ -50,8 +50,18 @@ class _UpdatesScreenState extends State<UpdatesScreen> {
   static const List<_UpdateEntry> _changelog = [
     _UpdateEntry(
       version: UpdatesScreen.latestVersion,
-      date: '2026-11-22',
+      date: '2026-11-24',
       isLatest: true,
+      notes: [
+        'Deleting your account now also cancels the Razorpay subscription, removes every meal and cloud photo, and deletes the sign-in itself',
+        'If a deletion step fails, the app says so and lets you retry instead of claiming everything was removed',
+        'Sync Meal Photos actually uploads and restores photos now — the backup route the app called did not exist on the server',
+        'Photo backup still requires Pro, and the check happens on the server, not just in the app',
+      ],
+    ),
+    _UpdateEntry(
+      version: '1.5.21',
+      date: '2026-11-22',
       notes: [
         'The Rank page shows the top 5 and a View more button, which opens the full top-100 board on its own page',
         'Opening a page no longer blends two screens: Profile, Subscription and every other page slide in fully opaque instead of cross-fading',

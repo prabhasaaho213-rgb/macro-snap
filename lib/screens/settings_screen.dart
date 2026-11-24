@@ -271,6 +271,12 @@ Future<void> deleteAccountFlow(
 
   // 0 means "no reply at all"; anything else is the status the server chose.
   var serverStatus = 0;
+  // 202 means the server deleted most of the account but could not finish
+  // every step (a provider cancellation, a Firestore batch, the sign-in
+  // record). `auth_deleted` says whether signing in again is still possible.
+  var incomplete = false;
+  var authDeleted = false;
+  var incompleteMessage = '';
   try {
     // The token identifies the account being deleted — nothing else is sent.
     final uri = Uri.parse('${GeminiService.serverUrl}/account/delete');
@@ -280,12 +286,63 @@ Future<void> deleteAccountFlow(
       body: jsonEncode(const <String, dynamic>{}),
     ).timeout(const Duration(seconds: 20));
     serverStatus = res.statusCode;
+    if (serverStatus == 202) {
+      incomplete = true;
+      try {
+        final body = jsonDecode(utf8.decode(res.bodyBytes));
+        if (body is Map) {
+          authDeleted = body['auth_deleted'] == true;
+          final message = body['message'];
+          if (message is String && message.isNotEmpty) incompleteMessage = message;
+        }
+      } catch (_) {}
+    }
   } catch (e, st) {
     logError('deleteAccountFlow.server', e, st);
   }
 
   if (!context.mounted) return;
   Navigator.of(context).pop(); // dismiss progress dialog
+
+  if (incomplete && context.mounted) {
+    // Partly deleted. Reporting it as "nothing was deleted" is false, and
+    // reporting it as a clean deletion is worse: the user needs to know the
+    // deletion is not finished and whether they can still sign in.
+    logError(
+      'deleteAccountFlow.server',
+      StateError('account deletion answered HTTP 202 (incomplete)'),
+      StackTrace.current,
+    );
+    if (authDeleted) {
+      // The sign-in identity is gone, so this device has nothing left to keep.
+      // Wipe locally so the next launch is a clean login, and say what is left.
+      await wipeLocalAndSignOut(context);
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            incompleteMessage.isEmpty
+                ? 'Your account and sign-in were deleted, but some records are '
+                      'still being cleared. Email macrosnap7@gmail.com if this '
+                      'does not finish within a day.'
+                : incompleteMessage,
+          ),
+        ),
+      );
+      return;
+    }
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          incompleteMessage.isEmpty
+              ? 'Deletion did not finish. Retry in a few minutes, or email '
+                    'macrosnap7@gmail.com.'
+              : incompleteMessage,
+        ),
+      ),
+    );
+    return;
+  }
 
   if (serverStatus != 200 || !context.mounted) {
     // Nothing was deleted — not the cloud account, not this device's copy — so

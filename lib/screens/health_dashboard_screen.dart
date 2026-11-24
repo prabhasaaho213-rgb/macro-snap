@@ -9,6 +9,7 @@ import '../services/health_service.dart';
 import '../services/leaderboard_service.dart';
 import '../services/meal_store.dart';
 import '../services/step_goal_service.dart';
+import '../widgets/analysis_button.dart';
 import '../widgets/animations.dart';
 import '../widgets/glass_card.dart';
 
@@ -735,6 +736,12 @@ class _HealthDashboardScreenState extends State<HealthDashboardScreen>
                   fontWeight: FontWeight.w800,
                   color: Colors.white,
                 ),
+              ),
+              const SizedBox(width: 8),
+              // White variant: the hero sits on a saturated gradient.
+              const AnalysisButton(
+                section: AnalysisSection.movement,
+                onDark: true,
               ),
             ],
           ),

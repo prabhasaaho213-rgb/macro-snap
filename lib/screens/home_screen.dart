@@ -28,11 +28,12 @@ import 'settings_screen.dart';
 import 'chat_screen.dart';
 import 'subscription_screen.dart';
 import 'bmi_screen.dart';
-import 'barcode_scan_screen.dart';
+import 'activity_analysis_screen.dart';
 import 'leaderboard_screen.dart';
 import 'result_screen.dart';
 import '../services/leaderboard_service.dart';
 import '../widgets/macro_bar.dart';
+import '../widgets/analysis_button.dart';
 import '../widgets/edit_meal_sheet.dart';
 import '../services/crash_reporting.dart';
 

@@ -18,6 +18,8 @@ import 'subscription_screen.dart';
 import '../widgets/swipe_action_background.dart';
 import '../widgets/reminder_time_picker.dart';
 
+import '../widgets/analysis_button.dart';
+
 part 'habits_tab_cards.dart';
 part 'habits_tab_mission.dart';
 part 'habits_tab_sheets.dart';
@@ -149,6 +151,8 @@ class _HabitsTabState extends State<HabitsTab> {
                   ),
                   Row(
                     children: [
+                      const AnalysisButton(section: AnalysisSection.habits),
+                      const SizedBox(width: 8),
                       Semantics(
                         button: true,
                         label: 'Settings',

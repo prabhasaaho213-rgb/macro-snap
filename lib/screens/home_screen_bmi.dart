@@ -125,6 +125,8 @@ extension _HomeBmi on _HomeScreenState {
                         ),
                     ],
                   ),
+                  const SizedBox(width: 8),
+                  const AnalysisButton(section: AnalysisSection.weight),
                 ],
               ),
               if (bmi != null) ...[

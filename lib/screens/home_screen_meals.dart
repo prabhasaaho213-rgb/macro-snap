@@ -60,15 +60,20 @@ extension _HomeMeals on _HomeScreenState {
                       },
                       width: tileWidth,
                     ),
+                    // Analysis replaced the Barcode tile: one tap now opens a
+                    // summary of EVERY activity (food, habits, water, steps,
+                    // weight) instead of a single-item lookup. Barcode
+                    // scanning itself is untouched — it still lives on the
+                    // Scan tab and in manual entry.
                     _quickAction(
-                      Icons.qr_code_scanner_rounded,
-                      'Barcode',
+                      Icons.insights_rounded,
+                      'Analysis',
                       MacroSnapTheme.neonCyan,
                       isDark,
                       () {
                         Navigator.push(
                           context,
-                          habitFlowRoute(const BarcodeScanScreen()),
+                          habitFlowRoute(const ActivityAnalysisScreen()),
                         );
                       },
                       width: tileWidth,
@@ -134,7 +139,7 @@ extension _HomeMeals on _HomeScreenState {
     // made the row look broken. The caller passes one width for all of them, so
     // every tile is identical and the label ellipsises instead of overflowing.
     return ScaleOnPress(
-      // Tap feedback for every quick action (Snap, Barcode, Diet, ...).
+      // Tap feedback for every quick action (Snap, Analysis, Diet, Rank).
       onTap: () {
         HapticFeedback.lightImpact();
         onTap();
@@ -191,20 +196,29 @@ extension _HomeMeals on _HomeScreenState {
                   color: isDark ? Colors.white : const Color(0xFF1A1A1A),
                 ),
               ),
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 6,
-                ),
-                decoration: MacroSnapTheme.neonPill(MacroSnapTheme.neonGreen),
-                child: Text(
-                  '${meals.fold(0, (s, m) => s + m.calories)} kcal',
-                  style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w800,
-                    color: MacroSnapTheme.greenText(context),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 6,
+                    ),
+                    decoration: MacroSnapTheme.neonPill(
+                      MacroSnapTheme.neonGreen,
+                    ),
+                    child: Text(
+                      '${meals.fold(0, (s, m) => s + m.calories)} kcal',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w800,
+                        color: MacroSnapTheme.greenText(context),
+                      ),
+                    ),
                   ),
-                ),
+                  const SizedBox(width: 8),
+                  const AnalysisButton(section: AnalysisSection.nutrition),
+                ],
               ),
             ],
           ),
