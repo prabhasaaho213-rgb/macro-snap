@@ -162,6 +162,21 @@ Future<void> _bootstrap() async {
     'AccountPartition.ensureCurrent',
   );
 
+  // One identity, two keys. Older builds set only one of them — login wrote
+  // `nickname`, the profile editor wrote `name` — so a name could look saved on
+  // one screen and lost on another (and on the leaderboard). Heal whichever is
+  // missing from the other, once, before any screen reads it.
+  await _guardStartup(() async {
+    final prefs = await SharedPreferences.getInstance();
+    final name = (prefs.getString('name') ?? '').trim();
+    final nickname = (prefs.getString('nickname') ?? '').trim();
+    if (name.isEmpty && nickname.isNotEmpty) {
+      await prefs.setString('name', nickname);
+    } else if (nickname.isEmpty && name.isNotEmpty) {
+      await prefs.setString('nickname', name);
+    }
+  }, 'Name reconciliation');
+
   // Each of these is an independent prefs/file read, so they run together
   // instead of one after another. Local data is what the first real screen
   // draws; cloud restore stays in the background.

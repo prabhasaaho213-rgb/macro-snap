@@ -292,7 +292,10 @@ class LeaderboardRemote {
   static Future<String> publicName() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      final raw = (prefs.getString('nickname') ?? prefs.getString('name') ?? '')
+      // `name` is the key the Profile/Settings editor writes, so it wins. It
+      // used to be the other way round: a nickname captured at login shadowed
+      // the name forever, and a rename never reached the board.
+      final raw = (prefs.getString('name') ?? prefs.getString('nickname') ?? '')
           .trim();
       if (raw.isEmpty) return 'MacroSnap user';
       return raw.length > 40 ? raw.substring(0, 40) : raw;

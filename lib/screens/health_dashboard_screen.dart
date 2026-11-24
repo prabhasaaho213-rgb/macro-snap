@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:permission_handler/permission_handler.dart';
 
 import '../core/app_nav.dart';
 import '../core/haptics.dart';
@@ -219,6 +220,26 @@ class _HealthDashboardScreenState extends State<HealthDashboardScreen>
 
   /// Connect / authorize: ask the user for read permission to steps and
   /// calories burned. On success, load today's data immediately.
+  /// Connects the health platform WITHOUT touching the step sensor.
+  ///
+  /// Used by the optional card on the running dashboard: the sensor is already
+  /// counting, and this only adds the health records on top.
+  Future<void> _connectHealth() async {
+    unawaited(Haptics.light());
+    await HealthService.instance.requestReadPermissions();
+    if (!mounted) return;
+    final access = await HealthService.instance.checkAccess();
+    if (!mounted) return;
+    setState(() {
+      _hasReadPermission = access.canReadActivity;
+      if (access.canReadActivity) _loadFailed = false;
+    });
+    if (access.canReadActivity) {
+      await _loadToday();
+    }
+    _syncPolling();
+  }
+
   Future<void> _connect() async {
     unawaited(Haptics.light());
     // Step counting must work with no health app at all, so the phone sensor is
@@ -473,6 +494,25 @@ class _HealthDashboardScreenState extends State<HealthDashboardScreen>
   /// it needs no Health Connect and no extra app — so a user who declines the
   /// health platform still gets steps, a ring and movement points.
   Widget _buildConnectState(BuildContext context, bool isDark) {
+    final sensor = StepCounterService.instance;
+    final sensorSupported = sensor.supported;
+    final denied = sensor.permissionDenied;
+    // Name the actual reason instead of showing the same card forever: a
+    // denied permission and a phone with no counter need different actions.
+    final title = sensorSupported
+        ? (denied ? 'Allow step access' : 'Count your steps')
+        : 'Steps need Health Connect';
+    final body = sensorSupported
+        ? (denied
+              ? 'Android is blocking "Physical activity", so the phone\'s '
+                    'step counter cannot start. Allow it in Settings, or '
+                    'connect Health Connect below.'
+              : 'MacroSnap counts steps with your phone\'s own sensor — no '
+                    'Health Connect, no watch. Allow "Physical activity" to '
+                    'start. Health Connect is optional and only adds a watch '
+                    'and calories burned.')
+        : 'This phone does not report a step counter to apps. Connect Health '
+              'Connect so MacroSnap can read steps from it.';
     return SafeArea(
       child: SingleChildScrollView(
         physics: const AlwaysScrollableScrollPhysics(),
@@ -491,21 +531,26 @@ class _HealthDashboardScreenState extends State<HealthDashboardScreen>
                 backgroundColor: MacroSnapTheme.neonGreen.withValues(
                   alpha: 0.12,
                 ),
-                title: 'Count your steps',
-                body:
-                    'MacroSnap counts steps with your phone\'s own sensor — no '
-                    'Health Connect, no watch. Allow "Physical activity" to '
-                    'start. Health Connect is optional and only adds a watch '
-                    'and calories burned.',
+                title: title,
+                body: body,
               ),
             ),
             const SizedBox(height: 18),
             SizedBox(
               width: double.infinity,
               child: FilledButton.icon(
-                onPressed: _connect,
-                icon: const Icon(Icons.directions_walk_rounded, size: 20),
-                label: const Text('Enable step counting'),
+                onPressed: sensorSupported ? _connect : _connectHealth,
+                icon: Icon(
+                  sensorSupported
+                      ? Icons.directions_walk_rounded
+                      : Icons.link_rounded,
+                  size: 20,
+                ),
+                label: Text(
+                  sensorSupported
+                      ? 'Enable step counting'
+                      : 'Connect Health Connect',
+                ),
                 style: FilledButton.styleFrom(
                   backgroundColor: MacroSnapTheme.neonGreen,
                   foregroundColor: Colors.black,
@@ -516,12 +561,26 @@ class _HealthDashboardScreenState extends State<HealthDashboardScreen>
                 ),
               ),
             ),
+            if (denied) ...[
+              const SizedBox(height: 10),
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  onPressed: () => unawaited(openAppSettings()),
+                  icon: const Icon(Icons.settings_rounded, size: 18),
+                  label: const Text('Open app permissions'),
+                ),
+              ),
+            ],
             const SizedBox(height: 14),
             Text(
-              'Tap Enable and allow "Physical activity" (Android) or "Motion & '
-              'Fitness" (iOS). Your steps appear here immediately; connect '
-              'Health Connect later from the same button if you want your '
-              'watch and calorie burn included.',
+              sensorSupported
+                  ? 'Allow "Physical activity" when Android asks. Your steps '
+                        'appear here immediately; Health Connect stays '
+                        'available on this screen afterwards if you want your '
+                        'watch and calorie burn included.'
+                  : 'Health Connect stores the step records this phone writes. '
+                        'Once connected, its numbers appear here.',
               textAlign: TextAlign.center,
               style: TextStyle(
                 fontSize: 12.5,
@@ -619,6 +678,29 @@ class _HealthDashboardScreenState extends State<HealthDashboardScreen>
               delayMs: 190,
               child: _buildBalanceCard(context, isDark, steps, cals, eaten),
             ),
+            // Health Connect is optional, but the option has to stay visible
+            // AFTER the phone sensor starts working — otherwise a user who
+            // wants their watch and calorie burn has nowhere to tap.
+            if (_available && !_hasReadPermission) ...[
+              const SizedBox(height: 14),
+              AnimatedEntrance(
+                delayMs: 210,
+                child: _buildHealthConnectCard(context, isDark),
+              ),
+            ],
+            if (_available && _hasReadPermission) ...[
+              const SizedBox(height: 10),
+              Text(
+                'Health Connect connected — steps include your watch, and '
+                'calories burned are shown.',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 11.5,
+                  height: 1.4,
+                  color: MacroSnapTheme.textTertiary(context),
+                ),
+              ),
+            ],
             if (_loadFailed) ...[
               const SizedBox(height: 12),
               Text(
@@ -640,6 +722,15 @@ class _HealthDashboardScreenState extends State<HealthDashboardScreen>
               textAlign: TextAlign.center,
               style: TextStyle(
                 fontSize: 11.5,
+                color: MacroSnapTheme.textTertiary(context),
+              ),
+            ),
+            const SizedBox(height: 2),
+            Text(
+              _stepSourceLabel(),
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 11,
                 color: MacroSnapTheme.textTertiary(context),
               ),
             ),
@@ -685,6 +776,99 @@ class _HealthDashboardScreenState extends State<HealthDashboardScreen>
         ),
       ),
     );
+  }
+
+  /// The optional Health Connect upgrade, offered from the running dashboard.
+  ///
+  /// Steps already work from the phone's own sensor, so this is deliberately a
+  /// choice and not a gate: connecting adds a watch's records (de-duplicated)
+  /// and the calories-burned figures that only the health platform has.
+  Widget _buildHealthConnectCard(BuildContext context, bool isDark) {
+    final titleColour = isDark ? Colors.white : const Color(0xFF1A1A1A);
+    return GlassCard(
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 38,
+                height: 38,
+                decoration: BoxDecoration(
+                  color: MacroSnapTheme.neonCyan.withValues(alpha: 0.14),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Icon(
+                  Icons.watch_rounded,
+                  color: MacroSnapTheme.neonCyan,
+                  size: 20,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Add Health Connect',
+                      style: TextStyle(
+                        fontSize: 13.5,
+                        fontWeight: FontWeight.w900,
+                        color: titleColour,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      'Optional. Includes a watch\'s steps and the calories '
+                      'you burn — your phone\'s own counter already works '
+                      'without it.',
+                      style: TextStyle(
+                        fontSize: 11,
+                        height: 1.4,
+                        color: MacroSnapTheme.textTertiary(context),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: _connectHealth,
+              icon: const Icon(Icons.link_rounded, size: 18),
+              label: const Text('Connect Health Connect'),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: MacroSnapTheme.neonCyan,
+                side: BorderSide(
+                  color: MacroSnapTheme.neonCyan.withValues(alpha: 0.55),
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                padding: const EdgeInsets.symmetric(vertical: 12),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Which sources are actually feeding the number above. "Not running" is a
+  /// visible answer instead of a silent zero.
+  String _stepSourceLabel() {
+    final sensor = StepCounterService.instance;
+    final parts = <String>[];
+    if (sensor.active) parts.add('phone sensor');
+    if (_hasReadPermission) parts.add('Health Connect');
+    if (parts.isEmpty) {
+      return 'No step source is running — allow activity access to start.';
+    }
+    return 'Step source: ${parts.join(' + ')}';
   }
 
   String _updatedLabel() {

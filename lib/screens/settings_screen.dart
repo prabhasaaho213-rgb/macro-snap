@@ -429,7 +429,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
     // finishes, and setState() on a disposed State throws.
     if (!mounted) return;
     setState(() {
-      _name = prefs.getString('name') ?? 'User';
+      _name =
+          prefs.getString('name') ?? prefs.getString('nickname') ?? 'User';
       _email = prefs.getString('email') ?? '';
       _phone = prefs.getString('phone') ?? '';
       _subscribed = SubscriptionService.instance.isSubscribed;

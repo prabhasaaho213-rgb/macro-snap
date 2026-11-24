@@ -58,6 +58,7 @@ class StepCounterService extends ChangeNotifier {
   static const String _carriedPref = 'sensor_steps_carried';
   static const String _todayPref = 'sensor_steps_today';
   static const String _lastTotalPref = 'sensor_steps_last_total';
+  static const String _lastAtPref = 'sensor_steps_last_at';
 
   /// The persisted key for [base] in the ACTIVE account's partition. Resolved
   /// per call rather than cached: the account can change between two reads.
@@ -91,7 +92,21 @@ class StepCounterService extends ChangeNotifier {
   /// Last counter value seen in this segment, used to spot a counter reset.
   int? _lastTotal;
 
+  /// When [_lastTotal] was read. Used to carry a day's total across midnight.
+  int? _lastAtMs;
+
+  /// Counter value from late yesterday, so steps taken between that reading
+  /// and midnight are counted today instead of being thrown away. Only set
+  /// when the last reading was close to midnight (see [_restore]).
+  int? _overnightFrom;
+
+  /// The last permission answer, for an honest empty state in the Health tab.
+  bool _denied = false;
+
   String? _day;
+
+  /// The user refused the activity permission (not merely "not asked yet").
+  bool get permissionDenied => _denied;
 
   /// This platform has a step counter that does not need Health Connect.
   bool get supported => _supported;
@@ -124,10 +139,12 @@ class StepCounterService extends ChangeNotifier {
 
     if (!await _hasPermission(requestPermission: requestPermission)) {
       _granted = false;
+      _denied = true;
       notifyListeners();
       return false;
     }
     _granted = true;
+    _denied = false;
     await _restore();
     _sub = _channel.receiveBroadcastStream().listen(
       (event) {
@@ -200,13 +217,33 @@ class StepCounterService extends ChangeNotifier {
         // continuation and the day was undercounted.
         final lastTotal = prefs.getInt(_key(prefs, _lastTotalPref));
         _lastTotal = (lastTotal != null && lastTotal >= 0) ? lastTotal : null;
+        final lastAt = prefs.getInt(_key(prefs, _lastAtPref));
+        _lastAtMs = (lastAt != null && lastAt > 0) ? lastAt : null;
         _day = _dayStamp();
       } else {
-        // A new day: yesterday's baseline would make today's count nonsense.
+        // A new day. Carry the steps taken since the last reading YESTERDAY
+        // when that reading was close to midnight (21:00+), so a night's walk
+        // and the first steps before the app opens are not lost. A reading
+        // from mid-afternoon would drag a day of walking into today, so it is
+        // deliberately not used.
+        final storedDay = prefs.getString(_key(prefs, _dayPref));
+        final lastTotal = prefs.getInt(_key(prefs, _lastTotalPref));
+        final lastAt = prefs.getInt(_key(prefs, _lastAtPref));
+        final yesterday = _dayStamp(DateTime.now().subtract(const Duration(days: 1)));
+        _overnightFrom = null;
+        if (storedDay == yesterday &&
+            lastTotal != null &&
+            lastTotal >= 0 &&
+            lastAt != null) {
+          final at = DateTime.fromMillisecondsSinceEpoch(lastAt);
+          if (at.hour >= 21) _overnightFrom = lastTotal;
+        }
         _day = null;
         _baseline = null;
         _carried = 0;
         _todaySteps = null;
+        _lastTotal = null;
+        _lastAtMs = null;
       }
     } catch (e, st) {
       logError('StepCounterService.restore', e, st);
@@ -218,11 +255,19 @@ class StepCounterService extends ChangeNotifier {
     var changed = false;
 
     if (_day != today) {
-      // First reading of a new day: this is the best available "midnight".
+      // First reading of a new day. `_overnightFrom` (a reading from late
+      // yesterday) turns the difference into today's steps instead of starting
+      // from zero; without it, the only honest "midnight" is now.
       _day = today;
-      _carried = 0;
+      final carriedFrom = _overnightFrom;
+      _overnightFrom = null;
+      if (carriedFrom != null && total >= carriedFrom) {
+        _carried = (total - carriedFrom).clamp(0, maxDailySteps).toInt();
+      } else {
+        _carried = 0;
+      }
       _baseline = total;
-      _todaySteps = 0;
+      _todaySteps = _carried;
       changed = true;
     } else if (_baseline == null ||
         total < _baseline! ||
@@ -238,6 +283,7 @@ class StepCounterService extends ChangeNotifier {
     }
 
     _lastTotal = total;
+    _lastAtMs = DateTime.now().millisecondsSinceEpoch;
     final steps = (_carried + (total - _baseline!)).clamp(
       0,
       maxDailySteps,
@@ -266,13 +312,14 @@ class StepCounterService extends ChangeNotifier {
       await prefs.setInt(_key(prefs, _carriedPref), _carried);
       await prefs.setInt(_key(prefs, _todayPref), _todaySteps ?? 0);
       await prefs.setInt(_key(prefs, _lastTotalPref), _lastTotal ?? -1);
+      await prefs.setInt(_key(prefs, _lastAtPref), _lastAtMs ?? -1);
     } catch (e, st) {
       logError('StepCounterService.persist', e, st);
     }
   }
 
-  static String _dayStamp() {
-    final now = DateTime.now();
+  static String _dayStamp([DateTime? at]) {
+    final now = at ?? DateTime.now();
     return '${now.year.toString().padLeft(4, '0')}-'
         '${now.month.toString().padLeft(2, '0')}-'
         '${now.day.toString().padLeft(2, '0')}';

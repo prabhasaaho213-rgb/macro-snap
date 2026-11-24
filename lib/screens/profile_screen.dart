@@ -81,7 +81,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final prefs = await SharedPreferences.getInstance();
     if (!mounted) return;
     setState(() {
-      _name = prefs.getString('name') ?? 'User';
+      // `nickname` is the fallback for a device where only login has written
+      // an identity so far — otherwise the page would show "User" while the
+      // greeting already knows the name.
+      _name =
+          prefs.getString('name') ?? prefs.getString('nickname') ?? 'User';
       _email = prefs.getString('email') ?? '';
       _phone = prefs.getString('phone') ?? '';
     });
