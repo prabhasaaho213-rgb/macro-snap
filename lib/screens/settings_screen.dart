@@ -596,6 +596,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
           'nickname': newName,
         }),
       );
+      // Save it against the account so a reinstall restores THIS name.
+      unawaited(LeaderboardRemote.instance.saveName(newName));
       // The leaderboard row carries this name too, so push it now.
       unawaited(LeaderboardRemote.instance.syncWithServer());
     }

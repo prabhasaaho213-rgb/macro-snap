@@ -15,6 +15,8 @@ import '../services/gemini_service.dart';
 import '../services/badge_service.dart';
 import '../services/meal_store.dart';
 import '../services/habit_store.dart';
+import '../services/leaderboard_remote.dart';
+import '../services/step_counter_service.dart';
 import '../services/subscription_service.dart';
 import '../services/account_partition.dart';
 import '../services/meal_streak_service.dart';
@@ -105,6 +107,17 @@ class _PhoneLoginScreenState extends State<PhoneLoginScreen>
 
       final prefs = await SharedPreferences.getInstance();
 
+      // A DIFFERENT account is signing in on this phone. `name`/`nickname` are
+      // the active session's identity, not the device's, so the previous
+      // account's values have to go before anything reads them: otherwise the
+      // new account greets the old name and /register saves it as its own.
+      final previousAccount = prefs.getString('phone');
+      if (previousAccount != null && previousAccount != email) {
+        await prefs.remove('name');
+        await prefs.remove('nickname');
+        await prefs.remove('photo_url');
+      }
+
       // Returning user? A saved nickname marks them — they are never asked
       // again. When local prefs are empty (reinstall / new device), try to
       // restore the nickname saved on the server during a previous
@@ -137,6 +150,11 @@ class _PhoneLoginScreenState extends State<PhoneLoginScreen>
       // collision-prone suffix → the current one). Move the local data NOW,
       // before anything reloads from it.
       await AccountPartition.ensureCurrent(prefs);
+      // The sensor measures the PHONE; the steps and the points belong to the
+      // ACCOUNT. Rebasing here means this account starts counting from this
+      // moment instead of inheriting the previous account's total into its
+      // partition — and it is what [resetForNewAccount] was written for.
+      unawaited(StepCounterService.instance.resetForNewAccount());
       // The calorie-goal streak is cached per process and keyed per account.
       // Re-read it here, or a second account on this phone keeps showing the
       // streak the previous one banked.
@@ -185,6 +203,11 @@ class _PhoneLoginScreenState extends State<PhoneLoginScreen>
       // where the one-time ₹1 first month is granted — this call is what
       // existing users get right after updating + logging in.
       unawaited(SubscriptionService.instance.verifyServerSubscription());
+      // Bring back THIS account's step history and name immediately: a fresh
+      // install has neither locally, and waiting for the next launch showed an
+      // empty week after signing in.
+      unawaited(LeaderboardRemote.instance.restoreSteps());
+      unawaited(LeaderboardRemote.instance.restoreFromServer());
       // Anything this account logged offline can upload now that it is active.
       unawaited(PendingSyncQueue.instance.drain());
       unawaited(MealStore.instance.reload());

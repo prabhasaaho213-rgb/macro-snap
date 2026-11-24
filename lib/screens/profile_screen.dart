@@ -160,6 +160,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
         'nickname': newName,
       }),
     );
+    // Save it against the ACCOUNT, not just this phone: the name a fresh
+    // install restores comes from the server, and without this write the
+    // reinstall fetched the old registration name back.
+    unawaited(LeaderboardRemote.instance.saveName(newName));
     // The public board carries this name. Push it now instead of waiting for
     // the next score change, or a rename would not reach the leaderboard until
     // the user earned another point.

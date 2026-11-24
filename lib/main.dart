@@ -222,6 +222,10 @@ Future<void> _bootstrap() async {
       // flag, and asking a joined account to join again was the bug), then push
       // this device's activity so the week is scored server-side.
       (_) => _guard(() async {
+        // Steps are the account's data whether or not it joined a board, so
+        // this pull runs for every signed-in account — it is what brings a
+        // reinstall's step history back.
+        await LeaderboardRemote.instance.restoreSteps();
         await LeaderboardRemote.instance.restoreFromServer();
         await LeaderboardRemote.instance.syncWithServer();
       }, 'LeaderboardRemote.restore+sync'),
@@ -332,9 +336,13 @@ Timer? _leaderboardPushTimer;
 /// not joined sends nothing — browsing a board must not publish a score.
 void _scheduleLeaderboardPush() {
   final service = LeaderboardService.instance;
-  if (!service.optIn || !service.hasLocation) return;
   _leaderboardPushTimer?.cancel();
   _leaderboardPushTimer = Timer(const Duration(seconds: 8), () {
+    // The account owns its step history whether or not it joined a board, so
+    // the upload is unconditional for a signed-in user — browsing a board must
+    // not publish a SCORE, but losing the steps was never intended.
+    unawaited(LeaderboardRemote.instance.syncSteps());
+    if (!service.optIn || !service.hasLocation) return;
     unawaited(LeaderboardRemote.instance.syncWithServer());
   });
 }

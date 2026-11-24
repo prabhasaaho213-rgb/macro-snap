@@ -387,6 +387,84 @@ class LeaderboardRemote {
     }
   }
 
+  /// Saves a renamed profile to the ACCOUNT.
+  ///
+  /// The name a fresh install restores comes from the server's identity record,
+  /// which only registration used to write. A rename therefore never survived
+  /// an uninstall: signing in again fetched the old registration name and put
+  /// it back. This is the write that makes the rename follow the account.
+  Future<bool> saveName(String name) async {
+    if (!canJoin) return false;
+    try {
+      final clean = name.trim();
+      if (clean.isEmpty) return false;
+      final resp = await AuthHttp.post(
+        _url('/user/profile'),
+        headers: const {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'name': clean.length > 40 ? clean.substring(0, 40) : clean,
+        }),
+      ).timeout(const Duration(seconds: 12));
+      return resp.statusCode == 200;
+    } catch (e, st) {
+      logError('LeaderboardRemote.saveName', e, st);
+      return false;
+    }
+  }
+
+  /// Uploads this device's per-day step totals for the signed-in account.
+  ///
+  /// Independent of the leaderboard: only members are scored, but the steps
+  /// themselves are the account's data, so they are stored — and restored after
+  /// a reinstall — for an account that never joined a board.
+  Future<bool> syncSteps() async {
+    if (!canJoin) return false;
+    final service = LeaderboardService.instance;
+    try {
+      final days = Map<String, int>.from(service.stepDays);
+      // Nothing local to send (a fresh install): pull the account's history
+      // instead of posting an empty map.
+      if (days.isEmpty) return await restoreSteps();
+      final resp = await AuthHttp.post(
+        _url('/steps/sync'),
+        headers: const {'Content-Type': 'application/json'},
+        body: jsonEncode({'days': days}),
+      ).timeout(const Duration(seconds: 15));
+      if (resp.statusCode != 200) return false;
+      final data = jsonDecode(resp.body);
+      if (data is Map) {
+        await service.applyServerStepDays(_intMap(data['stepDays']));
+      }
+      return true;
+    } catch (e, st) {
+      logError('LeaderboardRemote.syncSteps', e, st);
+      return false;
+    }
+  }
+
+  /// Pulls this account's step history back onto the device.
+  ///
+  /// A reinstall has no local steps at all; signing in brings back the totals
+  /// the account uploaded before, so the week does not restart at zero.
+  Future<bool> restoreSteps() async {
+    if (!canJoin) return false;
+    try {
+      final resp = await AuthHttp.get(
+        _url('/steps/me'),
+      ).timeout(const Duration(seconds: 12));
+      if (resp.statusCode != 200) return false;
+      final data = jsonDecode(resp.body);
+      if (data is! Map) return false;
+      await LeaderboardService.instance.applyServerStepDays(
+        _intMap(data['stepDays']),
+      );
+      return true;
+    } catch (e, st) {
+      logError('LeaderboardRemote.restoreSteps', e, st);
+      return false;
+    }
+  }
+
   /// Asks the server to take this account off every board for this week.
   ///
   /// Called BEFORE the local "left" flag is written: if the server cannot be

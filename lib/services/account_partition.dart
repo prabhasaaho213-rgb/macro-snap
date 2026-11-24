@@ -99,6 +99,17 @@ class AccountPartition {
     // second account inherited the first one's banked days (and the streak
     // badges computed from them).
     'calorie_goal_hit_dates',
+    // Step history is per account, not per phone: an account's walking is its
+    // data. These bases were already written with AccountPartition.key, but
+    // were missing from this list — so signing in did not move a guest's steps
+    // onto the account, and deleting an account left its step partition (and
+    // its day total) behind for the next person to inherit.
+    'sensor_steps_day',
+    'sensor_steps_baseline',
+    'sensor_steps_carried',
+    'sensor_steps_today',
+    'sensor_steps_last_total',
+    'sensor_steps_last_at',
   ];
 
   /// Moves the ACTIVE account's local data onto its current suffix.
