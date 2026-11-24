@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -6,8 +7,11 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../data/india_districts.dart';
+import 'auth_http.dart';
 import 'crash_reporting.dart';
+import 'gemini_service.dart';
 import 'leaderboard_service.dart';
+import 'weight_store.dart';
 
 /// The three boards a user can appear on. The score is the same everywhere —
 /// appearing on more than one board never earns extra points.
@@ -52,21 +56,50 @@ class LeaderboardBoard {
   static const LeaderboardBoard empty = LeaderboardBoard();
 }
 
-/// Firestore-first leaderboard: one weekly document per user per scope, read
-/// back with an ordered query.
+/// What `POST /leaderboard/sync` answered: the server's verdict for the week.
+class LeaderboardSyncResult {
+  /// The server now considers this account joined (it echoes the flag it
+  /// saved, so a restore and a fresh sync agree).
+  final bool joined;
+
+  /// This week's server-scored total — the number on the board.
+  final int points;
+
+  final String week;
+  final String name;
+  final String? stateKey;
+  final String? districtKey;
+
+  /// The area change was refused because the weekly move limit was reached.
+  final bool locationLocked;
+
+  const LeaderboardSyncResult({
+    required this.joined,
+    required this.points,
+    required this.week,
+    required this.name,
+    this.stateKey,
+    this.districtKey,
+    this.locationLocked = false,
+  });
+}
+
+/// Server-scored leaderboard. The phone reports facts, the backend decides
+/// every point, and Firestore holds the rows the app reads back.
 ///
 /// Path: `leaderboard/{week}/scopes/{scopeKey}/entries/{uid}`
 ///
 /// The scope lives in the PATH so each board is a plain collection with a
 /// single `orderBy('points')` — no composite index to deploy, no cross-board
-/// filtering. Writes go out as one batch so a user is on (or off) all three
-/// boards together.
+/// filtering. The backend writes all three rows in one batch so a user is on
+/// (or off) all three boards together; this class only READS them.
 ///
-/// What this is NOT: verified. The phone computes its own points and says so.
-/// See the note on `firestore.rules` — anyone running a modified client can
-/// claim any score up to the rule's cap, or claim a district they are not in.
-/// A server-side scoring endpoint that recomputes from event documents is the
-/// only thing that fixes that, and it does not exist yet.
+/// The score is verified: `POST /leaderboard/sync` re-reads meals, habits,
+/// water and weigh-ins from Firestore, merges the step history the server keeps
+/// in `stepLog/{uid}`, and scores the week itself. The app never writes points,
+/// so a modified client cannot claim a score — and because the server keeps the
+/// step totals and the join, a reinstall restores both instead of starting the
+/// week over.
 class LeaderboardRemote {
   LeaderboardRemote._();
   static final LeaderboardRemote instance = LeaderboardRemote._();
@@ -204,6 +237,8 @@ class LeaderboardRemote {
     return '${thursday.year}-W${week.toString().padLeft(2, '0')}';
   }
 
+  static Uri _url(String path) => Uri.parse('${GeminiService.serverUrl}$path');
+
   CollectionReference<Map<String, dynamic>> _entries(
     String week,
     String scope,
@@ -252,83 +287,6 @@ class LeaderboardRemote {
       if (!currentScopes.contains(scope) && isValidScope(scope)) scope,
   ];
 
-  /// Publishes [points] for this week to the India, state and district boards.
-  ///
-  /// [previousScopes] are the boards written earlier this week (remembered by
-  /// the caller): any the current area no longer covers are deleted in the same
-  /// batch, so a district change cannot leave two rows behind.
-  ///
-  /// Zero points writes no row — but the cleanup still runs, because a user can
-  /// move district after their score dropped back to zero, and then the old row
-  /// must go even though there is nothing new to write.
-  Future<bool> publish({
-    required String week,
-    required int points,
-    required String name,
-    required String stateKey,
-    required String district,
-    List<String> previousScopes = const [],
-  }) async {
-    final user = uid;
-    if (user == null) return false;
-    final districtKey = slug(district);
-    final current = boardsFor(stateKey: stateKey, district: district);
-    final writes = points > 0;
-    // A score that fell back to zero takes its rows down rather than leaving a
-    // stale higher number on the board for the rest of the week.
-    final deletes = writes
-        ? staleScopes(previousScopes, current)
-        : [
-            for (final scope in previousScopes)
-              if (isValidScope(scope)) scope,
-          ];
-    if (!writes && deletes.isEmpty) return false;
-
-    try {
-      final db = FirebaseFirestore.instance;
-      final weekRef = db.collection('leaderboard').doc(week);
-      final batch = db.batch();
-
-      for (final scope in writes ? current : const <String>[]) {
-        batch.set(
-          weekRef
-              .collection('scopes')
-              .doc(scope)
-              .collection('entries')
-              .doc(user),
-          {
-            'uid': user,
-            'name': name,
-            'week': week,
-            'scope': scope,
-            'points': points.clamp(0, maxWeekPoints),
-            'stateKey': stateKey,
-            'district': district,
-            'districtKey': districtKey,
-            'updatedAt': FieldValue.serverTimestamp(),
-          },
-          SetOptions(merge: true),
-        );
-      }
-      // Remove boards this account no longer belongs on: a district it moved
-      // away from, or every row when there is no score to publish.
-      for (final stale in deletes) {
-        batch.delete(
-          weekRef
-              .collection('scopes')
-              .doc(stale)
-              .collection('entries')
-              .doc(user),
-        );
-      }
-      await batch.commit();
-      return true;
-    } catch (e, st) {
-      logError('LeaderboardRemote.publish', e, st);
-      return false;
-    }
-  }
-
   /// The display name used on boards: a nickname if one is set, else the name
   /// on the account, else a generic label. Never an email or a phone number.
   static Future<String> publicName() async {
@@ -343,55 +301,215 @@ class LeaderboardRemote {
     }
   }
 
-  /// Brings this device's rows in line with the saved profile: publishes the
-  /// week's points when joined, retries a leave that never reached the server,
-  /// and clears rows from an area the user has moved away from.
+  /// Pushes this account's activity to the server, which scores the week and
+  /// writes the board rows.
   ///
-  /// Called at launch and from the Rank page — one implementation for both, so
-  /// the two paths cannot disagree about which boards a user is on.
-  Future<bool> publishIfJoined({required int points}) async {
+  /// The phone no longer writes points itself. It reports raw facts (name, area
+  /// and the stored step total for each day of the week); the server reads
+  /// meals, habits, water and weigh-ins from Firestore, scores every day with
+  /// `leaderboard.js`, and persists the step history. That is what makes
+  /// yesterday's points survive a reinstall, and it is the only place points
+  /// are decided.
+  Future<LeaderboardSyncResult?> syncWithServer() async {
+    final service = LeaderboardService.instance;
+    if (!canJoin) return null;
+    try {
+      final body = <String, dynamic>{
+        'name': await publicName(),
+        'weekId': weekId(),
+        'days': _weekDays(service),
+      };
+      final state = service.stateKey;
+      final district = service.district;
+      if (state != null && state.isNotEmpty) body['stateKey'] = state;
+      if (district != null && district.isNotEmpty) {
+        body['districtKey'] = slug(district);
+      }
+      final resp = await AuthHttp.post(
+        _url('/leaderboard/sync'),
+        headers: const {'Content-Type': 'application/json'},
+        body: jsonEncode(body),
+      ).timeout(const Duration(seconds: 15));
+      if (resp.statusCode != 200) return null;
+      final data = jsonDecode(resp.body);
+      if (data is! Map) return null;
+      return _applyResponse(service, data);
+    } catch (e, st) {
+      logError('LeaderboardRemote.syncWithServer', e, st);
+      return null;
+    }
+  }
+
+  /// Restores join state, area and step history for this account.
+  ///
+  /// Joining used to be a device preference only, so deleting and reinstalling
+  /// the app asked an account that was already on the board to join again. The
+  /// server remembers the join (`leaderboardMeta`), and this read rebuilds it
+  /// on a fresh install. A leave performed on this device is never undone: the
+  /// server is told about it before the local flag changes.
+  Future<bool> restoreFromServer() async {
     final service = LeaderboardService.instance;
     if (!canJoin) return false;
-
-    // A leave that failed while offline is retried here. The rows are only
-    // forgotten once they are actually gone, so "Leave" cannot silently leave
-    // the user on the board.
-    final pending = service.pendingLeave;
-    if (pending != null) {
-      final gone = await removeScopes(
-        week: pending.week,
-        scopes: pending.scopes,
+    try {
+      final resp = await AuthHttp.get(
+        _url('/leaderboard/me'),
+      ).timeout(const Duration(seconds: 12));
+      if (resp.statusCode != 200) return false;
+      final data = jsonDecode(resp.body);
+      if (data is! Map) return false;
+      await service.applyServerStepDays(_intMap(data['stepDays']));
+      if (data['joined'] != true) return false;
+      final state = data['stateKey'];
+      final districtKey = data['districtKey'];
+      if (state is! String || state.isEmpty) return false;
+      if (districtKey is! String || districtKey.isEmpty) return false;
+      // The server stores the slug; the picker works with display names.
+      final district = districtsFor(state).firstWhere(
+        (d) => slug(d) == districtKey,
+        orElse: () => districtKey,
       );
-      if (!gone) return false;
-      await service.clearPendingLeave();
-      await service.clearPublished(pending.week);
+      if (!service.optIn ||
+          service.stateKey != state ||
+          service.district != district) {
+        await service.setProfile(
+          optIn: true,
+          stateKey: state,
+          district: district,
+        );
+      }
+      return true;
+    } catch (e, st) {
+      logError('LeaderboardRemote.restoreFromServer', e, st);
+      return false;
     }
-
-    if (!service.optIn || !service.hasLocation) return false;
-
-    final week = weekId();
-    final stateKey = service.stateKey!;
-    final district = service.district!;
-    final ok = await publish(
-      week: week,
-      points: points,
-      name: await publicName(),
-      stateKey: stateKey,
-      district: district,
-      previousScopes: service.publishedScopes(week),
-    );
-    if (ok) {
-      // Remember exactly what exists now: the current boards when a score was
-      // written, nothing when the write was only a cleanup.
-      await service.rememberPublished(
-        week,
-        points > 0
-            ? boardsFor(stateKey: stateKey, district: district)
-            : const [],
-      );
-    }
-    return ok;
   }
+
+  /// Asks the server to take this account off every board for this week.
+  ///
+  /// Called BEFORE the local "left" flag is written: if the server cannot be
+  /// reached the user is still joined, and telling them otherwise would leave a
+  /// public row up on a device that believes it left.
+  Future<bool> leaveOnServer() async {
+    if (!canJoin) return false;
+    try {
+      final resp = await AuthHttp.post(
+        _url('/leaderboard/leave'),
+        headers: const {'Content-Type': 'application/json'},
+        body: '{}',
+      ).timeout(const Duration(seconds: 15));
+      return resp.statusCode == 200;
+    } catch (e, st) {
+      logError('LeaderboardRemote.leaveOnServer', e, st);
+      return false;
+    }
+  }
+
+  LeaderboardSyncResult? _applyResponse(
+    LeaderboardService service,
+    Map data,
+  ) {
+    final week = data['week'] as String? ?? weekId();
+    final days = <({String dateKey, int points, Map<String, int> buckets})>[];
+    final raw = data['dayPoints'];
+    if (raw is List) {
+      for (final entry in raw) {
+        if (entry is! Map) continue;
+        final key = entry['dateKey'];
+        if (key is! String) continue;
+        days.add((
+          dateKey: key,
+          points: (entry['points'] as num?)?.toInt() ?? 0,
+          buckets: _intMap(entry['buckets']),
+        ));
+      }
+    }
+    if (days.isNotEmpty) service.applyServerWeek(week, days);
+    unawaited(service.applyServerStepDays(_intMap(data['stepDays'])));
+
+    final state = data['stateKey'];
+    final districtKey = data['districtKey'];
+    if (state is String && state.isNotEmpty) {
+      final district = districtKey is String && districtKey.isNotEmpty
+          ? districtsFor(state).firstWhere(
+              (d) => slug(d) == districtKey,
+              orElse: () => districtKey,
+            )
+          : null;
+      if (district != null &&
+          (service.stateKey != state || service.district != district)) {
+        unawaited(
+          service.setProfile(
+            optIn: service.optIn,
+            stateKey: state,
+            district: district,
+          ),
+        );
+      }
+    }
+
+    return LeaderboardSyncResult(
+      joined: data['joined'] != false,
+      points: (data['points'] as num?)?.toInt() ?? 0,
+      week: week,
+      name: data['name'] is String ? data['name'] as String : '',
+      stateKey: state is String ? state : null,
+      districtKey: districtKey is String ? districtKey : null,
+      locationLocked: data['locationLocked'] == true,
+    );
+  }
+
+  static Map<String, int> _intMap(Object? value) {
+    final out = <String, int>{};
+    if (value is Map) {
+      value.forEach((key, raw) {
+        if (key is String && raw is num) out[key] = raw.toInt();
+      });
+    }
+    return out;
+  }
+
+  /// Monday..today of the current week, with the stored step total and the
+  /// weigh-in flag for each day.
+  ///
+  /// Every day is sent, not only today: a sync after a weekend the app was
+  /// closed still scores those days, and the server keeps the highest figure it
+  /// has seen for each one. Steps and weigh-ins are the two facts only the
+  /// phone knows — meals, habits and water are re-read from Firestore — so a day
+  /// is only listed when it has one of them.
+  static List<Map<String, dynamic>> _weekDays(LeaderboardService service) {
+    final now = DateTime.now();
+    final start = DateTime(
+      now.year,
+      now.month,
+      now.day,
+    ).subtract(Duration(days: now.weekday - 1));
+    // Seeded entries come from the diet profile, not from the user standing on
+    // a scale, so they must not buy the weigh-in points.
+    final weighIns = WeightStore.instance.entries
+        .where((e) => !e.seeded)
+        .map((e) => _dayKey(e.date))
+        .toSet();
+    final days = <Map<String, dynamic>>[];
+    for (var i = 0; i < 7; i++) {
+      final date = start.add(Duration(days: i));
+      if (date.isAfter(now)) break;
+      final key = _dayKey(date);
+      final steps = service.stepsForDay(key);
+      final weighedIn = weighIns.contains(key);
+      if (steps <= 0 && !weighedIn) continue;
+      days.add({
+        'dateKey': key,
+        'steps': steps,
+        'weighIn': weighedIn,
+      });
+    }
+    return days;
+  }
+
+  static String _dayKey(DateTime day) =>
+      '${day.year.toString().padLeft(4, '0')}-'
+      '${day.month.toString().padLeft(2, '0')}-'
+      '${day.day.toString().padLeft(2, '0')}';
 
   /// A live board: a new snapshot is pushed to every listener as soon as any
   /// entry changes, so a score earned on another phone appears here on its own.
@@ -503,44 +621,6 @@ class LeaderboardRemote {
       },
     );
     return controller.stream;
-  }
-
-  /// Deletes this account's row from every board in [scopes] for [week].
-  ///
-  /// The caller passes every board this account wrote this week, not just the
-  /// current area's, so leaving also removes a district row left behind by a
-  /// move. Leaving must actually take the rows down; otherwise "Leave" would
-  /// only hide them on this phone.
-  Future<bool> removeScopes({
-    required String week,
-    required List<String> scopes,
-  }) async {
-    final user = uid;
-    if (user == null) return false;
-    final targets = {
-      for (final scope in scopes)
-        if (isValidScope(scope)) scope,
-    };
-    if (targets.isEmpty) return false;
-    try {
-      final db = FirebaseFirestore.instance;
-      final weekRef = db.collection('leaderboard').doc(week);
-      final batch = db.batch();
-      for (final scope in targets) {
-        batch.delete(
-          weekRef
-              .collection('scopes')
-              .doc(scope)
-              .collection('entries')
-              .doc(user),
-        );
-      }
-      await batch.commit();
-      return true;
-    } catch (e, st) {
-      logError('LeaderboardRemote.removeScopes', e, st);
-      return false;
-    }
   }
 
   /// Reads one board, highest score first, and finds the caller's rank.

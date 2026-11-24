@@ -71,11 +71,11 @@ void main() {
       LeaderboardService.mealDailyCap +
           LeaderboardService.habitDailyCap +
           LeaderboardService.hydrationDailyCap +
-          LeaderboardService.stepGoalDailyCap +
+          LeaderboardService.movementDailyCap +
           LeaderboardService.weighInPoints +
           LeaderboardService.calorieGoalPoints,
     );
-    expect(LeaderboardService.dailyMax, 90);
+    expect(LeaderboardService.dailyMax, 170);
   });
 
   test('DayPoints round-trips through JSON and sums its buckets', () {

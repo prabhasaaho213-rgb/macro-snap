@@ -2,7 +2,12 @@ package com.macrosnap.macro_snap
 
 import android.content.ActivityNotFoundException
 import android.content.ContentValues
+import android.content.Context
 import android.content.Intent
+import android.hardware.Sensor
+import android.hardware.SensorEvent
+import android.hardware.SensorEventListener
+import android.hardware.SensorManager
 import android.media.MediaScannerConnection
 import android.net.Uri
 import android.os.Build
@@ -12,6 +17,7 @@ import android.provider.MediaStore
 import androidx.core.view.WindowCompat
 import io.flutter.embedding.android.FlutterFragmentActivity
 import io.flutter.embedding.engine.FlutterEngine
+import io.flutter.plugin.common.EventChannel
 import io.flutter.plugin.common.MethodChannel
 import java.io.File
 
@@ -32,6 +38,10 @@ import java.io.File
  * permissions — that API contract requires the FragmentActivity base.
  */
 class MainActivity : FlutterFragmentActivity() {
+    private var stepSensorManager: SensorManager? = null
+    private var stepListener: SensorEventListener? = null
+    private var stepEventSink: EventChannel.EventSink? = null
+
     override fun onCreate(savedInstanceState: Bundle?) {
         // Draw under system bars on Android 15+ (SDK 35+).
         WindowCompat.setDecorFitsSystemWindows(window, false)
@@ -50,6 +60,83 @@ class MainActivity : FlutterFragmentActivity() {
                 else -> result.notImplemented()
             }
         }
+
+        // The phone's own step counter. Health Connect is OPTIONAL in this app:
+        // steps have to keep working for a phone that never installed or
+        // authorised a health app, and the hardware counter the OS already
+        // keeps is the only source that needs no other app and no account.
+        //
+        // The stream emits the CUMULATIVE count since boot (a Long), exactly
+        // what TYPE_STEP_COUNTER reports; StepCounterService turns that into a
+        // day total and survives reboots. No plugin: this is the same reason
+        // the launcher channel above exists — a sensor listener needs no
+        // dependency and no Play Services.
+        EventChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            "macrosnap/steps",
+        ).setStreamHandler(
+            object : EventChannel.StreamHandler {
+                override fun onListen(arguments: Any?, events: EventChannel.EventSink?) {
+                    stepEventSink = events
+                    startStepSensor()
+                }
+
+                override fun onCancel(arguments: Any?) {
+                    stopStepSensor()
+                }
+            },
+        )
+    }
+
+    /**
+     * Starts the hardware step counter. Emits an error (which Dart reports as
+     * "no sensor on this device") rather than staying silent when the phone has
+     * no counter, so the Health tab can say so honestly.
+     *
+     * ACTIVITY_RECOGNITION is requested by Dart before this is called: on
+     * Android 10+ the sensor is gated behind that runtime permission.
+     */
+    private fun startStepSensor() {
+        val manager = getSystemService(Context.SENSOR_SERVICE) as? SensorManager
+        val sensor = manager?.getDefaultSensor(Sensor.TYPE_STEP_COUNTER)
+        if (manager == null || sensor == null) {
+            stepEventSink?.error(
+                "unavailable",
+                "No step counter sensor on this device",
+                null,
+            )
+            return
+        }
+        stopStepSensor()
+        val listener = object : SensorEventListener {
+            override fun onSensorChanged(event: SensorEvent) {
+                val total = event.values.firstOrNull() ?: return
+                stepEventSink?.success(total.toLong())
+            }
+
+            override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) = Unit
+        }
+        if (manager.registerListener(listener, sensor, SensorManager.SENSOR_DELAY_NORMAL)) {
+            stepSensorManager = manager
+            stepListener = listener
+        } else {
+            stepEventSink?.error(
+                "unavailable",
+                "The step counter could not be started",
+                null,
+            )
+        }
+    }
+
+    private fun stopStepSensor() {
+        stepListener?.let { stepSensorManager?.unregisterListener(it) }
+        stepListener = null
+        stepSensorManager = null
+    }
+
+    override fun onDestroy() {
+        stopStepSensor()
+        super.onDestroy()
     }
 
     /**

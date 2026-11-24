@@ -23,6 +23,7 @@ import '../services/meal_streak_service.dart';
 import '../services/meal_store.dart';
 import '../services/weight_store.dart';
 import '../services/meal_sync_service.dart';
+import '../services/leaderboard_remote.dart';
 import '../services/habit_store.dart';
 import '../services/rate_us_service.dart';
 import '../services/subscription_service.dart';
@@ -579,12 +580,23 @@ class _SettingsScreenState extends State<SettingsScreen> {
     ctrl.dispose();
     if (newName != null && newName.isNotEmpty && newName != _name) {
       final prefs = await SharedPreferences.getInstance();
+      // Both identity keys move together: `nickname` is what login and the
+      // leaderboard read first, so updating only `name` made the edit look
+      // ignored everywhere except Settings itself.
       await prefs.setString('name', newName);
+      await prefs.setString('nickname', newName);
       userNameNotifier.value = newName;
       if (!mounted) return;
       setState(() => _name = newName);
       // Auto-sync name to cloud.
-      unawaited(MealSyncService.syncPreferences({'name': newName}));
+      unawaited(
+        MealSyncService.syncPreferences({
+          'name': newName,
+          'nickname': newName,
+        }),
+      );
+      // The leaderboard row carries this name too, so push it now.
+      unawaited(LeaderboardRemote.instance.syncWithServer());
     }
   }
 

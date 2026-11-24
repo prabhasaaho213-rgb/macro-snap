@@ -27,6 +27,7 @@ import 'services/meal_streak_service.dart';
 import 'services/pending_sync_queue.dart';
 import 'services/leaderboard_remote.dart';
 import 'services/leaderboard_service.dart';
+import 'services/step_counter_service.dart';
 import 'services/account_partition.dart';
 import 'core/app_nav.dart';
 
@@ -184,25 +185,39 @@ Future<void> _bootstrap() async {
   PendingSyncQueue.instance.mealSource = () => MealStore.instance.allMeals;
   PendingSyncQueue.instance.start();
 
+  // The phone's own step counter — NOT Health Connect. It is started on every
+  // launch so a day's walking is counted and scored even for a user who never
+  // installed or authorised a health app; the permission dialog itself belongs
+  // to the Health tab, so this only resumes a grant that already exists.
+  unawaited(
+    _guard(() async {
+      await StepCounterService.instance.start();
+    }, 'StepCounterService.start'),
+  );
+
   // Leaderboard points are derived from the stores loaded above (meals,
   // habits, water, weigh-ins), so it is attached once they are ready and then
-  // keeps itself current by listening to them. Steps are fed separately by the
-  // health dashboard, which is the only place that reads them.
+  // keeps itself current by listening to them and to the step sensor.
   unawaited(
     _guard(
       LeaderboardService.instance.attach,
       'LeaderboardService.attach',
     ).then(
-      // Once the points are loaded, put this week's total on the boards if the
-      // user has joined — otherwise a score earned on Home would only reach the
-      // leaderboard when the Rank page was next opened.
+      // Restore the join from the server first (a reinstall has no local
+      // flag, and asking a joined account to join again was the bug), then push
+      // this device's activity so the week is scored server-side.
       (_) => _guard(() async {
-        await LeaderboardRemote.instance.publishIfJoined(
-          points: LeaderboardService.instance.weekPoints,
-        );
-      }, 'LeaderboardRemote.publishIfJoined'),
+        await LeaderboardRemote.instance.restoreFromServer();
+        await LeaderboardRemote.instance.syncWithServer();
+      }, 'LeaderboardRemote.restore+sync'),
     ),
   );
+  // Every point change (a meal, a habit, water, a weigh-in, a step batch) is
+  // pushed to the server shortly after it happens. Without this the server only
+  // heard from a device that opened the Rank page, so a user who never opened
+  // it lost yesterday's movement when the app was reinstalled.
+  LeaderboardService.instance.addListener(_scheduleLeaderboardPush);
+
   unawaited(
     _guard(PendingSyncQueue.instance.drain, 'PendingSyncQueue.drain'),
   );
@@ -291,6 +306,22 @@ Future<void> _bootstrap() async {
       await NotificationService().logPendingCount();
     }, 'NotificationService reminders'),
   );
+}
+
+Timer? _leaderboardPushTimer;
+
+/// Debounced push of this week's activity to the server.
+///
+/// Debounced on purpose: three water glasses, a meal and a step batch are one
+/// request, and the backend rate-limits the route to 12/minute. A user who has
+/// not joined sends nothing — browsing a board must not publish a score.
+void _scheduleLeaderboardPush() {
+  final service = LeaderboardService.instance;
+  if (!service.optIn || !service.hasLocation) return;
+  _leaderboardPushTimer?.cancel();
+  _leaderboardPushTimer = Timer(const Duration(seconds: 8), () {
+    unawaited(LeaderboardRemote.instance.syncWithServer());
+  });
 }
 
 /// Rebuilds the trophy case from what is already on this device.

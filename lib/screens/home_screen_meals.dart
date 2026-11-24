@@ -216,8 +216,6 @@ extension _HomeMeals on _HomeScreenState {
                       ),
                     ),
                   ),
-                  const SizedBox(width: 8),
-                  const AnalysisButton(section: AnalysisSection.nutrition),
                 ],
               ),
             ],

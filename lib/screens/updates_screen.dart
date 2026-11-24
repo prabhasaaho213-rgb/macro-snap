@@ -53,6 +53,17 @@ class _UpdatesScreenState extends State<UpdatesScreen> {
       date: '2026-11-24',
       isLatest: true,
       notes: [
+        'Steps now count without Health Connect: the app reads your phone\'s own step sensor, and Health Connect is an optional extra for a watch and calorie burn',
+        'Movement pays 10 points for every 5,000 steps, instead of only rewarding one step goal',
+        'Yesterday\'s points stay on the leaderboard after a reinstall, and an account that already joined is not asked to join again',
+        'Your name updates everywhere at once — profile, greeting and the leaderboard row',
+        'One Analysis button in Quick Actions; the extra icon on each activity card is gone',
+      ],
+    ),
+    _UpdateEntry(
+      version: '1.5.23',
+      date: '2026-11-24',
+      notes: [
         'Deleting your account now also cancels the Razorpay subscription, removes every meal and cloud photo, and deletes the sign-in itself',
         'If a deletion step fails, the app says so and lets you retry instead of claiming everything was removed',
         'Sync Meal Photos actually uploads and restores photos now — the backup route the app called did not exist on the server',

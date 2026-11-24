@@ -7,6 +7,7 @@ import '../core/haptics.dart';
 import '../core/theme.dart';
 import '../models/bmi.dart';
 import '../models/diet_profile.dart';
+import '../services/leaderboard_remote.dart';
 import '../services/meal_sync_service.dart';
 import '../services/subscription_service.dart';
 import '../widgets/animations.dart';
@@ -139,12 +140,26 @@ class _ProfileScreenState extends State<ProfileScreen> {
     ctrl.dispose();
     if (newName == null || newName.isEmpty || newName == _name) return;
     final prefs = await SharedPreferences.getInstance();
+    // TWO keys hold the user's name: `name` (what this page and Home show) and
+    // `nickname` (set at login, and what the leaderboard publishes first).
+    // Writing only `name` left every other surface on the old value — which is
+    // why a rename looked like it had not saved.
     await prefs.setString('name', newName);
+    await prefs.setString('nickname', newName);
     userNameNotifier.value = newName;
     if (!mounted) return;
     setState(() => _name = newName);
     // Same auto-sync the Settings name editor does.
-    unawaited(MealSyncService.syncPreferences({'name': newName}));
+    unawaited(
+      MealSyncService.syncPreferences({
+        'name': newName,
+        'nickname': newName,
+      }),
+    );
+    // The public board carries this name. Push it now instead of waiting for
+    // the next score change, or a rename would not reach the leaderboard until
+    // the user earned another point.
+    unawaited(LeaderboardRemote.instance.syncWithServer());
   }
 
   /// Opens the diet profile editor and repaints with whatever came back — a

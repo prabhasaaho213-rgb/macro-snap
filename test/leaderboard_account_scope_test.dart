@@ -96,21 +96,17 @@ void main() {
     );
   });
 
-  test('steps below the goal reverse the points already awarded', () async {
-    SharedPreferences.setMockInitialValues({
-      'phone': 'alice@example.com',
-      'health_step_goal': 10000,
-    });
+  test('movement pays per 5,000 steps and is never taken back', () async {
+    SharedPreferences.setMockInitialValues({'phone': 'alice@example.com'});
     await service.reload();
 
     await service.noteSteps(12000);
-    expect(service.todayPoints, LeaderboardService.stepGoalPoints);
+    expect(service.todayPoints, 20);
 
-    // A later read comes back lower (deleted record, corrected source). The
-    // provisional award must not survive.
+    // A later read coming back lower (a reboot, a fresh sensor, a corrected
+    // source) must not walk the day backwards: the stored total only grows.
     await service.noteSteps(4200);
-    expect(service.todayPoints, 0);
-    expect(service.dayPoints(DateTime.now()).earnedKeys, isEmpty);
+    expect(service.todayPoints, 20);
   });
 
   test('the server score is shown for the week it was scored for', () async {

@@ -1,7 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
-import 'package:pedometer/pedometer.dart';
+import 'package:flutter/services.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -14,13 +14,17 @@ import 'crash_reporting.dart';
 /// watch, and it is the only source for calories burned. But it is also
 /// optional. When it is not installed, not supported, or the user never granted
 /// it, the dashboard used to read zero steps forever. This reads Android's
-/// `TYPE_STEP_COUNTER` (CoreMotion on iOS, via the `pedometer` plugin) instead,
-/// which needs only the activity-recognition permission the manifest already
-/// declares — no Health Connect, no separate app, no account.
+/// `TYPE_STEP_COUNTER` directly over the `macrosnap/steps` event channel
+/// implemented in MainActivity.kt, which needs only the activity-recognition
+/// permission the manifest already declares — no Health Connect, no separate
+/// app, no account, and no plugin dependency.
+///
+/// The hardware counter is Android-only. iOS keeps HealthKit as its source, so
+/// [supported] is false there and the dashboard simply uses the health read.
 ///
 /// ## What the number means
 ///
-/// The sensor reports a CUMULATIVE count since boot, so the day is tracked as
+  /// The channel emits a CUMULATIVE count since boot, so the day is tracked as
 ///
 ///     today = carried + (total − baseline)
 ///
@@ -67,7 +71,10 @@ class StepCounterService extends ChangeNotifier {
   /// not a walk.
   static const int maxDailySteps = 200000;
 
-  StreamSubscription<StepCount>? _sub;
+  /// The `macrosnap/steps` event channel, defined in MainActivity.kt.
+  static const EventChannel _channel = EventChannel('macrosnap/steps');
+
+  StreamSubscription<dynamic>? _sub;
   bool _supported = false;
   bool _granted = false;
   bool _failed = false;
@@ -98,10 +105,10 @@ class StepCounterService extends ChangeNotifier {
   /// The sensor is supported but the stream reported an error.
   bool get failed => _failed;
 
+  /// Android only: the channel is backed by the Android step-counter sensor.
+  /// iOS has no equivalent here, and HealthKit already supplies its steps.
   bool get _platformSupported =>
-      !kIsWeb &&
-      (defaultTargetPlatform == TargetPlatform.android ||
-          defaultTargetPlatform == TargetPlatform.iOS);
+      !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
 
   /// Starts listening. Safe to call repeatedly; returns whether the sensor is
   /// usable.
@@ -122,8 +129,13 @@ class StepCounterService extends ChangeNotifier {
     }
     _granted = true;
     await _restore();
-    _sub = Pedometer.stepCountStream.listen(
-      _onStepCount,
+    _sub = _channel.receiveBroadcastStream().listen(
+      (event) {
+        // Kotlin sends the raw sensor value as a Long; accept a num or a string
+        // so a channel-type change cannot silently stop the counter.
+        final total = event is num ? event.toInt() : int.tryParse('$event');
+        if (total != null) _onStepCount(total);
+      },
       onError: _onError,
     );
     notifyListeners();
@@ -201,8 +213,7 @@ class StepCounterService extends ChangeNotifier {
     }
   }
 
-  void _onStepCount(StepCount event) {
-    final total = event.steps;
+  void _onStepCount(int total) {
     final today = _dayStamp();
     var changed = false;
 

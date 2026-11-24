@@ -87,15 +87,19 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
     // Re-reads today from the stores: opening the page after a meal logged on
     // another tab must show that meal's points, not the ones from last open.
     await _service.sync();
+    // A fresh install has no join flag and no step history of its own; the
+    // server still knows this account, so restore BEFORE syncing.
+    await LeaderboardRemote.instance.restoreFromServer();
     await _publish();
     await _listen();
   }
 
-  /// Writes this week's score to the public boards, when the user has joined.
+  /// Sends this week's activity to the server, which scores it and writes the
+  /// public boards.
   ///
-  /// Called on open, on pull-to-refresh and after joining — not on every
-  /// change, because a Firestore write per water glass would be noise for a
-  /// number that is read back on the next open anyway.
+  /// Called on open, on pull-to-refresh, after joining and after a score
+  /// change (debounced). The phone sends facts only — the server decides the
+  /// points — so what this page shows and what the board holds cannot drift.
   Future<void> _publish() async {
     if (!_service.optIn || !_service.hasLocation) return;
     if (_publishing) {
@@ -108,9 +112,7 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
     try {
       do {
         _pendingPublish = false;
-        await LeaderboardRemote.instance.publishIfJoined(
-          points: _service.weekPoints,
-        );
+        await LeaderboardRemote.instance.syncWithServer();
       } while (_pendingPublish);
     } finally {
       _publishing = false;
@@ -180,37 +182,42 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
       stateKey: result.stateKey,
       district: result.district,
     );
-    await _publish();
+    // Joining writes the board on the SERVER. If that cannot be reached, say
+    // so: the join is saved on this device and the next sync retries, but the
+    // user must not be left believing they are already ranked.
+    final synced = await LeaderboardRemote.instance.syncWithServer();
+    if (!mounted) return;
+    if (synced == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Joined on this device. Your score will appear on the board once '
+            'you are back online.',
+          ),
+        ),
+      );
+    }
     await _listen();
   }
 
   Future<void> _leave() async {
-    final stateKey = _service.stateKey;
-    final district = _service.district;
-    final week = LeaderboardRemote.weekId();
-    await _service.setProfile(optIn: false);
-
-    if (stateKey != null && district != null) {
-      // Every row this account put up this week: the current area's three, plus
-      // any board remembered from before a move.
-      final scopes = {
-        ...LeaderboardRemote.boardsFor(stateKey: stateKey, district: district),
-        ..._service.publishedScopes(week),
-      }.toList();
-
-      // Record the intent first. If the delete cannot reach Firestore (offline),
-      // the next launch retries instead of silently leaving the user on the
-      // board with their name and score still visible.
-      await _service.setPendingLeave(week: week, scopes: scopes);
-      final gone = await LeaderboardRemote.instance.removeScopes(
-        week: week,
-        scopes: scopes,
+    // The server owns the public row, so it is asked FIRST. If it cannot be
+    // reached the local flag stays "joined": believing you left while the
+    // board still shows your name is worse than an honest failure.
+    final left = await LeaderboardRemote.instance.leaveOnServer();
+    if (!mounted) return;
+    if (!left) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Could not leave the leaderboard. Check your connection and try '
+            'again.',
+          ),
+        ),
       );
-      if (gone) {
-        await _service.clearPendingLeave();
-        await _service.clearPublished(week);
-      }
+      return;
     }
+    await _service.setProfile(optIn: false);
     await _listen();
   }
 
@@ -533,9 +540,9 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
             icon: Icons.directions_walk_rounded,
             colour: MacroSnapTheme.neonCyan,
             label: 'Movement',
-            hint: 'Daily step goal reached',
+            hint: 'Every 5,000 steps',
             value: points.movement,
-            cap: LeaderboardService.stepGoalDailyCap,
+            cap: LeaderboardService.movementDailyCap,
           ),
           (
             icon: Icons.restaurant_rounded,
@@ -1179,7 +1186,7 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
   Widget _buildRules(BuildContext context, bool isDark) {
     final titleColour = isDark ? Colors.white : const Color(0xFF1A1A1A);
     final rules = <({String label, String points, String limit})>[
-      (label: 'Reach your step goal', points: '+20', limit: 'once a day'),
+      (label: 'Walk 5,000 steps', points: '+10', limit: 'per 5k, up to 50k'),
       (label: 'Log a meal', points: '+10', limit: 'up to 3 meals'),
       (label: 'Meet your calorie goal', points: '+10', limit: 'once a day'),
       (label: 'Complete a habit', points: '+5', limit: 'up to 3 habits'),

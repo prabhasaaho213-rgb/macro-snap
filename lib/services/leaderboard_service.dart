@@ -7,6 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'crash_reporting.dart';
 import 'habit_store.dart';
 import 'meal_store.dart';
+import 'step_counter_service.dart';
 import 'step_goal_service.dart';
 import 'weight_store.dart';
 
@@ -20,7 +21,7 @@ import 'weight_store.dart';
 ///   * a meal pays once per meal id, capped at 3 meals a day
 ///   * a habit pays once per habit per day, capped at 3 habits a day
 ///   * water pays 1 point per logged glass (max 5) plus 5 for reaching the goal
-///   * reaching the daily step goal pays 20, once
+///   * movement pays 10 for every complete 5,000 steps, capped at 100
 ///   * a real weigh-in pays 5, once a day
 ///   * meeting the calorie tracking goal pays 10, once a day
 ///
@@ -29,11 +30,12 @@ import 'weight_store.dart';
 /// rejected. That is what stops "delete and re-add the same meal" or
 /// "uncheck and re-check a habit" from farming points.
 ///
-/// Steps are the figure the app's own dashboard shows — including the steps
-/// Health Connect reports, since that is the number the user sees and the one
-/// they asked to be counted. They are typed in nowhere: the value is written by
-/// [noteSteps] from the Health Connect read, so a hand-entered total cannot
-/// exist.
+/// Steps are the figure the app's own dashboard shows, from the phone's own
+/// step sensor first and Health Connect second (see StepCounterService). They
+/// are typed in nowhere: [noteSteps] is the only writer. Each day's total is
+/// also kept in [_stepDays] so the whole week can be sent to the server on
+/// sync — that is what makes yesterday's movement points survive a reinstall,
+/// which the old "today only" value could not.
 class LeaderboardService extends ChangeNotifier {
   LeaderboardService._();
   static final LeaderboardService instance = LeaderboardService._();
@@ -54,8 +56,11 @@ class LeaderboardService extends ChangeNotifier {
   /// Entries (5) + goal bonus (5).
   static const int hydrationDailyCap = 10;
 
-  static const int stepGoalPoints = 20;
-  static const int stepGoalDailyCap = 20;
+  /// Movement is paid per distance walked, not for crossing one target:
+  /// every complete 5,000 steps is 10 points. 50,000 steps (the cap) is 100.
+  static const int stepsPerAward = 5000;
+  static const int stepAward = 10;
+  static const int movementDailyCap = 100;
 
   static const int weighInPoints = 5;
 
@@ -63,20 +68,28 @@ class LeaderboardService extends ChangeNotifier {
   /// Meals (30) + the calorie-goal bonus (10).
   static const int nutritionDailyCap = 40;
 
-  /// The most a user can bank in one day with today's table (90).
+  /// Movement points for a day's step total: 10 for every complete 5,000
+  /// steps, capped at [movementDailyCap]. The single definition of the rule —
+  /// [sync] awards with it and the server's `leaderboard.js` mirrors it.
+  static int movementPointsFor(int steps) {
+    if (steps <= 0) return 0;
+    final points = (steps ~/ stepsPerAward) * stepAward;
+    return points > movementDailyCap ? movementDailyCap : points;
+  }
+
+  /// The most a user can bank in one day with today's table (170).
   static const int dailyMax =
-      mealDailyCap + habitDailyCap + hydrationDailyCap + stepGoalDailyCap +
+      mealDailyCap + habitDailyCap + hydrationDailyCap + movementDailyCap +
       weighInPoints + calorieGoalPoints;
 
   // ─── Preferences keys ─────────────────────────────────────────────
   static const String _daysKey = 'leaderboard_days_v1';
   static const String _stepsDayKey = 'leaderboard_steps_day';
   static const String _stepsValueKey = 'leaderboard_steps_value';
+  static const String _stepsDaysKey = 'leaderboard_steps_days_v1';
   static const String _optInKey = 'leaderboard_opt_in';
   static const String _statePrefKey = 'leaderboard_state_key';
   static const String _districtPrefKey = 'leaderboard_district';
-  static const String _publishedKey = 'leaderboard_published_v1';
-  static const String _pendingLeaveKey = 'leaderboard_pending_leave_v1';
 
   /// How much history is kept. A season/quarter is plenty for "this week"
   /// plus a few weeks of context, and it keeps the stored JSON tiny.
@@ -90,22 +103,23 @@ class LeaderboardService extends ChangeNotifier {
   int _stepsToday = 0;
   String? _stepsDay;
 
+  /// Day key -> step total, for the whole week. This is the history the server
+  /// needs to score every day of the week, not just the day the app is open.
+  final Map<String, int> _stepDays = {};
+
+  /// Server-scored points for the current week, when a sync has answered. They
+  /// are displayed INSTEAD of the local estimate: the board shows the server's
+  /// number, so the page and the ranking cannot disagree, and a reinstall gets
+  /// yesterday's points back from the server rather than starting at today.
+  final Map<String, DayPoints> _serverDays = {};
+  String? _serverWeek;
+
   /// Public leaderboard identity. Off by default: joining puts the user's
   /// name and weekly score on a board other accounts can read, so it is the
   /// user's decision, not a side effect of logging a meal.
   bool _optIn = false;
   String? _stateKey;
   String? _district;
-
-  /// Which boards were written for which week, so a district change can
-  /// remove the stale document instead of leaving the user on two boards.
-  final Map<String, List<String>> _published = {};
-
-  /// A leave that has not reached Firestore yet (offline). Retried at the next
-  /// launch so "Leave" cannot be a no-op.
-  ({String week, List<String> scopes})? _pendingLeave;
-
-  ({String week, List<String> scopes})? get pendingLeave => _pendingLeave;
 
   bool get optIn => _optIn;
   String? get stateKey => _stateKey;
@@ -118,14 +132,14 @@ class LeaderboardService extends ChangeNotifier {
   bool get loaded => _loaded;
 
   /// Points banked today.
-  int get todayPoints => _day(_dayKey(DateTime.now())).total;
+  int get todayPoints => _visible(_dayKey(DateTime.now())).total;
 
   /// Points banked this week, Monday to Sunday.
   int get weekPoints {
     final start = _weekStart(DateTime.now());
     var sum = 0;
     for (var i = 0; i < 7; i++) {
-      sum += _day(_dayKey(start.add(Duration(days: i)))).total;
+      sum += _visible(_dayKey(start.add(Duration(days: i)))).total;
     }
     return sum;
   }
@@ -134,12 +148,12 @@ class LeaderboardService extends ChangeNotifier {
   int get activeStreak {
     var streak = 0;
     var cursor = DateTime.now();
-    if (_day(_dayKey(cursor)).total == 0) {
+    if (_visible(_dayKey(cursor)).total == 0) {
       // Today may simply not have started yet; the streak is still alive if
       // yesterday banked something.
       cursor = cursor.subtract(const Duration(days: 1));
     }
-    while (_day(_dayKey(cursor)).total > 0) {
+    while (_visible(_dayKey(cursor)).total > 0) {
       streak++;
       cursor = cursor.subtract(const Duration(days: 1));
     }
@@ -147,7 +161,15 @@ class LeaderboardService extends ChangeNotifier {
   }
 
   /// The points for one day, for the week strip.
-  DayPoints dayPoints(DateTime day) => _day(_dayKey(day));
+  DayPoints dayPoints(DateTime day) => _visible(_dayKey(day));
+
+  /// A day's step total from the stored history (0 when unknown).
+  int stepsForDay(String dayKey) => _stepDays[dayKey] ?? 0;
+
+  /// The stored step history, oldest day first. Sent to the server on sync so
+  /// it can score every day of the week, including days this install never
+  /// saw (after a reinstall) and days the app was not opened on.
+  Map<String, int> get stepDays => Map.unmodifiable(_stepDays);
 
   /// Monday..Sunday of the current week, oldest first.
   List<({DateTime date, DayPoints points})> get currentWeek {
@@ -156,7 +178,7 @@ class LeaderboardService extends ChangeNotifier {
       for (var i = 0; i < 7; i++)
         (
           date: start.add(Duration(days: i)),
-          points: _day(_dayKey(start.add(Duration(days: i)))),
+          points: _visible(_dayKey(start.add(Duration(days: i)))),
         ),
     ];
   }
@@ -182,37 +204,33 @@ class LeaderboardService extends ChangeNotifier {
           });
         }
       }
+      final stepsDaysRaw = prefs.getString(_stepsDaysKey);
+      if (stepsDaysRaw != null && stepsDaysRaw.isNotEmpty) {
+        final data = jsonDecode(stepsDaysRaw);
+        if (data is Map) {
+          data.forEach((key, value) {
+            final steps = value is num ? value.toInt() : null;
+            if (key is String && steps != null && steps >= 0) {
+              _stepDays[key] = steps;
+            }
+          });
+        }
+      }
       _stepsDay = prefs.getString(_stepsDayKey);
       _stepsToday = prefs.getInt(_stepsValueKey) ?? 0;
       if (_stepsDay != _dayKey(DateTime.now())) {
         // Yesterday's step total must not count toward today's goal.
         _stepsToday = 0;
         _stepsDay = null;
+      } else if (_stepsDay != null) {
+        // Carry the single-day value the previous build stored into the new
+        // history map, so upgrading mid-day does not zero today's movement.
+        final previous = _stepDays[_stepsDay!] ?? 0;
+        if (_stepsToday > previous) _stepDays[_stepsDay!] = _stepsToday;
       }
       _optIn = prefs.getBool(_optInKey) ?? false;
       _stateKey = prefs.getString(_statePrefKey);
       _district = prefs.getString(_districtPrefKey);
-      final publishedRaw = prefs.getString(_publishedKey);
-      if (publishedRaw != null && publishedRaw.isNotEmpty) {
-        final data = jsonDecode(publishedRaw);
-        if (data is Map) {
-          data.forEach((key, value) {
-            if (value is List) {
-              _published[key as String] = value.whereType<String>().toList();
-            }
-          });
-        }
-      }
-      final leaveRaw = prefs.getString(_pendingLeaveKey);
-      if (leaveRaw != null && leaveRaw.isNotEmpty) {
-        final data = jsonDecode(leaveRaw);
-        if (data is Map && data['week'] is String && data['scopes'] is List) {
-          _pendingLeave = (
-            week: data['week'] as String,
-            scopes: (data['scopes'] as List).whereType<String>().toList(),
-          );
-        }
-      }
       _prune();
     } catch (e, st) {
       logError('LeaderboardService.load', e, st);
@@ -231,11 +249,43 @@ class LeaderboardService extends ChangeNotifier {
     MealStore.instance.changeNotifier.addListener(_onStoreChanged);
     HabitStore.instance.addListener(_onStoreChanged);
     WeightStore.instance.addListener(_onStoreChanged);
+    // The phone's own step sensor is the PRIMARY step source; the Health tab is
+    // only one place it is read. Listening here means a day's steps are banked
+    // even when that tab is never opened — Health Connect is an optional
+    // second source, not a requirement.
+    StepCounterService.instance.addListener(_onSensorSteps);
     await sync();
+    _onSensorSteps();
   }
 
   void _onStoreChanged() {
     unawaited(sync());
+  }
+
+  /// Last step total already fed into the stores, and when.
+  int _lastSensorSteps = -1;
+  DateTime? _lastSensorPush;
+
+  /// Feeds a sensor reading into the streak and the points.
+  ///
+  /// The hardware counter can emit several times a second while walking, and
+  /// every push writes prefs and rescans today's meals/habits. Both are
+  /// idempotent, but doing that per step is pure I/O, so a reading is only
+  /// acted on when it moved by 25 steps or 20 seconds have passed. The number
+  /// on screen is updated by the dashboard itself, so nothing looks laggy.
+  void _onSensorSteps() {
+    final steps = StepCounterService.instance.todaySteps;
+    if (steps == null) return;
+    final now = DateTime.now();
+    final grew = steps - _lastSensorSteps;
+    final due =
+        _lastSensorPush == null ||
+        now.difference(_lastSensorPush!) >= const Duration(seconds: 20);
+    if (_lastSensorSteps >= 0 && !due && grew < 25) return;
+    _lastSensorSteps = steps;
+    _lastSensorPush = now;
+    unawaited(StepGoalService.instance.recordToday(steps));
+    unawaited(noteSteps(steps));
   }
 
   Future<void> _save() async {
@@ -255,24 +305,26 @@ class LeaderboardService extends ChangeNotifier {
   }
 
   void _prune() {
-    if (_days.length <= keepDays) return;
     final cutoff = _dayKey(
       DateTime.now().subtract(const Duration(days: keepDays)),
     );
     _days.removeWhere((key, _) => key.compareTo(cutoff) < 0);
+    _stepDays.removeWhere((key, _) => key.compareTo(cutoff) < 0);
   }
 
   // ─── Scoring ──────────────────────────────────────────────────────
 
-  /// Re-reads today from the stores and awards anything not yet paid.
+  /// Re-reads the stores and awards anything not yet paid: today's meals,
+  /// habits, water and weigh-in, plus every stored step day of the week.
   ///
   /// Safe to call as often as wanted: every award is keyed and idempotent, and
-  /// a run that changes nothing writes nothing.
+  /// a run that changes nothing writes nothing. These points are the offline
+  /// estimate the page shows before a server sync answers; the server's scored
+  /// days replace them on screen once it does.
   Future<void> sync() async {
     await load();
-    // The step target lives in its own store; without this a launch that never
-    // opened the Health tab would score against the 10,000 default instead of
-    // the target the user actually chose.
+    // The streak lives in the goal store, and loading it here means a launch
+    // that never opened the Health tab still has the current target.
     await StepGoalService.instance.load();
     final today = _dayKey(DateTime.now());
     var changed = false;
@@ -322,17 +374,21 @@ class LeaderboardService extends ChangeNotifier {
       );
     }
 
-    // Steps — the goal pays once, and only for a count the health dashboard
-    // actually read (see [noteSteps]).
-    final stepGoal = StepGoalService.instance.goal;
-    if (_stepsDay == today && _stepsToday >= stepGoal) {
-      changed |= _award(
-        today,
-        'steps_$today',
-        PointsBucket.movement,
-        stepGoalPoints,
-        stepGoalDailyCap,
-      );
+    // Movement — 10 points for each complete 5,000 steps, awarded per unit so
+    // the total grows while the user walks. The stored day total is used (not
+    // only today's), so a launch after a day the app was closed still credits
+    // that day's walking.
+    for (final entry in _stepDays.entries) {
+      final units = entry.value ~/ stepsPerAward;
+      for (var i = 1; i <= units; i++) {
+        changed |= _award(
+          entry.key,
+          'steps_${i}_${entry.key}',
+          PointsBucket.movement,
+          stepAward,
+          movementDailyCap,
+        );
+      }
     }
 
     // Weigh-in — a real reading (not a value seeded from the profile) pays
@@ -356,24 +412,92 @@ class LeaderboardService extends ChangeNotifier {
     }
   }
 
-  /// Records today's step total as the health dashboard read it.
+  /// Records today's step total as the phone's sensor (or Health Connect)
+  /// reported it. Called on every sensor batch, and again from the Health tab
+  /// with the health platform's figure when that is higher.
   ///
-  /// Deliberately not user-enterable: the only caller is the Health Connect
-  /// read, which is the figure the dashboard shows.
+  /// Deliberately not user-enterable: no screen takes a step number from a
+  /// text field, so a typed total cannot exist.
   Future<void> noteSteps(int steps) async {
     await load();
     final today = _dayKey(DateTime.now());
-    if (_stepsDay == today && _stepsToday == steps) return;
+    final previous = _stepDays[today] ?? 0;
+    if (_stepsDay == today && _stepsToday == steps && steps <= previous) return;
     _stepsDay = today;
     _stepsToday = steps;
+    // The sensor only counts up; a lower reading (a reboot, a fresh install)
+    // must never walk the day — or its points — backwards.
+    if (steps > previous) _stepDays[today] = steps;
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString(_stepsDayKey, today);
       await prefs.setInt(_stepsValueKey, steps);
+      await prefs.setString(_stepsDaysKey, jsonEncode(_stepDays));
     } catch (e, st) {
       logError('LeaderboardService.noteSteps', e, st);
     }
     await sync();
+  }
+
+  /// Merges step totals restored from the server (a fresh install has none).
+  Future<void> applyServerStepDays(Map<String, int> days) async {
+    if (days.isEmpty) return;
+    await load();
+    var changed = false;
+    days.forEach((key, steps) {
+      if (steps <= (_stepDays[key] ?? 0)) return;
+      _stepDays[key] = steps;
+      changed = true;
+    });
+    if (!changed) return;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_stepsDaysKey, jsonEncode(_stepDays));
+    } catch (e, st) {
+      logError('LeaderboardService.applyServerStepDays', e, st);
+    }
+    notifyListeners();
+  }
+
+  /// Replaces this week's displayed points with the server's scored days.
+  ///
+  /// The server is the authority on the board, so showing anything else here
+  /// lets the page and the ranking disagree — and a local-only week is exactly
+  /// what lost yesterday's points when the app was reinstalled.
+  void applyServerWeek(
+    String week,
+    Iterable<({String dateKey, int points, Map<String, int> buckets})> days,
+  ) {
+    var changed = false;
+    if (_serverWeek != week) {
+      _serverWeek = week;
+      _serverDays.clear();
+      changed = true;
+    }
+    for (final day in days) {
+      final points = DayPoints()
+        ..movement = day.buckets['movement'] ?? 0
+        ..nutrition = day.buckets['nutrition'] ?? 0
+        ..habits = day.buckets['habits'] ?? 0
+        ..hydration = day.buckets['hydration'] ?? 0
+        ..body = day.buckets['body'] ?? 0;
+      final previous = _serverDays[day.dateKey];
+      // Only notify on a real change. Without this every sync (which is
+      // scheduled by this very notification) re-notified and pushed again,
+      // forever — an 8-second loop of identical requests.
+      if (previous != null &&
+          previous.total == points.total &&
+          previous.movement == points.movement &&
+          previous.nutrition == points.nutrition &&
+          previous.habits == points.habits &&
+          previous.hydration == points.hydration &&
+          previous.body == points.body) {
+        continue;
+      }
+      _serverDays[day.dateKey] = points;
+      changed = true;
+    }
+    if (changed) notifyListeners();
   }
 
   /// Saves the public leaderboard profile.
@@ -406,67 +530,6 @@ class LeaderboardService extends ChangeNotifier {
       }
     } catch (e, st) {
       logError('LeaderboardService.setProfile', e, st);
-    }
-  }
-
-  /// The boards written for [week] last time, so a move can clear the old one.
-  List<String> publishedScopes(String week) =>
-      List.unmodifiable(_published[week] ?? const <String>[]);
-
-  /// Forgets the boards remembered for [week] — used after they were deleted,
-  /// so a later publish does not chase documents that no longer exist.
-  Future<void> clearPublished(String week) async {
-    _published.remove(week);
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString(
-        _publishedKey,
-        jsonEncode({for (final e in _published.entries) e.key: e.value}),
-      );
-    } catch (e, st) {
-      logError('LeaderboardService.clearPublished', e, st);
-    }
-  }
-
-  /// Remembers a leave that still has to be sent, so it survives an app kill
-  /// and is retried on the next launch.
-  Future<void> setPendingLeave({
-    required String week,
-    required List<String> scopes,
-  }) async {
-    _pendingLeave = (week: week, scopes: List<String>.from(scopes));
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString(
-        _pendingLeaveKey,
-        jsonEncode({'week': week, 'scopes': scopes}),
-      );
-    } catch (e, st) {
-      logError('LeaderboardService.setPendingLeave', e, st);
-    }
-  }
-
-  Future<void> clearPendingLeave() async {
-    _pendingLeave = null;
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.remove(_pendingLeaveKey);
-    } catch (e, st) {
-      logError('LeaderboardService.clearPendingLeave', e, st);
-    }
-  }
-
-  Future<void> rememberPublished(String week, List<String> scopes) async {
-    _published.clear();
-    _published[week] = List<String>.from(scopes);
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString(
-        _publishedKey,
-        jsonEncode({for (final e in _published.entries) e.key: e.value}),
-      );
-    } catch (e, st) {
-      logError('LeaderboardService.rememberPublished', e, st);
     }
   }
 
@@ -508,6 +571,13 @@ class LeaderboardService extends ChangeNotifier {
   }
 
   DayPoints _day(String key) => _days.putIfAbsent(key, DayPoints.new);
+
+  /// What the UI shows for one day: the server's scored points when this week
+  /// has been synced, otherwise the local estimate (offline, before the first
+  /// sync of the week). Never inserts, so reading the week cannot grow the
+  /// stored map.
+  DayPoints _visible(String key) =>
+      _serverDays[key] ?? _days[key] ?? DayPoints();
 
   // ─── Date helpers ─────────────────────────────────────────────────
 

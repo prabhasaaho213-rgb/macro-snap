@@ -8,8 +8,8 @@ import '../core/theme.dart';
 import '../services/health_service.dart';
 import '../services/leaderboard_service.dart';
 import '../services/meal_store.dart';
+import '../services/step_counter_service.dart';
 import '../services/step_goal_service.dart';
-import '../widgets/analysis_button.dart';
 import '../widgets/animations.dart';
 import '../widgets/glass_card.dart';
 
@@ -59,7 +59,24 @@ class _HealthDashboardScreenState extends State<HealthDashboardScreen>
   Timer? _pollTimer;
   bool _appInForeground = true;
 
-  bool get _connected => _hasReadPermission;
+  /// The phone's own step counter. This is the PRIMARY source: Health Connect
+  /// is optional, and a user who never connects it still gets steps, a ring and
+  /// leaderboard movement points from the sensor the phone already has.
+  bool _sensorActive = false;
+  int? _sensorSteps;
+
+  /// Today's steps from whichever source has the higher count. Health Connect
+  /// de-duplicates a phone and a watch, so when it is connected its number can
+  /// be larger; the sensor is the fallback that always exists.
+  int? get _stepsNow {
+    final sensor = StepCounterService.instance.todaySteps ?? _sensorSteps;
+    final health = _steps;
+    if (sensor == null) return health;
+    if (health == null) return sensor;
+    return sensor > health ? sensor : health;
+  }
+
+  bool get _connected => _sensorActive || _hasReadPermission;
 
   @override
   void initState() {
@@ -73,6 +90,7 @@ class _HealthDashboardScreenState extends State<HealthDashboardScreen>
     // them, so changing the goal in the picker repaints this screen without
     // any state being copied twice.
     StepGoalService.instance.addListener(_onGoalChanged);
+    StepCounterService.instance.addListener(_onSensorChanged);
     _initialize();
   }
 
@@ -82,6 +100,7 @@ class _HealthDashboardScreenState extends State<HealthDashboardScreen>
     healthTabVisible.removeListener(_onTabVisibilityChanged);
     MealStore.instance.changeNotifier.removeListener(_onMealsChanged);
     StepGoalService.instance.removeListener(_onGoalChanged);
+    StepCounterService.instance.removeListener(_onSensorChanged);
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
@@ -92,6 +111,20 @@ class _HealthDashboardScreenState extends State<HealthDashboardScreen>
 
   void _onGoalChanged() {
     if (mounted) setState(() {});
+  }
+
+  void _onSensorChanged() {
+    if (!mounted) return;
+    final service = StepCounterService.instance;
+    setState(() {
+      _sensorActive = service.active;
+      _sensorSteps = service.todaySteps;
+      if (service.todaySteps != null) _lastUpdated = DateTime.now();
+    });
+    // Scoring is handled centrally (LeaderboardService listens to the sensor),
+    // so this only repaints the number. Doing the store writes here as well
+    // meant two prefs writes per sensor tick.
+    _syncPolling();
   }
 
   @override
@@ -143,13 +176,21 @@ class _HealthDashboardScreenState extends State<HealthDashboardScreen>
     await StepGoalService.instance.load();
     if (!mounted) return;
 
+    // The phone's own step counter is the primary source. Its permission
+    // (ACTIVITY_RECOGNITION) is asked for HERE, on the screen that shows the
+    // number — never at launch — and Android remembers the grant afterwards.
+    await StepCounterService.instance.start(requestPermission: true);
+    if (!mounted) return;
+    setState(() {
+      _sensorActive = StepCounterService.instance.active;
+      _sensorSteps = StepCounterService.instance.todaySteps;
+    });
+    _syncPolling();
+
     final service = HealthService.instance;
     if (!service.isPlatformSupported) {
       if (!mounted) return;
-      setState(() {
-        _available = false;
-        _hasReadPermission = false;
-      });
+      setState(() => _available = false);
       return;
     }
 
@@ -180,6 +221,14 @@ class _HealthDashboardScreenState extends State<HealthDashboardScreen>
   /// calories burned. On success, load today's data immediately.
   Future<void> _connect() async {
     unawaited(Haptics.light());
+    // Step counting must work with no health app at all, so the phone sensor is
+    // started first and Health Connect is the optional extra.
+    if (!StepCounterService.instance.active) {
+      await StepCounterService.instance.start(requestPermission: true);
+      if (mounted) {
+        setState(() => _sensorActive = StepCounterService.instance.active);
+      }
+    }
     final service = HealthService.instance;
     // The request itself is only half of "connected": Health Connect can
     // accept the dialog and still hold no grant for a type this build asked
@@ -216,7 +265,9 @@ class _HealthDashboardScreenState extends State<HealthDashboardScreen>
           _activeCalories = today.activeCalories ?? _activeCalories;
           _lastUpdated = DateTime.now();
           _loadFailed = false;
-        } else {
+        } else if (_hasReadPermission) {
+          // Only a GRANTED Health Connect read can "fail": a phone without it
+          // is not an error, because the sensor is still counting.
           _loadFailed = true;
         }
         _refreshing = false;
@@ -224,12 +275,13 @@ class _HealthDashboardScreenState extends State<HealthDashboardScreen>
       // The streak advances the moment the target is crossed, not at the next
       // launch — the poll runs while the tab is open, so this is the only
       // place that sees the crossing happen.
-      final steps = today.steps ?? _steps;
-      if (today.ok && steps != null) {
+      final steps = _stepsNow;
+      if (steps != null) {
         await StepGoalService.instance.recordToday(steps);
         // The leaderboard's movement points use THIS number — the one the
-        // dashboard shows. It comes from Health Connect, so it is never a
-        // figure the user typed in.
+        // dashboard shows. It comes from the phone's sensor (or Health
+        // Connect when that is higher), so it is never a figure the user typed
+        // in.
         await LeaderboardService.instance.noteSteps(steps);
       }
     } catch (_) {
@@ -408,56 +460,18 @@ class _HealthDashboardScreenState extends State<HealthDashboardScreen>
     if (!_initialized) {
       return const Center(child: CircularProgressIndicator());
     }
-    if (!_available) {
-      return _buildUnavailable(context, isDark);
-    }
+    // Health Connect being unavailable is NOT a dead end any more: the phone's
+    // own step counter is enough, so the dashboard shows as soon as that is
+    // running.
     if (!_connected) {
       return _buildConnectState(context, isDark);
     }
     return _buildDashboard(context, isDark);
   }
 
-  /// Health Connect / HealthKit is not available on this device (too old, work
-  /// profile, private space, etc.). Show a short explanation and hide the CTA.
-  Widget _buildUnavailable(BuildContext context, bool isDark) {
-    return SafeArea(
-      child: SingleChildScrollView(
-        physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.fromLTRB(20, 12, 20, 28),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            const SizedBox(height: 8),
-            _buildIconCard(
-              context,
-              isDark,
-              icon: Icons.fitness_center_rounded,
-              iconColor: MacroSnapTheme.neonCyan,
-              backgroundColor: MacroSnapTheme.neonCyan.withValues(alpha: 0.12),
-              title: 'Health Connect unavailable',
-              body:
-                  'This phone or account does not support health data. '
-                  'Try a different device to see your steps and calories here.',
-            ),
-            const SizedBox(height: 24),
-            Text(
-              'Steps and calories from your phone or watch appear here once '
-              'you connect Health Connect.',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 13,
-                height: 1.5,
-                color: MacroSnapTheme.textTertiary(context),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  /// Health platform is available but the user has not granted read permission
-  /// yet. Offer a one-tap connect flow.
+  /// Nothing is counting yet. The phone's own step sensor is offered first —
+  /// it needs no Health Connect and no extra app — so a user who declines the
+  /// health platform still gets steps, a ring and movement points.
   Widget _buildConnectState(BuildContext context, bool isDark) {
     return SafeArea(
       child: SingleChildScrollView(
@@ -472,15 +486,17 @@ class _HealthDashboardScreenState extends State<HealthDashboardScreen>
               child: _buildIconCard(
                 context,
                 isDark,
-                icon: Icons.fitness_center_rounded,
+                icon: Icons.directions_walk_rounded,
                 iconColor: MacroSnapTheme.neonGreen,
                 backgroundColor: MacroSnapTheme.neonGreen.withValues(
                   alpha: 0.12,
                 ),
-                title: 'Connect Health',
+                title: 'Count your steps',
                 body:
-                    'Let MacroSnap read your steps and calories burned so '
-                    'you can see activity alongside your food logs.',
+                    'MacroSnap counts steps with your phone\'s own sensor — no '
+                    'Health Connect, no watch. Allow "Physical activity" to '
+                    'start. Health Connect is optional and only adds a watch '
+                    'and calories burned.',
               ),
             ),
             const SizedBox(height: 18),
@@ -488,8 +504,8 @@ class _HealthDashboardScreenState extends State<HealthDashboardScreen>
               width: double.infinity,
               child: FilledButton.icon(
                 onPressed: _connect,
-                icon: const Icon(Icons.fitness_center_rounded, size: 20),
-                label: const Text('Connect Health Connect'),
+                icon: const Icon(Icons.directions_walk_rounded, size: 20),
+                label: const Text('Enable step counting'),
                 style: FilledButton.styleFrom(
                   backgroundColor: MacroSnapTheme.neonGreen,
                   foregroundColor: Colors.black,
@@ -502,8 +518,10 @@ class _HealthDashboardScreenState extends State<HealthDashboardScreen>
             ),
             const SizedBox(height: 14),
             Text(
-              'Allow "Steps" and "Calories burned" (or "Active calories") — '
-              'either one is enough, and the app keeps the permission.',
+              'Tap Enable and allow "Physical activity" (Android) or "Motion & '
+              'Fitness" (iOS). Your steps appear here immediately; connect '
+              'Health Connect later from the same button if you want your '
+              'watch and calorie burn included.',
               textAlign: TextAlign.center,
               style: TextStyle(
                 fontSize: 12.5,
@@ -520,7 +538,7 @@ class _HealthDashboardScreenState extends State<HealthDashboardScreen>
 
   /// Permissions granted: the live dashboard.
   Widget _buildDashboard(BuildContext context, bool isDark) {
-    final steps = _steps ?? 0;
+    final steps = _stepsNow ?? 0;
     final cals = _caloriesBurned;
     final goal = _stepGoal;
     final progress = (steps / goal).clamp(0.0, 1.0);
@@ -639,7 +657,7 @@ class _HealthDashboardScreenState extends State<HealthDashboardScreen>
                       title: 'Updates itself',
                       body:
                           'Steps refresh every 5 seconds while this tab is '
-                          'open, straight from Health Connect.',
+                          'open, from your phone\'s own step sensor.',
                     ),
                   ),
                 ),
@@ -654,7 +672,8 @@ class _HealthDashboardScreenState extends State<HealthDashboardScreen>
                       iconColor: MacroSnapTheme.textTertiary(context),
                       title: 'Source',
                       body:
-                          'Numbers come from your phone or watch. MacroSnap '
+                          'Steps come from your phone\'s sensor; Health '
+                          'Connect adds a watch and calorie burn. MacroSnap '
                           'only reads them — it never edits them.',
                     ),
                   ),
@@ -736,12 +755,6 @@ class _HealthDashboardScreenState extends State<HealthDashboardScreen>
                   fontWeight: FontWeight.w800,
                   color: Colors.white,
                 ),
-              ),
-              const SizedBox(width: 8),
-              // White variant: the hero sits on a saturated gradient.
-              const AnalysisButton(
-                section: AnalysisSection.movement,
-                onDark: true,
               ),
             ],
           ),

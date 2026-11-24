@@ -276,8 +276,6 @@ extension _HabitsCards on _HabitsTabState {
                       ),
                     ),
                   ),
-                  const SizedBox(width: 8),
-                  const AnalysisButton(section: AnalysisSection.water),
                 ],
               ),
             ],
