@@ -7,6 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'account_partition.dart';
 import 'crash_reporting.dart';
+import 'step_limit.dart';
 
 /// Today's step count from the phone's own step sensor.
 ///
@@ -114,8 +115,20 @@ class StepCounterService extends ChangeNotifier {
   /// Listening and permitted — [todaySteps] is a real reading.
   bool get active => _sub != null && _granted;
 
-  /// Today's steps so far, or null before the first reading.
-  int? get todaySteps => _todaySteps;
+  /// Today's steps as the rest of the app may use them, or null before the
+  /// first reading.
+  ///
+  /// Capped for a free account: the sensor cannot be told to stop counting, so
+  /// the ceiling lives on the number the dashboard, the goal, the streak and
+  /// the leaderboard read. Pro removes it.
+  int? get todaySteps =>
+      _todaySteps == null ? null : StepLimit.cap(_todaySteps!);
+
+  /// The sensor's real total for today, before the free-plan cap.
+  ///
+  /// Kept separate so an upgrade shows the steps already walked: capping this
+  /// value instead would silently rewrite the day for every account.
+  int? get rawTodaySteps => _todaySteps;
 
   /// The sensor is supported but the stream reported an error.
   bool get failed => _failed;

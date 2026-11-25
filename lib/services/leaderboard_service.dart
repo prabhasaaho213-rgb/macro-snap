@@ -9,6 +9,7 @@ import 'habit_store.dart';
 import 'meal_store.dart';
 import 'step_counter_service.dart';
 import 'step_goal_service.dart';
+import 'step_limit.dart';
 import 'weight_store.dart';
 
 /// The fitness points a user earns for using MacroSnap itself.
@@ -379,7 +380,9 @@ class LeaderboardService extends ChangeNotifier {
     // only today's), so a launch after a day the app was closed still credits
     // that day's walking.
     for (final entry in _stepDays.entries) {
-      final units = entry.value ~/ stepsPerAward;
+      // Capped again here: a step day restored from the server can hold the raw
+      // total, and an offline week must not pay for more than the plan allows.
+      final units = StepLimit.cap(entry.value) ~/ stepsPerAward;
       for (var i = 1; i <= units; i++) {
         changed |= _award(
           entry.key,
@@ -418,8 +421,12 @@ class LeaderboardService extends ChangeNotifier {
   ///
   /// Deliberately not user-enterable: no screen takes a step number from a
   /// text field, so a typed total cannot exist.
-  Future<void> noteSteps(int steps) async {
+  Future<void> noteSteps(int rawSteps) async {
     await load();
+    // The free plan's daily ceiling, applied where a reading becomes history.
+    // The raw total stays with the sensor, so an upgrade reveals the steps
+    // already walked instead of rewriting the day backwards.
+    final steps = StepLimit.cap(rawSteps);
     final today = _dayKey(DateTime.now());
     final previous = _stepDays[today] ?? 0;
     if (_stepsDay == today && _stepsToday == steps && steps <= previous) return;

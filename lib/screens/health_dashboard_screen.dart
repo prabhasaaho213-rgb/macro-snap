@@ -11,8 +11,11 @@ import '../services/leaderboard_service.dart';
 import '../services/meal_store.dart';
 import '../services/step_counter_service.dart';
 import '../services/step_goal_service.dart';
+import '../services/step_limit.dart';
+import '../services/subscription_service.dart';
 import '../widgets/animations.dart';
 import '../widgets/glass_card.dart';
+import 'subscription_screen.dart';
 
 /// The Health dashboard — steps and calories burned from Health Connect,
 /// shown alongside the app's food-logging flow so a user can see intake and
@@ -45,7 +48,9 @@ class _HealthDashboardScreenState extends State<HealthDashboardScreen>
   /// The daily step goal the ring fills toward. Kept in [StepGoalService]
   /// (prefs-backed) so the target — and the streak that depends on it — is
   /// the same every time the tab is rebuilt.
-  int get _stepGoal => StepGoalService.instance.goal;
+  /// Pinned to the free plan's ceiling until the account is Pro, so the ring
+  /// can actually be completed on the free plan.
+  int get _stepGoal => StepLimit.goal(StepGoalService.instance.goal);
 
   bool _initialized = false;
   bool _available = false;
@@ -71,7 +76,9 @@ class _HealthDashboardScreenState extends State<HealthDashboardScreen>
   /// be larger; the sensor is the fallback that always exists.
   int? get _stepsNow {
     final sensor = StepCounterService.instance.todaySteps ?? _sensorSteps;
-    final health = _steps;
+    // Health Connect can report more than the phone's sensor (a watch); the
+    // free ceiling applies to that number too.
+    final health = _steps == null ? null : StepLimit.cap(_steps!);
     if (sensor == null) return health;
     if (health == null) return sensor;
     return sensor > health ? sensor : health;
@@ -328,7 +335,7 @@ class _HealthDashboardScreenState extends State<HealthDashboardScreen>
   /// Lets the user move the daily target in 5,000-step steps.
   Future<void> _pickGoal() async {
     unawaited(Haptics.light());
-    final goal = StepGoalService.instance.goal;
+    final goal = _stepGoal;
     final chosen = await showModalBottomSheet<int>(
       context: context,
       backgroundColor: Colors.transparent,
@@ -393,14 +400,34 @@ class _HealthDashboardScreenState extends State<HealthDashboardScreen>
                     for (final option in StepGoalService.goalOptions)
                       ChoiceChip(
                         label: Text(
-                          '${_thousands(option)} steps',
+                          StepLimit.isFree && option > StepLimit.freeDaily
+                              ? '${_thousands(option)} steps \u{1F512}'
+                              : '${_thousands(option)} steps',
                           style: const TextStyle(fontSize: 12.5),
                         ),
                         selected: option == goal,
-                        onSelected: (_) => Navigator.pop(ctx, option),
+                        // A target the free plan cannot record is not a
+                        // choice — it would just be a ring that never fills.
+                        onSelected:
+                            StepLimit.isFree && option > StepLimit.freeDaily
+                            ? null
+                            : (_) => Navigator.pop(ctx, option),
                       ),
                   ],
                 ),
+                if (StepLimit.isFree) ...[
+                  const SizedBox(height: 10),
+                  Text(
+                    'The free plan records up to '
+                    '${_thousands(StepLimit.freeDaily)} steps a day. Pro '
+                    'unlocks every target up to 30,000.',
+                    style: TextStyle(
+                      fontSize: 11.5,
+                      height: 1.4,
+                      color: MacroSnapTheme.textTertiary(ctx),
+                    ),
+                  ),
+                ],
                 const SizedBox(height: 18),
                 SizedBox(
                   width: double.infinity,
@@ -627,6 +654,13 @@ class _HealthDashboardScreenState extends State<HealthDashboardScreen>
                 progress: progress,
               ),
             ),
+            if (StepLimit.reached(steps)) ...[
+              const SizedBox(height: 12),
+              AnimatedEntrance(
+                delayMs: 55,
+                child: _buildStepLimitCard(context, isDark),
+              ),
+            ],
             const SizedBox(height: 14),
             Row(
               children: [
@@ -776,6 +810,98 @@ class _HealthDashboardScreenState extends State<HealthDashboardScreen>
         ),
       ),
     );
+  }
+
+  /// Shown the moment a free account reaches the daily step ceiling.
+  ///
+  /// Deliberately here and not in Settings: this is the moment the number stops
+  /// moving, which is the only moment an upgrade answers what the user is
+  /// looking at.
+  Widget _buildStepLimitCard(BuildContext context, bool isDark) {
+    return GlassCard(
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  color: MacroSnapTheme.neonOrange.withValues(alpha: 0.14),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Icon(
+                  Icons.lock_rounded,
+                  size: 18,
+                  color: MacroSnapTheme.neonOrange,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Daily step limit reached',
+                      style: TextStyle(
+                        fontSize: 13.5,
+                        fontWeight: FontWeight.w900,
+                        color: isDark ? Colors.white : const Color(0xFF1A1A1A),
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      'The free plan records '
+                      '${_thousands(StepLimit.freeDaily)} steps a day. Your '
+                      'phone keeps counting — Pro shows and scores every step.',
+                      style: TextStyle(
+                        fontSize: 11.5,
+                        height: 1.4,
+                        color: MacroSnapTheme.textTertiary(context),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          SizedBox(
+            width: double.infinity,
+            child: FilledButton(
+              onPressed: _openStepsPro,
+              style: FilledButton.styleFrom(
+                backgroundColor: MacroSnapTheme.neonOrange,
+                foregroundColor: Colors.black,
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                textStyle: const TextStyle(fontWeight: FontWeight.w800),
+              ),
+              child: const Text('Unlock unlimited steps'),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Opens the plans from the step ceiling, then re-reads the subscription so
+  /// a purchase lifts the cap without leaving the tab.
+  Future<void> _openStepsPro() async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const SubscriptionScreen()),
+    );
+    if (!mounted) return;
+    await SubscriptionService.instance.load();
+    if (!mounted) return;
+    setState(() {
+      _sensorSteps = StepCounterService.instance.todaySteps;
+    });
   }
 
   /// The optional Health Connect upgrade, offered from the running dashboard.
@@ -933,7 +1059,11 @@ class _HealthDashboardScreenState extends State<HealthDashboardScreen>
               ),
               const Spacer(),
               Text(
-                goalReached ? 'Goal reached 🎉' : '${(progress * 100).round()}%',
+                StepLimit.reached(steps)
+                    ? 'Free limit'
+                    : goalReached
+                    ? 'Goal reached 🎉'
+                    : '${(progress * 100).round()}%',
                 style: const TextStyle(
                   fontSize: 12,
                   fontWeight: FontWeight.w800,

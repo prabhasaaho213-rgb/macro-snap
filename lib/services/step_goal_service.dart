@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'crash_reporting.dart';
+import 'step_limit.dart';
 
 /// The user's daily step target, plus the streak of days that target was hit.
 ///
@@ -40,8 +41,15 @@ class StepGoalService extends ChangeNotifier {
   String? _lastGoalDay;
   bool _loaded = false;
 
-  /// The daily target in steps.
+  /// The daily target in steps, as the user chose it.
   int get goal => _goal;
+
+  /// The target the ring and the streak work toward.
+  ///
+  /// A free account's target is pinned to the free ceiling (5,000) so it can
+  /// still be completed; [goal] keeps the chosen number for the day Pro lifts
+  /// the cap.
+  int get effectiveGoal => StepLimit.goal(_goal);
 
   /// Consecutive days the target was reached, counting today once it is hit.
   /// Zero once a whole day has been missed — a streak that survives a skipped
@@ -119,7 +127,7 @@ class StepGoalService extends ChangeNotifier {
     var newlyReached = false;
     var changed = false;
 
-    if (steps >= _goal) {
+    if (steps >= effectiveGoal) {
       if (_lastGoalDay != today) {
         final yesterday = _dayKey(
           DateTime.now().subtract(const Duration(days: 1)),

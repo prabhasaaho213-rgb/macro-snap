@@ -10,6 +10,7 @@ import '../services/gemini_service.dart';
 import '../services/razorpay_service.dart';
 import '../services/currency_service.dart';
 import '../services/scan_gate.dart';
+import '../services/step_limit.dart';
 import '../services/subscription_service.dart';
 import 'referral_screen.dart';
 import 'payment_result_screen.dart';
@@ -340,7 +341,7 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
                 ),
               ],
               const SizedBox(height: 32),
-              // Exactly four rows, and each one is something Pro really
+              // Five rows, and each one is something Pro really
               // unlocks. Everything else that used to sit here was removed for
               // the same reason, so it is worth recording all four:
               //
@@ -385,6 +386,12 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
                 Icons.groups_rounded,
                 'Friends League',
                 'A private weekly board with the people you invite',
+                isDark,
+              ),
+              _buildFeatureRow(
+                Icons.directions_walk_rounded,
+                'Unlimited Steps',
+                'The free plan records 5,000 a day; Pro counts every step',
                 isDark,
               ),
               const SizedBox(height: 32),
@@ -799,6 +806,7 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
           _planPoint(context, 'Manual meal logging and macros'),
           _planPoint(context, 'Streaks and charts'),
           _planPoint(context, '${ScanGate.freeLimitPerDay} AI scans a day'),
+          _planPoint(context, '${StepLimit.freeDaily} steps a day'),
         ],
       ),
     );
