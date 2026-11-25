@@ -340,7 +340,7 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
                 ),
               ],
               const SizedBox(height: 32),
-              // Exactly three rows, and each one is something Pro really
+              // Exactly four rows, and each one is something Pro really
               // unlocks. Everything else that used to sit here was removed for
               // the same reason, so it is worth recording all four:
               //
@@ -358,8 +358,9 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
               // all, so this was the worst of the four.
               //
               // What remains is what the code enforces: the two server-side
-              // 403 pro_required gates (Guru, AI meal plan) and the scan limit
-              // that ScanGate lifts for Pro. A benefit that is not actually
+              // 403 pro_required gates (Guru, AI meal plan), the friends-league
+              // create/join gate on the same 403, and the scan limit that
+              // ScanGate lifts for Pro. A benefit that is not actually
               // gated reads as a false promise, and Play treats a paywall
               // promise the app does not keep as misleading metadata.
               _buildFeatureRow(
@@ -378,6 +379,12 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
                 Icons.photo_camera_rounded,
                 'Unlimited AI Scans',
                 'Snap any meal for instant macros — no limits',
+                isDark,
+              ),
+              _buildFeatureRow(
+                Icons.groups_rounded,
+                'Friends League',
+                'A private weekly board with the people you invite',
                 isDark,
               ),
               const SizedBox(height: 32),
