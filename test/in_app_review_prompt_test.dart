@@ -94,6 +94,25 @@ void main() {
     expect(await prompted(), isTrue);
   });
 
+  test('a manual ask shows the card even after the automatic one', () async {
+    var requests = 0;
+    InAppReviewService.requestOverride = () async => requests++;
+
+    await InAppReviewService.maybeAfterMealSave(3);
+    expect(requests, 1);
+
+    // Settings' Rate Us: the tap is the user's decision, so it asks again.
+    expect(await InAppReviewService.requestNow(), isTrue);
+    expect(requests, 2);
+  });
+
+  test('a manual ask reports false when Play cannot show the card', () async {
+    InAppReviewService.availabilityOverride = () async => false;
+
+    expect(await InAppReviewService.requestNow(), isFalse);
+    expect(await prompted(), isFalse, reason: 'the fallback must still run');
+  });
+
   test('nothing happens off Android', () async {
     debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
     var requests = 0;

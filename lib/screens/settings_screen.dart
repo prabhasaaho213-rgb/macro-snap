@@ -845,7 +845,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     child: _settingTile(
                       Icons.star_rounded,
                       'Rate Us',
-                      'Love MacroSnap? Leave a 5-star review',
+                      'Tell us how MacroSnap is doing on Google Play',
                       () => RateUsService.rateNowFromSettings(),
                       isDark,
                     ),

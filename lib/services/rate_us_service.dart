@@ -4,6 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import 'crash_reporting.dart';
+import 'in_app_review_service.dart';
 
 /// Opens MacroSnap's Play Store page, and remembers when the user has been
 /// there to rate.
@@ -66,10 +67,16 @@ class RateUsService {
     return false;
   }
 
-  /// The Settings / What's New "Rate us" action: opens the listing directly.
-  /// Only marked as rated once the store page actually launched, so a failed
-  /// launch does not silently suppress anything.
+  /// The Settings "Rate us" action: Play's own review card first, and the
+  /// listing only when Play will not show the card here.
+  ///
+  /// A user who taps Rate us has already decided to rate, so the sheet belongs
+  /// in-app rather than as a jump to the store. Sideloaded builds and installs
+  /// Play will not review report unavailable, and for those the store page is
+  /// still the honest destination. Only marked as rated once something
+  /// actually opened, so a failed attempt does not silently suppress anything.
   static Future<void> rateNowFromSettings() async {
+    if (await InAppReviewService.requestNow()) return;
     final opened = await openPlayStore();
     if (opened) {
       await prefsMarkRated();

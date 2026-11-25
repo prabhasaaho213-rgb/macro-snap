@@ -39,6 +39,47 @@ class InAppReviewService {
     requestOverride = null;
   }
 
+  /// Raises Play's review card now, because the user asked for it.
+  ///
+  /// Used by the Settings "Rate Us" row: a deliberate tap deserves the sheet
+  /// in-app instead of a jump to the listing. Returns `false` when Play cannot
+  /// show the card here (a sideloaded build, no Play account, quota used for
+  /// this version), which is the caller's cue to fall back to the store page.
+  ///
+  /// The prompted flag is set here too, so a manual ask counts as the one ask
+  /// and the automatic prompt does not follow it.
+  static Future<bool> requestNow() async {
+    try {
+      // The app is Android-only, and a Play review sheet means nothing on any
+      // other platform (including `flutter test`, for which the host platform
+      // is not Android).
+      if (defaultTargetPlatform != TargetPlatform.android) return false;
+
+      final available = availabilityOverride != null
+          ? await availabilityOverride!()
+          : await InAppReview.instance.isAvailable();
+      if (!available) {
+        // A sideloaded build, or an install Play will not review. Leave the
+        // flag alone: burned here, the ask would never happen for a real
+        // install.
+        return false;
+      }
+
+      // Marked BEFORE the request. Play shows the sheet at its own discretion
+      // and reports nothing back, so waiting for a result would mean asking
+      // again later — the nagging this exists to avoid.
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool(promptedKey, true);
+
+      final request = requestOverride ?? InAppReview.instance.requestReview;
+      await request();
+      return true;
+    } catch (e, st) {
+      logError('InAppReviewService.requestNow', e, st);
+      return false;
+    }
+  }
+
   /// Called after a meal is saved, with the number saved so far.
   ///
   /// Safe to call on every save: it returns immediately until the threshold,
@@ -47,31 +88,9 @@ class InAppReviewService {
   static Future<void> maybeAfterMealSave(int totalMeals) async {
     try {
       if (totalMeals < minMealsBeforePrompt) return;
-      // The app is Android-only, and a Play review sheet means nothing on any
-      // other platform (including `flutter test`, for which the host platform
-      // is not Android).
-      if (defaultTargetPlatform != TargetPlatform.android) return;
-
       final prefs = await SharedPreferences.getInstance();
       if (prefs.getBool(promptedKey) ?? false) return;
-
-      final available = availabilityOverride != null
-          ? await availabilityOverride!()
-          : await InAppReview.instance.isAvailable();
-      if (!available) {
-        // A sideloaded build, or an install Play will not review (no Play
-        // Store account, quota already used for this version). Leave the flag
-        // alone: burned here, the ask would never happen for a real install.
-        return;
-      }
-
-      // Marked BEFORE the request. Play shows the sheet at its own discretion
-      // and reports nothing back, so waiting for a result would mean asking
-      // again on every later save — the nagging this exists to avoid.
-      await prefs.setBool(promptedKey, true);
-
-      final request = requestOverride ?? InAppReview.instance.requestReview;
-      await request();
+      await requestNow();
     } catch (e, st) {
       logError('InAppReviewService.maybeAfterMealSave', e, st);
     }

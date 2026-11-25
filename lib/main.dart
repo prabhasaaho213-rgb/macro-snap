@@ -28,6 +28,7 @@ import 'services/pending_sync_queue.dart';
 import 'services/leaderboard_remote.dart';
 import 'services/leaderboard_service.dart';
 import 'services/step_counter_service.dart';
+import 'services/in_app_review_service.dart';
 import 'services/account_partition.dart';
 import 'core/app_nav.dart';
 
@@ -239,6 +240,19 @@ Future<void> _bootstrap() async {
 
   unawaited(
     _guard(PendingSyncQueue.instance.drain, 'PendingSyncQueue.drain'),
+  );
+
+  // The review ask otherwise only rides on a meal save, so an account that
+  // already logged the meals it waits for before this shipped would never see
+  // it. Deferred until the first real screen is up: Play's card needs a resumed
+  // activity, and asking behind the splash burns the one ask for nothing.
+  unawaited(
+    _guard(() async {
+      await Future<void>.delayed(const Duration(seconds: 2));
+      await InAppReviewService.maybeAfterMealSave(
+        MealStore.instance.allMeals.length,
+      );
+    }, 'InAppReviewService launch check'),
   );
 
   // Achievements shipped after these users had already been logging, so their
