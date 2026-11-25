@@ -7,9 +7,12 @@ import '../core/theme.dart';
 import '../data/india_districts.dart';
 import '../services/leaderboard_remote.dart';
 import '../services/leaderboard_service.dart';
+import '../services/subscription_service.dart';
 import '../widgets/animations.dart';
 import '../widgets/glass_card.dart';
+import 'friends_league_screen.dart';
 import 'leaderboard_ranks_screen.dart';
+import 'subscription_screen.dart';
 
 /// Fitness points — what the user earned this week, where those points came
 /// from, and the leaderboard scopes they will rank in.
@@ -283,6 +286,11 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
             // hero gradient as Home, Habits and Health. The week total, the
             // breakdown and the rules follow it.
             AnimatedEntrance(delayMs: 20, child: _buildRankings(context)),
+            const SizedBox(height: 14),
+            AnimatedEntrance(
+              delayMs: 45,
+              child: _buildFriendsCard(context, isDark),
+            ),
             const SizedBox(height: 14),
             AnimatedEntrance(delayMs: 70, child: _buildHero(context, isDark)),
             const SizedBox(height: 14),
@@ -686,6 +694,116 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
           ],
         ],
       ),
+    );
+  }
+
+  /// The private, invite-only board.
+  ///
+  /// Pro-gated at the tap rather than hidden: this card is the only place a
+  /// user learns the feature exists, so a locked card that opens the plans is
+  /// more useful than a card that is not there.
+  Widget _buildFriendsCard(BuildContext context, bool isDark) {
+    final titleColour = isDark ? Colors.white : const Color(0xFF1A1A1A);
+    return GlassCard(
+      padding: EdgeInsets.zero,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: _openFriendsLeague,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
+          child: Row(
+            children: [
+              Container(
+                width: 38,
+                height: 38,
+                decoration: BoxDecoration(
+                  color: MacroSnapTheme.neonPurple.withValues(alpha: 0.14),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Icon(
+                  Icons.groups_rounded,
+                  size: 19,
+                  color: MacroSnapTheme.neonPurple,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Text(
+                          'Friends league',
+                          style: TextStyle(
+                            fontSize: 13.5,
+                            fontWeight: FontWeight.w900,
+                            color: titleColour,
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 6,
+                            vertical: 2,
+                          ),
+                          decoration: BoxDecoration(
+                            color: MacroSnapTheme.neonOrange.withValues(
+                              alpha: 0.16,
+                            ),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: const Text(
+                            'PRO',
+                            style: TextStyle(
+                              fontSize: 8.5,
+                              letterSpacing: 0.6,
+                              fontWeight: FontWeight.w900,
+                              color: MacroSnapTheme.neonOrange,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      'A private weekly board for the people you invite',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: MacroSnapTheme.textTertiary(context),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Icon(
+                Icons.arrow_forward_ios_rounded,
+                size: 13,
+                color: MacroSnapTheme.textTertiary(context),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _openFriendsLeague() async {
+    unawaited(Haptics.light());
+    if (!await SubscriptionService.instance.unlocksPro()) {
+      if (!mounted) return;
+      await Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => const SubscriptionScreen()),
+      );
+      return;
+    }
+    if (!mounted) return;
+    await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const FriendsLeagueScreen()),
     );
   }
 

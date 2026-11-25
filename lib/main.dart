@@ -26,6 +26,7 @@ import 'services/badge_service.dart';
 import 'services/meal_streak_service.dart';
 import 'services/pending_sync_queue.dart';
 import 'services/leaderboard_remote.dart';
+import 'services/friends_league_service.dart';
 import 'services/leaderboard_service.dart';
 import 'services/step_counter_service.dart';
 import 'services/in_app_review_service.dart';
@@ -356,6 +357,9 @@ void _scheduleLeaderboardPush() {
     // the upload is unconditional for a signed-in user — browsing a board must
     // not publish a SCORE, but losing the steps was never intended.
     unawaited(LeaderboardRemote.instance.syncSteps());
+    // The private league row is scored from the same facts. A no-op for an
+    // account that belongs to no league (a cached flag short-circuits it).
+    unawaited(FriendsLeagueService.instance.syncScore());
     if (!service.optIn || !service.hasLocation) return;
     unawaited(LeaderboardRemote.instance.syncWithServer());
   });

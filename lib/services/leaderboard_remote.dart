@@ -320,7 +320,7 @@ class LeaderboardRemote {
       final body = <String, dynamic>{
         'name': await publicName(),
         'weekId': weekId(),
-        'days': _weekDays(service),
+        'days': weekDaysForSync(service),
       };
       final state = service.stateKey;
       final district = service.district;
@@ -557,7 +557,9 @@ class LeaderboardRemote {
   /// has seen for each one. Steps and weigh-ins are the two facts only the
   /// phone knows — meals, habits and water are re-read from Firestore — so a day
   /// is only listed when it has one of them.
-  static List<Map<String, dynamic>> _weekDays(LeaderboardService service) {
+  /// Shared with the friends-league sync: both boards must be scored from the
+  /// same facts, so both send this exact list of days.
+  static List<Map<String, dynamic>> weekDaysForSync(LeaderboardService service) {
     final now = DateTime.now();
     final start = DateTime(
       now.year,
