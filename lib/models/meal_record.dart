@@ -73,9 +73,7 @@ class MealItem {
     ingredients:
         (json['ingredients'] as List<dynamic>?)
             ?.whereType<Map>()
-            .map((e) => MealIngredient.fromJson(
-                  Map<String, dynamic>.from(e),
-                ))
+            .map((e) => MealIngredient.fromJson(Map<String, dynamic>.from(e)))
             .toList() ??
         const [],
   );
@@ -220,8 +218,7 @@ class MealRecord {
     // not stumble over a key it has never seen, and the parser treats a missing
     // key and a null the same way.
     if (imagePath != null) 'imagePath': imagePath,
-    if (items.isNotEmpty)
-      'items': [for (final item in items) item.toJson()],
+    if (items.isNotEmpty) 'items': [for (final item in items) item.toJson()],
     if (servingGrams != null) 'servingGrams': servingGrams,
   };
 

@@ -122,7 +122,10 @@ extension _HomeCalories on _HomeScreenState {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Flexible(
+                // Both sides are flexible: at 2x system text on a 320dp phone
+                // the pair is wider than the card, and a fixed-width trailing
+                // label overflowed the row by 18 px.
+                Expanded(
                   child: Text(
                     '${consumed.toInt()} of ${targetCal.toInt()} kcal',
                     maxLines: 1,
@@ -143,22 +146,23 @@ extension _HomeCalories on _HomeScreenState {
                 // met, computed like a habit's daily streak — not the habit
                 // streak, which sits next to a different goal. Until then
                 // the card states what is still to go.
-                goalMet
-                    ? StreakFlame(
-                        streak: _calorieStreak,
-                        fontSize: 15,
-                      )
-                    : Text(
-                        '${(targetCal - consumed).round()} left',
-                        maxLines: 1,
-                        style: TextStyle(
-                          color: isDark
-                              ? Colors.white70
-                              : MacroSnapTheme.textSecondary(context),
-                          fontSize: 13,
-                          fontWeight: FontWeight.w700,
+                Flexible(
+                  child: goalMet
+                      ? StreakFlame(streak: _calorieStreak, fontSize: 15)
+                      : Text(
+                          '${(targetCal - consumed).round()} left',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          textAlign: TextAlign.end,
+                          style: TextStyle(
+                            color: isDark
+                                ? Colors.white70
+                                : MacroSnapTheme.textSecondary(context),
+                            fontSize: 13,
+                            fontWeight: FontWeight.w700,
+                          ),
                         ),
-                      ),
+                ),
               ],
             ),
           ],

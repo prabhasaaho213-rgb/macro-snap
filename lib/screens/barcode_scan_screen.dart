@@ -11,6 +11,7 @@ import '../services/meal_store.dart';
 import '../widgets/animations.dart';
 import '../widgets/glass_card.dart';
 import '../widgets/gradient_button.dart';
+import '../widgets/scan_overlay.dart';
 import 'manual_barcode_entry_screen.dart';
 
 /// Turns a barcode product plus a portion into the meal that gets logged.
@@ -42,9 +43,19 @@ class BarcodeScanScreen extends StatefulWidget {
   State<BarcodeScanScreen> createState() => _BarcodeScanScreenState();
 }
 
-class _BarcodeScanScreenState extends State<BarcodeScanScreen> {
+class _BarcodeScanScreenState extends State<BarcodeScanScreen>
+    with TickerProviderStateMixin {
   BarcodeFood? _found;
   bool _scanning = true;
+
+  /// The same Lens-style sweep the photo scanner uses: one direction, faded at
+  /// both ends. Runs while the camera is looking for a code.
+  late final AnimationController _sweep;
+
+  /// The green wash when a code is caught. 1 = spent (no wash), 0 = fresh.
+  late final AnimationController _flash;
+
+  bool _reduceMotion = false;
 
   /// Set while a barcode is being resolved. Also stops the scanner for that
   /// moment, so one package does not fire five lookups and five dialogs.
@@ -57,7 +68,43 @@ class _BarcodeScanScreenState extends State<BarcodeScanScreen> {
   final TextEditingController _gramsCtrl = TextEditingController(text: '100');
 
   @override
+  void initState() {
+    super.initState();
+    _sweep = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 2400),
+    );
+    _flash = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 420),
+      value: 1,
+    );
+    _sweep.repeat();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _reduceMotion = MediaQuery.maybeDisableAnimationsOf(context) ?? false;
+    _syncSweep();
+  }
+
+  /// The sweep only runs while the camera is actually looking for a code, and
+  /// parks mid-frame when the OS asks for reduced motion.
+  void _syncSweep() {
+    if (_reduceMotion) {
+      _sweep.stop();
+      _sweep.value = 0.5;
+      return;
+    }
+    if (_scanning && !_sweep.isAnimating) _sweep.repeat();
+    if (!_scanning && _sweep.isAnimating) _sweep.stop();
+  }
+
+  @override
   void dispose() {
+    _sweep.dispose();
+    _flash.dispose();
     _gramsCtrl.dispose();
     super.dispose();
   }
@@ -98,6 +145,10 @@ class _BarcodeScanScreenState extends State<BarcodeScanScreen> {
       _lookingUp = true;
       _pendingCode = code;
     });
+    _syncSweep();
+    // The catch: the frame washes green once, then fades — the same beat as a
+    // dish chip landing on the photo scan.
+    _flash.forward(from: 0);
     unawaited(HapticFeedback.mediumImpact());
 
     final food = await BarcodeService.lookup(code);
@@ -124,6 +175,7 @@ class _BarcodeScanScreenState extends State<BarcodeScanScreen> {
       _scanning = manual == null;
       _pendingCode = null;
     });
+    _syncSweep();
   }
 
   Future<void> _log() async {
@@ -188,47 +240,13 @@ class _BarcodeScanScreenState extends State<BarcodeScanScreen> {
             ),
           ),
         ),
-        Center(
-          child: Container(
-            width: 250,
-            height: 250,
-            decoration: BoxDecoration(
-              border: Border.all(color: MacroSnapTheme.neonGreen, width: 2),
-              borderRadius: BorderRadius.circular(20),
-            ),
-            child: Center(
-              child: Icon(
-                Icons.qr_code_scanner_rounded,
-                size: 80,
-                color: Colors.white.withValues(alpha: 0.3),
-              ),
-            ),
-          ),
-        ),
+        Center(child: _buildFrame()),
         if (_lookingUp)
           Positioned.fill(
             child: ColoredBox(
-              color: Colors.black.withValues(alpha: 0.78),
+              color: Colors.black.withValues(alpha: 0.5),
               child: Center(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const SizedBox(
-                      width: 34,
-                      height: 34,
-                      child: CircularProgressIndicator(strokeWidth: 3),
-                    ),
-                    const SizedBox(height: 18),
-                    Text(
-                      'Looking up ${_pendingCode ?? 'barcode'}',
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 15,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ],
-                ),
+                child: _LookupCard(code: _pendingCode ?? 'barcode'),
               ),
             ),
           ),
@@ -253,6 +271,68 @@ class _BarcodeScanScreenState extends State<BarcodeScanScreen> {
           ),
         ),
       ],
+    );
+  }
+
+  /// The viewfinder. Same chrome as the photo scan: a thin green frame, white
+  /// breathing brackets and a Lens-style sweep, plus a one-shot green wash when
+  /// a code is caught.
+  Widget _buildFrame() {
+    final green = MacroSnapTheme.neonGreen;
+    return SizedBox(
+      width: 250,
+      height: 250,
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          DecoratedBox(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(
+                color: green.withValues(alpha: _scanning ? 0.55 : 0.9),
+                width: 2,
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: green.withValues(alpha: _scanning ? 0.18 : 0.32),
+                  blurRadius: 26,
+                ),
+              ],
+            ),
+          ),
+          RepaintBoundary(
+            child: CustomPaint(
+              painter: ScanOverlayPainter(
+                sweep: _sweep,
+                color: green,
+                revealing: !_scanning,
+                // A live preview is not a photo: no vignette inside the frame.
+                vignette: false,
+              ),
+            ),
+          ),
+          Center(
+            child: Icon(
+              Icons.qr_code_scanner_rounded,
+              size: 80,
+              color: Colors.white.withValues(alpha: _scanning ? 0.16 : 0.3),
+            ),
+          ),
+          AnimatedBuilder(
+            animation: _flash,
+            builder: (context, _) {
+              final wash = (1 - _flash.value) * 0.35;
+              if (wash <= 0.001) return const SizedBox.shrink();
+              return DecoratedBox(
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(20),
+                  color: green.withValues(alpha: wash),
+                ),
+              );
+            },
+          ),
+        ],
+      ),
     );
   }
 
@@ -283,7 +363,11 @@ class _BarcodeScanScreenState extends State<BarcodeScanScreen> {
               'Allow camera access in Settings to scan a barcode, or use the '
               'button below to type the label numbers instead.',
               textAlign: TextAlign.center,
-              style: TextStyle(color: Colors.white70, fontSize: 13, height: 1.4),
+              style: TextStyle(
+                color: Colors.white70,
+                fontSize: 13,
+                height: 1.4,
+              ),
             ),
           ],
         ),
@@ -295,11 +379,10 @@ class _BarcodeScanScreenState extends State<BarcodeScanScreen> {
   /// readable barcode.
   Future<void> _enterManually() async {
     setState(() => _scanning = false);
+    _syncSweep();
     final manual = await Navigator.push<BarcodeFood>(
       context,
-      habitFlowRoute<BarcodeFood>(
-        const ManualBarcodeEntryScreen(barcode: ''),
-      ),
+      habitFlowRoute<BarcodeFood>(const ManualBarcodeEntryScreen(barcode: '')),
     );
     if (!mounted) return;
     setState(() {
@@ -307,6 +390,7 @@ class _BarcodeScanScreenState extends State<BarcodeScanScreen> {
       // Cancel means "back to scanning", not a dead end.
       _scanning = manual == null;
     });
+    _syncSweep();
   }
 
   Widget _buildResult(bool isDark) {
@@ -407,11 +491,14 @@ class _BarcodeScanScreenState extends State<BarcodeScanScreen> {
               const SizedBox(width: 12),
               Expanded(
                 child: FilledButton(
-                  onPressed: () => setState(() {
-                    _found = null;
-                    _scanning = true;
-                    _gramsCtrl.text = '100';
-                  }),
+                  onPressed: () {
+                    setState(() {
+                      _found = null;
+                      _scanning = true;
+                      _gramsCtrl.text = '100';
+                    });
+                    _syncSweep();
+                  },
                   style: FilledButton.styleFrom(
                     backgroundColor: isDark
                         ? MacroSnapTheme.cardDark
@@ -526,6 +613,66 @@ class _BarcodeScanScreenState extends State<BarcodeScanScreen> {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+// ──— "Looking up" card ────────────────────────────────────────────────—
+
+/// Lands with the same short overshoot as a dish chip on the photo scan, so
+/// a barcode catch feels like the same gesture in both scanners.
+class _LookupCard extends StatelessWidget {
+  final String code;
+  const _LookupCard({required this.code});
+
+  @override
+  Widget build(BuildContext context) {
+    return TweenAnimationBuilder<double>(
+      tween: Tween(begin: 0, end: 1),
+      duration: const Duration(milliseconds: 340),
+      curve: Curves.easeOutBack,
+      builder: (context, t, child) => Opacity(
+        opacity: t.clamp(0.0, 1.0),
+        child: Transform.scale(scale: 0.86 + 0.14 * t, child: child),
+      ),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 18),
+        decoration: BoxDecoration(
+          color: Colors.black.withValues(alpha: 0.78),
+          borderRadius: BorderRadius.circular(22),
+          border: Border.all(
+            color: MacroSnapTheme.neonGreen.withValues(alpha: 0.9),
+            width: 1.5,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: MacroSnapTheme.neonGreen.withValues(alpha: 0.35),
+              blurRadius: 20,
+            ),
+          ],
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(
+              width: 22,
+              height: 22,
+              child: CircularProgressIndicator(strokeWidth: 2.5),
+            ),
+            const SizedBox(width: 14),
+            Flexible(
+              child: Text(
+                'Looking up $code',
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 15,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

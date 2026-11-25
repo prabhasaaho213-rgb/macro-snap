@@ -62,9 +62,9 @@ class NotificationService with WidgetsBindingObserver {
       // dialog that appeared on top of a still-unpainted window — the app sat
       // on the launch screen (black in dark mode) until the user answered,
       // every time the permission was still undetermined. The ask now happens
-      // once the UI is up and interactive, via the in-app prompt
-      // (maybeShowNotificationPrompt), which also explains WHY before
-      // Android's dialog appears.
+      // once the UI is up and interactive, and it is the phone's own dialog
+      // (maybeShowNotificationPrompt calls Permission.notification.request) —
+      // there is no in-app pre-prompt in front of it.
       //
       // Scheduling below does not depend on the answer: reminders are
       // scheduled either way, so granting later still delivers them.
@@ -448,7 +448,12 @@ class NotificationService with WidgetsBindingObserver {
     List<Habit> habits, {
     String? subscribedDate,
   }) async {
-    await _registry.sync(habits: habits, subscribedDate: subscribedDate, paidSubscription: SubscriptionService.instance.isPaid, proUntil: SubscriptionService.instance.proUntil);
+    await _registry.sync(
+      habits: habits,
+      subscribedDate: subscribedDate,
+      paidSubscription: SubscriptionService.instance.isPaid,
+      proUntil: SubscriptionService.instance.proUntil,
+    );
   }
 
   /// Best-effort diagnostic: how many alarms the OS actually holds right

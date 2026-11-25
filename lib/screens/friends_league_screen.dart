@@ -2,11 +2,15 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:qr_flutter/qr_flutter.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../core/haptics.dart';
 import '../core/theme.dart';
 import '../services/friends_league_service.dart';
+import '../services/gemini_service.dart';
+import '../services/invite_analytics.dart';
+import '../services/league_invite.dart';
 import '../services/leaderboard_remote.dart';
 import '../services/subscription_service.dart';
 import '../widgets/glass_card.dart';
@@ -19,7 +23,11 @@ import 'subscription_screen.dart';
 /// account belongs to. This page only creates/joins leagues, shows the invite
 /// code and renders the rows.
 class FriendsLeagueScreen extends StatefulWidget {
-  const FriendsLeagueScreen({super.key});
+  const FriendsLeagueScreen({super.key, this.initialCode});
+
+  /// The code an invite link carried (`.../join/ABC123`). Applied once, after
+  /// the boards load, so an invite is one tap instead of typing a code.
+  final String? initialCode;
 
   @override
   State<FriendsLeagueScreen> createState() => _FriendsLeagueScreenState();
@@ -32,6 +40,10 @@ class _FriendsLeagueScreenState extends State<FriendsLeagueScreen> {
   String? _error;
   List<FriendsLeague> _leagues = const [];
   String? _selectedId;
+
+  /// A link's code is applied exactly once, even though [_load] runs again
+  /// after joining, upgrading and returning from another screen.
+  bool _inviteHandled = false;
 
   @override
   void initState() {
@@ -51,13 +63,28 @@ class _FriendsLeagueScreenState extends State<FriendsLeagueScreen> {
   /// The score push runs before the read so the rows this screen paints are the
   /// ones the server just wrote, not last visit's.
   Future<void> _load({bool sync = true}) async {
-    final pro = await SubscriptionService.instance.unlocksPro();
+    var pro = await SubscriptionService.instance.unlocksPro();
     if (!mounted) return;
+    if (!pro && widget.initialCode != null && !_inviteHandled) {
+      // Try the join even though this account looks free: the server may grant
+      // an invite trial (INVITE_TRIAL_DAYS). Without one it answers
+      // pro_required and nothing is joined, so the code stays parked.
+      pro = await _tryInviteJoin();
+      if (!mounted) return;
+    }
     if (!pro) {
       setState(() {
         _pro = false;
         _loading = false;
       });
+      // The code is NOT consumed here: after upgrading, this screen reloads
+      // and the invite is applied then.
+      if (widget.initialCode != null) {
+        _toast(
+          'Joining a league needs MacroSnap Pro — your invite is saved for '
+          'after you upgrade.',
+        );
+      }
       return;
     }
     setState(() {
@@ -76,6 +103,7 @@ class _FriendsLeagueScreenState extends State<FriendsLeagueScreen> {
             : (leagues.isEmpty ? null : leagues.first.id);
         _loading = false;
       });
+      await _maybeApplyInvite();
     } on FriendsLeagueException catch (e) {
       if (!mounted) return;
       setState(() {
@@ -91,9 +119,45 @@ class _FriendsLeagueScreenState extends State<FriendsLeagueScreen> {
     }
   }
 
+  /// Attempts the invite join for an account the app believes is free.
+  ///
+  /// Returns true when the server accepted it (an invite trial was granted).
+  /// The parked code is cleared only on success, so a refusal leaves it for
+  /// after an upgrade.
+  Future<bool> _tryInviteJoin() async {
+    final code = widget.initialCode;
+    if (code == null || _inviteHandled) return false;
+    _inviteHandled = true;
+    await InviteAnalytics.log(InviteAnalytics.joinAttempt, code: code);
+    try {
+      final displayName = await LeaderboardRemote.publicName();
+      await FriendsLeagueService.instance.join(
+        code: code,
+        displayName: displayName,
+      );
+      await LeagueInvite.clear();
+      await InviteAnalytics.log(InviteAnalytics.joinOk, code: code);
+      // The join may have come with a Pro window; read it before deciding
+      // whether the paywall still applies.
+      await SubscriptionService.instance.verifyServerSubscription();
+      if (!mounted) return false;
+      _toast('You joined the league');
+      return true;
+    } on FriendsLeagueException catch (e) {
+      await InviteAnalytics.log(InviteAnalytics.joinFail, code: code);
+      if (mounted) _toast(e.message);
+      return false;
+    } catch (_) {
+      await InviteAnalytics.log(InviteAnalytics.joinFail, code: code);
+      return false;
+    }
+  }
+
   void _toast(String message) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
   }
 
   Future<void> _perform(
@@ -114,6 +178,54 @@ class _FriendsLeagueScreenState extends State<FriendsLeagueScreen> {
     } finally {
       if (mounted) setState(() => _busy = false);
     }
+  }
+
+  /// Joins the league an invite link named, once.
+  ///
+  /// Runs after the boards are loaded so an invite to a league this account is
+  /// already in just selects it instead of calling join and getting an error.
+  Future<void> _maybeApplyInvite() async {
+    final code = widget.initialCode;
+    if (code == null || _inviteHandled) return;
+    _inviteHandled = true;
+    await InviteAnalytics.log(InviteAnalytics.screenOpen, code: code);
+
+    final existing = _leagues.where((l) => l.code == code).toList();
+    if (existing.isNotEmpty) {
+      // Already in it: nothing left for the invite to do.
+      await LeagueInvite.clear();
+      if (mounted) setState(() => _selectedId = existing.first.id);
+      _toast('You are already in ${existing.first.name}');
+      return;
+    }
+
+    // Ask what the code points at first: an expired invite or a full league
+    // deserves its own answer instead of a generic failure after the join.
+    try {
+      final preview = await FriendsLeagueService.instance.previewInvite(code);
+      if (preview.full) {
+        _toast('That league is full.');
+        return;
+      }
+    } on FriendsLeagueException catch (e) {
+      _toast(e.message);
+      return;
+    } catch (_) {
+      // Offline preflight — let the join itself decide.
+    }
+
+    final displayName = await LeaderboardRemote.publicName();
+    if (!mounted) return;
+    await InviteAnalytics.log(InviteAnalytics.joinAttempt, code: code);
+    await _perform(() async {
+      final league = await FriendsLeagueService.instance.join(
+        code: code,
+        displayName: displayName,
+      );
+      await LeagueInvite.clear();
+      await InviteAnalytics.log(InviteAnalytics.joinOk, code: code);
+      return league;
+    }, 'You joined the league');
   }
 
   Future<String?> _askForText({
@@ -141,8 +253,7 @@ class _FriendsLeagueScreenState extends State<FriendsLeagueScreen> {
               ? [FilteringTextInputFormatter.allow(RegExp(r'[A-Za-z0-9]'))]
               : null,
           decoration: InputDecoration(hintText: hint),
-          onSubmitted: (value) =>
-              Navigator.of(dialogContext).pop(value.trim()),
+          onSubmitted: (value) => Navigator.of(dialogContext).pop(value.trim()),
         ),
         actions: [
           TextButton(
@@ -240,17 +351,68 @@ class _FriendsLeagueScreenState extends State<FriendsLeagueScreen> {
   }
 
   Future<void> _copyCode(FriendsLeague league) async {
-    await Clipboard.setData(ClipboardData(text: league.code));
-    _toast('Invite code copied');
+    // The link, not the bare code: it carries the league, the Pro note and a
+    // working install path, which six characters on a clipboard do not.
+    await Clipboard.setData(
+      ClipboardData(
+        text:
+            'Join my MacroSnap friends league "${league.name}".\n\n'
+            'You need MacroSnap Pro to join a league.\n\n'
+            'Tap to join: ${GeminiService.serverUrl}/join/${league.code}\n'
+            'Or enter this code in the app: ${league.code}',
+      ),
+    );
+    _toast('Invite link copied');
   }
 
   Future<void> _shareCode(FriendsLeague league) async {
     unawaited(Haptics.light());
+    // A real link, not just a code: it opens the league in the app when it is
+    // installed, and the backend route sends everyone else to the Play Store.
+    // The code stays visible for anyone who prefers to type it.
     await Share.share(
-      'Join my MacroSnap friends league "${league.name}" — code '
-      '${league.code}.\n\n'
-      'Download MacroSnap: '
-      'https://play.google.com/store/apps/details?id=com.macrosnap.macro_snap',
+      'Join my MacroSnap friends league "${league.name}".\n\n'
+      // The requirement goes first and on its own line: an invitee who is not
+      // Pro would otherwise tap the link, install, and only then find the
+      // league locked.
+      'You need MacroSnap Pro to join a league.\n\n'
+      'Tap to join: ${GeminiService.serverUrl}/join/${league.code}\n'
+      'Or enter this code in the app: ${league.code}\n\n'
+      'Not installed? The link opens the Play Store.',
+    );
+  }
+
+  /// A QR of the join link, for an invite across a table or from an iPhone.
+  Future<void> _showQr(FriendsLeague league) async {
+    unawaited(Haptics.light());
+    final url = '${GeminiService.serverUrl}/join/${league.code}';
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        backgroundColor: Colors.white,
+        title: const Text('Scan to join'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            QrImageView(data: url, size: 210, backgroundColor: Colors.white),
+            const SizedBox(height: 10),
+            SelectableText(
+              league.code,
+              style: const TextStyle(
+                letterSpacing: 4,
+                fontWeight: FontWeight.w900,
+                color: Color(0xFF1A1A1A),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('Done'),
+          ),
+        ],
+      ),
     );
   }
 
@@ -637,15 +799,27 @@ class _FriendsLeagueScreenState extends State<FriendsLeagueScreen> {
               color: Colors.white.withValues(alpha: 0.75),
             ),
           ),
+          // The inviter's half of the loop: a name, so sending an invite has a
+          // visible result instead of a silent one.
+          if (league.invitedNames.isNotEmpty) ...[
+            const SizedBox(height: 2),
+            Text(
+              '${league.invitedNames.take(2).join(' and ')} joined with '
+              'your invite',
+              style: TextStyle(
+                fontSize: 11.5,
+                fontWeight: FontWeight.w700,
+                color: Colors.white.withValues(alpha: 0.9),
+              ),
+            ),
+          ],
           const SizedBox(height: 14),
           Container(
             padding: const EdgeInsets.fromLTRB(14, 12, 10, 12),
             decoration: BoxDecoration(
               color: Colors.black.withValues(alpha: 0.22),
               borderRadius: BorderRadius.circular(14),
-              border: Border.all(
-                color: Colors.white.withValues(alpha: 0.14),
-              ),
+              border: Border.all(color: Colors.white.withValues(alpha: 0.14)),
             ),
             child: Row(
               children: [
@@ -680,6 +854,15 @@ class _FriendsLeagueScreenState extends State<FriendsLeagueScreen> {
                   onPressed: () => _copyCode(league),
                   icon: const Icon(
                     Icons.copy_rounded,
+                    size: 19,
+                    color: Colors.white,
+                  ),
+                ),
+                IconButton(
+                  tooltip: 'Show invite QR',
+                  onPressed: () => _showQr(league),
+                  icon: const Icon(
+                    Icons.qr_code_2_rounded,
                     size: 19,
                     color: Colors.white,
                   ),

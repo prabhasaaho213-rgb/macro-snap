@@ -9,7 +9,11 @@ import '../core/theme.dart';
 /// for a secondary action — and it carries a semantic label, so a screen
 /// reader announces "Edit protein" instead of an unlabelled icon.
 class EditPencil extends StatelessWidget {
-  const EditPencil({super.key, required this.onTap, required this.semanticLabel});
+  const EditPencil({
+    super.key,
+    required this.onTap,
+    required this.semanticLabel,
+  });
 
   final VoidCallback onTap;
   final String semanticLabel;

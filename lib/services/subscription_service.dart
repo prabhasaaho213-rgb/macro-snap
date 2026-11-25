@@ -114,20 +114,44 @@ class SubscriptionService extends ChangeNotifier {
   /// up on the next launch.
   bool _claimsRefreshed = false;
 
-  Future<bool> isAdmin() async {
+  Future<bool> isAdmin() async => await _adminClaim() ?? false;
+
+  /// The last admin answer this process got, for a first frame that already
+  /// knows it (null until the claim has been read once). Screens seed their
+  /// Pro badge from this so the owner does not see "Free" then "Lifetime
+  /// Pro" on every visit after the first.
+  bool? _adminKnown;
+  bool? get adminKnown => _adminKnown;
+
+  /// The admin claim in three states: true, false, or null when it cannot be
+  /// read yet.
+  ///
+  /// [load] must be able to tell "this account is not the admin" from "we
+  /// could not ask". Treating the second as the first stripped the owner's
+  /// lifetime grant at launch — before Firebase restored the session, or after
+  /// a token refresh that failed — and re-granted it a moment later. On screen
+  /// that read as the Pro badge flickering between Unlimited and the free
+  /// count, and as the Guru button briefly locking.
+  Future<bool?> _adminClaim() async {
     final override = adminCheckOverride;
-    if (override != null) return override();
-    // No Firebase app at all (unit tests, or a build without Firebase): there
-    // is no claim to read, and this is not an error worth reporting.
-    if (Firebase.apps.isEmpty) return false;
+    if (override != null) {
+      final known = await override();
+      _adminKnown = known;
+      return known;
+    }
+    // No Firebase app at all (unit tests, or a build without Firebase): the
+    // claim cannot be read, and that is not an error worth reporting.
+    if (Firebase.apps.isEmpty) return null;
     final user = FirebaseAuth.instance.currentUser;
-    if (user == null) return false;
+    if (user == null) return null;
 
     final fresh = !_claimsRefreshed;
     try {
       final token = await user.getIdTokenResult(fresh);
       _claimsRefreshed = true;
-      return token.claims?['admin'] == true;
+      final known = token.claims?['admin'] == true;
+      _adminKnown = known;
+      return known;
     } catch (e, st) {
       // A failed refresh (offline, or the app just launched) must not cost the
       // owner their Pro: fall back to whatever the cached token says.
@@ -135,14 +159,18 @@ class SubscriptionService extends ChangeNotifier {
         try {
           final cached = await user.getIdTokenResult(false);
           _claimsRefreshed = true;
-          return cached.claims?['admin'] == true;
+          final known = cached.claims?['admin'] == true;
+          _adminKnown = known;
+          return known;
         } catch (e2, st2) {
           logError('SubscriptionService.isAdmin(cached)', e2, st2);
         }
       } else {
         logError('SubscriptionService.isAdmin', e, st);
       }
-      return false; // fail closed: no claim, no privilege
+      // Unknown, not "no": callers that gate access still treat null as false
+      // ([isAdmin]), but a persisted grant is not destroyed on a guess.
+      return null;
     }
   }
 
@@ -248,14 +276,17 @@ class SubscriptionService extends ChangeNotifier {
     }
     final subscribedNow = subscribed;
 
-    if (await isAdmin()) {
+    final admin = await _adminClaim();
+    if (admin == true) {
       // Owner: force lifetime Pro, regardless of any previous paid state.
       if (at != _lifetimeDate) {
         await _grantLifetimeAdmin();
       }
       subscribed = true;
       at = _lifetimeDate;
-    } else if (at == _lifetimeDate && await _identityKnown()) {
+    } else if (admin == false &&
+        at == _lifetimeDate &&
+        await _identityKnown()) {
       // A non-owner signed in on a device where the owner granted lifetime
       // Pro — strip the grant so it doesn't leak to them.
       await p.remove(_subscribedAtKey);
@@ -298,10 +329,7 @@ class SubscriptionService extends ChangeNotifier {
     final p = await SharedPreferences.getInstance();
     await p.setBool(_subscribedKey, true);
     await p.setString(_subscribedAtKey, _lifetimeDate);
-    await p.setString(
-      _subscribedOwnerKey,
-      AccountPartition.activeFromPrefs(p),
-    );
+    await p.setString(_subscribedOwnerKey, AccountPartition.activeFromPrefs(p));
     _subscribed = true;
     _subscribedAt = _lifetimeDate;
     notifyListeners();
@@ -333,7 +361,6 @@ class SubscriptionService extends ChangeNotifier {
       await _ensureAdminGrant();
       return;
     }
-
 
     // ── Firestore first: users/{uid}.subscribed ────────────────────────
     try {
@@ -432,10 +459,7 @@ class SubscriptionService extends ChangeNotifier {
     final p = await SharedPreferences.getInstance();
     await p.setString(_subscribedAtKey, now);
     await p.setBool(_subscribedKey, true);
-    await p.setString(
-      _subscribedOwnerKey,
-      AccountPartition.activeFromPrefs(p),
-    );
+    await p.setString(_subscribedOwnerKey, AccountPartition.activeFromPrefs(p));
     _subscribed = true;
     _subscribedAt = now;
     notifyListeners();

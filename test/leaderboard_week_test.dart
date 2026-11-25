@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:macro_snap/services/leaderboard_remote.dart';
+import 'package:macro_snap/services/scan_gate.dart';
 
 /// The server scores in Asia/Kolkata. These pin the client's week id and day
 /// key to that calendar rather than to the device's timezone, which is what
@@ -38,20 +39,17 @@ void main() {
   group('istDayKey', () {
     test('rolls over at 18:30 UTC', () {
       expect(
-        LeaderboardRemote.istDayKey(DateTime.utc(2026, 11, 22, 18, 29)),
+        ScanGate.istDayKey(DateTime.utc(2026, 11, 22, 18, 29)),
         '2026-11-22',
       );
       expect(
-        LeaderboardRemote.istDayKey(DateTime.utc(2026, 11, 22, 18, 30)),
+        ScanGate.istDayKey(DateTime.utc(2026, 11, 22, 18, 30)),
         '2026-11-23',
       );
     });
 
     test('is zero-padded for the weight document id', () {
-      expect(
-        LeaderboardRemote.istDayKey(DateTime.utc(2026, 1, 5, 6)),
-        '2026-01-05',
-      );
+      expect(ScanGate.istDayKey(DateTime.utc(2026, 1, 5, 6)), '2026-01-05');
     });
   });
 }

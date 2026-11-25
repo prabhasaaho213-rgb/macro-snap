@@ -6,7 +6,7 @@ import 'package:macro_snap/core/app_nav.dart';
 import 'package:macro_snap/screens/habits_tab.dart';
 import 'package:macro_snap/screens/home_screen.dart';
 import 'package:macro_snap/screens/main_shell.dart';
-import 'package:macro_snap/screens/profile_screen.dart';
+import 'package:macro_snap/screens/health_dashboard_screen.dart';
 import 'package:macro_snap/screens/scan_screen.dart';
 import 'package:macro_snap/services/habit_store.dart';
 
@@ -191,7 +191,7 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 450));
     }
-    expect(find.byType(ProfileScreen), findsOneWidget);
+    expect(find.byType(HealthDashboardScreen), findsOneWidget);
     expect(find.byType(ScanScreen), findsNothing);
 
     // Already at the last tab — swiping further left must be a no-op.
@@ -199,7 +199,7 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 450));
     expect(
-      find.byType(ProfileScreen),
+      find.byType(HealthDashboardScreen),
       findsOneWidget,
       reason: 'swiping left past the last tab must stay on the Profile tab',
     );

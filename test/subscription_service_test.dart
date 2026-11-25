@@ -117,6 +117,12 @@ void main() {
     // The admin once signed in here (leaving the lifetime marker), then a
     // paying user signs in — the grant must not survive, but their paid
     // subscription must.
+    //
+    // The claim has to be readable for the strip to happen: an unreadable one
+    // is "unknown", not "not the admin", so a cold start cannot wipe the
+    // owner's grant. The test harness has no Firebase app, so the claim is
+    // injected, exactly like the strip test above.
+    SubscriptionService.adminCheckOverride = () async => false;
     SharedPreferences.setMockInitialValues({
       'email': 'paying@example.com',
       'subscribed': true,
@@ -175,23 +181,26 @@ void main() {
       expect(SubscriptionService.instance.isSubscribed, isTrue);
     });
 
-    test('an install from before the owner marker adopts the account', () async {
-      SharedPreferences.setMockInitialValues({
-        'subscribed': true,
-        'subscribed_at': '2026-01-01T00:00:00.000',
-        'phone': '+914444444444',
-      });
-      SubscriptionService.adminCheckOverride = () async => false;
+    test(
+      'an install from before the owner marker adopts the account',
+      () async {
+        SharedPreferences.setMockInitialValues({
+          'subscribed': true,
+          'subscribed_at': '2026-01-01T00:00:00.000',
+          'phone': '+914444444444',
+        });
+        SubscriptionService.adminCheckOverride = () async => false;
 
-      await SubscriptionService.instance.load();
+        await SubscriptionService.instance.load();
 
-      final p = await SharedPreferences.getInstance();
-      expect(
-        SubscriptionService.instance.isSubscribed,
-        isTrue,
-        reason: 'No paying user may lose Pro to this change',
-      );
-      expect(p.getString('subscribed_owner'), '+914444444444');
-    });
+        final p = await SharedPreferences.getInstance();
+        expect(
+          SubscriptionService.instance.isSubscribed,
+          isTrue,
+          reason: 'No paying user may lose Pro to this change',
+        );
+        expect(p.getString('subscribed_owner'), '+914444444444');
+      },
+    );
   });
 }

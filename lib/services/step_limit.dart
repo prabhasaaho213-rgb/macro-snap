@@ -34,8 +34,7 @@ class StepLimit {
   }
 
   /// [steps] as a free account may use them.
-  static int cap(int steps) =>
-      isFree && steps > freeDaily ? freeDaily : steps;
+  static int cap(int steps) => isFree && steps > freeDaily ? freeDaily : steps;
 
   /// The free ceiling has been hit today (the upgrade prompt's condition).
   static bool reached(int steps) => isFree && steps >= freeDaily;

@@ -150,6 +150,7 @@ class HabitReminderService {
     );
     await _scheduleDailyAt(h, tomorrow, notifications);
   }
+
   static bool _isTomorrow(tz.TZDateTime when, tz.TZDateTime now) {
     final t = tz.TZDateTime(tz.local, now.year, now.month, now.day + 1);
     return when.year == t.year && when.month == t.month && when.day == t.day;

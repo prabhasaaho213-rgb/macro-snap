@@ -42,6 +42,14 @@ android {
         versionCode = flutter.versionCode
         versionName = flutter.versionName
         multiDexEnabled = true
+        // The App Links host, in ONE place: the https intent filter, the
+        // assetlinks file the server serves and the shared invite URL all have
+        // to agree, so the host is a placeholder instead of a literal in the
+        // manifest. Override without editing code:
+        //   flutter build appbundle --dart-define=... -PappLinkHost=links.example.com
+        manifestPlaceholders["appLinkHost"] =
+            (project.findProperty("appLinkHost") as String?)
+                ?: "macro-snap-backend.vercel.app"
         ndk {
             abiFilters += listOf("armeabi-v7a", "arm64-v8a", "x86_64")
         }
@@ -90,6 +98,11 @@ kotlin {
 
 dependencies {
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")
+    // Reads the `referrer=join_code=CODE` a league invite carries through the
+    // Play Store install, so a friend who installs from the link lands in the
+    // league without tapping it again. Called from MainActivity's
+    // macrosnap/install_referrer channel.
+    implementation("com.android.installreferrer:installreferrer:2.2")
 }
 
 flutter {

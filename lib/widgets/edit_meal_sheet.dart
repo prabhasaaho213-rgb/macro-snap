@@ -17,10 +17,7 @@ import '../models/meal_record.dart';
 /// calories and the three macros, and the serving description. The date, the
 /// scan's per-dish breakdown and the photo are preserved by
 /// [MealRecord.copyWith], so an edit never detaches a meal from its history.
-Future<MealRecord?> showEditMealSheet(
-  BuildContext context,
-  MealRecord meal,
-) {
+Future<MealRecord?> showEditMealSheet(BuildContext context, MealRecord meal) {
   return showModalBottomSheet<MealRecord>(
     context: context,
     isScrollControlled: true,

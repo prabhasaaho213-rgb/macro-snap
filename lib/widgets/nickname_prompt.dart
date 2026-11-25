@@ -127,10 +127,7 @@ Future<String?> showNicknamePrompt(BuildContext context) async {
   // 400 ms is comfortably past the route's exit transition (~150–200 ms), so
   // the TextField has stopped rebuilding by the time the controller goes.
   unawaited(
-    Future<void>.delayed(
-      const Duration(milliseconds: 400),
-      controller.dispose,
-    ),
+    Future<void>.delayed(const Duration(milliseconds: 400), controller.dispose),
   );
   return chosen?.trim().isEmpty ?? true ? null : chosen!.trim();
 }

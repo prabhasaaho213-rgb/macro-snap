@@ -110,6 +110,16 @@ class AccountPartition {
     'sensor_steps_today',
     'sensor_steps_last_total',
     'sensor_steps_last_at',
+    // Leaderboard state is per account too: points, the join flag, the
+    // district and the step history were global keys, so a second account on
+    // the same phone inherited the first one's board standing.
+    'leaderboard_days_v1',
+    'leaderboard_steps_days_v1',
+    'leaderboard_steps_day',
+    'leaderboard_steps_value',
+    'leaderboard_opt_in',
+    'leaderboard_state_key',
+    'leaderboard_district',
   ];
 
   /// Moves the ACTIVE account's local data onto its current suffix.
@@ -132,7 +142,8 @@ class AccountPartition {
   static Future<void> ensureCurrent(SharedPreferences p) async {
     final account = activeFromPrefs(p);
     final target = suffix(account);
-    if (target.isEmpty) return; // Signed out: the legacy keys ARE its partition.
+    // Signed out: the legacy keys ARE its partition.
+    if (target.isEmpty) return;
 
     final legacy = legacySuffix(account);
     if (legacy != target) {

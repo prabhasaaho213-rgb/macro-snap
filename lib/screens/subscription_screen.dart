@@ -25,8 +25,11 @@ class SubscriptionScreen extends StatefulWidget {
 
 class _SubscriptionScreenState extends State<SubscriptionScreen> {
   String? _phone;
-  bool _subscribed = false;
-  bool _isAdmin = false;
+
+  /// Seeded from the plan already loaded, so the page does not paint the free
+  /// layout and then swap to the Pro one.
+  bool _subscribed = SubscriptionService.instance.isSubscribed;
+  bool _isAdmin = SubscriptionService.instance.adminKnown == true;
   bool _submitting = false;
   bool _checking = true;
   String? _subscribedDate;
@@ -63,8 +66,18 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
     final d = DateTime.tryParse(raw)?.toLocal();
     if (d == null) return null;
     const months = [
-      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
     ];
     return '${d.day} ${months[d.month - 1]} ${d.year}';
   }
@@ -341,7 +354,7 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
                 ),
               ],
               const SizedBox(height: 32),
-              // Five rows, and each one is something Pro really
+              // Six rows, and each one is something Pro really
               // unlocks. Everything else that used to sit here was removed for
               // the same reason, so it is worth recording all four:
               //
@@ -364,6 +377,10 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
               // ScanGate lifts for Pro. A benefit that is not actually
               // gated reads as a false promise, and Play treats a paywall
               // promise the app does not keep as misleading metadata.
+              //
+              // BMI is listed below because it is gated: both entry points
+              // (the Home BMI card and the Profile row) send a free user to
+              // this screen before the calculator opens.
               _buildFeatureRow(
                 Icons.smart_toy_rounded,
                 'Guru Assistant',
@@ -392,6 +409,12 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
                 Icons.directions_walk_rounded,
                 'Unlimited Steps',
                 'The free plan records 5,000 a day; Pro counts every step',
+                isDark,
+              ),
+              _buildFeatureRow(
+                Icons.monitor_weight_rounded,
+                'BMI & Weight Trend',
+                'Your BMI and category, plus a 30-day weight trend',
                 isDark,
               ),
               const SizedBox(height: 32),
@@ -804,7 +827,7 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
             ],
           ),
           _planPoint(context, 'Manual meal logging and macros'),
-          _planPoint(context, 'Streaks and charts'),
+          _planPoint(context, 'Streaks, charts and the global leaderboard'),
           _planPoint(context, '${ScanGate.freeLimitPerDay} AI scans a day'),
           _planPoint(context, '${StepLimit.freeDaily} steps a day'),
         ],

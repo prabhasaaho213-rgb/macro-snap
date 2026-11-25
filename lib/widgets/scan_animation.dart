@@ -2,11 +2,25 @@
 //
 // "Magic trick" scan animation for MacroSnap.
 //
-//  Phase 1 (labels == null): the photo is dimmed, corner brackets frame it and
-//                            a glowing line sweeps up and down while the AI
-//                            is analysing.
-//  Phase 2 (labels != null): the sweep stops and each detected dish pops onto
-//                            the photo one by one with a haptic tick.
+//  Phase 1 (labels == null): the photo drifts slowly under a vignette, corner
+//                            brackets frame it and a glowing line sweeps top to
+//                            bottom while the AI is analysing.
+//  Phase 2 (labels != null): the sweep fades out and each detected dish pops
+//                            onto the photo one by one with a haptic tick.
+//
+// The motion is modelled on the scan screens people already know:
+//   • Google Lens — a soft gradient trail above a bright core line, sweeping one
+//     direction and fading at the ends so the restart is never seen.
+//   • Cal AI / SnapCalorie — the still photo keeps a very slow zoom, so the
+//     frame feels alive instead of frozen, and chips land with a small overshoot
+//     rather than a bouncy elastic pop.
+//   • Apple Visual Look Up — a quiet vignette and thin brackets: the chrome stays
+//     still so the sweep is the only thing moving.
+//
+// Everything that moves is drawn in ONE CustomPainter that repaints off the
+// controller (no per-frame layout, no widget rebuilds), and the photo's zoom is
+// a transform inside a RepaintBoundary. That is what keeps it smooth on a
+// mid-range phone.
 //
 // NOTE: the backend does not return bounding boxes, so labels are placed at
 // fixed spread-out spots on the photo, not on the exact food position.
@@ -16,6 +30,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../core/theme.dart';
+import 'scan_overlay.dart';
 
 class ScanAnimationView extends StatefulWidget {
   final String imagePath;
@@ -37,14 +52,27 @@ class ScanAnimationView extends StatefulWidget {
   /// Max labels shown on the photo.
   static const int maxLabels = 5;
 
-  /// Gap between two labels popping.
-  static const Duration labelGap = Duration(milliseconds: 450);
+  /// Gap between two labels popping. Short enough to read as a cascade; the old
+  /// 450 ms made the reveal feel stalled.
+  static const Duration labelGap = Duration(milliseconds: 200);
+
+  /// When the first chip appears, after the sweep has had a moment to land.
+  static const Duration _firstLabelDelay = Duration(milliseconds: 320);
+
+  /// How long one chip takes to arrive.
+  static const Duration _popDuration = Duration(milliseconds: 360);
 
   /// How long the reveal needs. Wait this long after setting [labels] before
   /// switching to the results screen so the pops are not cut short.
   static Duration revealDuration(int dishCount) {
     final n = math.min(dishCount, maxLabels);
-    return Duration(milliseconds: 500 + labelGap.inMilliseconds * n + 700);
+    return Duration(
+      milliseconds:
+          _firstLabelDelay.inMilliseconds +
+          labelGap.inMilliseconds * n +
+          _popDuration.inMilliseconds +
+          420,
+    );
   }
 
   @override
@@ -52,8 +80,17 @@ class ScanAnimationView extends StatefulWidget {
 }
 
 class _ScanAnimationViewState extends State<ScanAnimationView>
-    with SingleTickerProviderStateMixin {
+    with TickerProviderStateMixin {
+  /// One continuous top-to-bottom pass. It repeats (not reverse) and fades at
+  /// both ends, so there is no visible bounce or jump at the wrap.
   late final AnimationController _sweep;
+
+  /// A very slow zoom on the photo, so a still frame does not look like a
+  /// screenshot. Small on purpose: 1.0 → 1.05 is felt, not noticed.
+  late final AnimationController _drift;
+  late final Animation<double> _driftScale;
+
+  bool _reduceMotion = false;
 
   bool get _revealing => widget.labels != null;
 
@@ -62,34 +99,55 @@ class _ScanAnimationViewState extends State<ScanAnimationView>
     super.initState();
     _sweep = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 1600),
+      duration: const Duration(milliseconds: 2400),
     );
+    _drift = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 9000),
+    );
+    _driftScale = Tween<double>(
+      begin: 1.0,
+      end: 1.05,
+    ).animate(CurvedAnimation(parent: _drift, curve: Curves.easeInOutSine));
   }
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    _syncSweep();
+    _reduceMotion = MediaQuery.maybeDisableAnimationsOf(context) ?? false;
+    _sync();
   }
 
   @override
   void didUpdateWidget(covariant ScanAnimationView oldWidget) {
     super.didUpdateWidget(oldWidget);
-    _syncSweep();
+    _sync();
   }
 
-  void _syncSweep() {
-    final reduceMotion = MediaQuery.maybeDisableAnimationsOf(context) ?? false;
-    if (_revealing || reduceMotion) {
-      if (_sweep.isAnimating) _sweep.stop();
-    } else if (!_sweep.isAnimating) {
-      _sweep.repeat(reverse: true);
+  void _sync() {
+    if (_reduceMotion) {
+      // Static, readable frame: no sweep, no zoom, no motion sickness.
+      _sweep.stop();
+      _sweep.value = 0.5;
+      _drift.stop();
+      _drift.value = 1.0;
+      return;
     }
+    if (_revealing) {
+      // Let the current pass finish instead of snapping the line away; the
+      // painter fades it out on its own.
+      if (_sweep.isAnimating) _sweep.stop();
+      if (_drift.isAnimating) _drift.stop();
+      return;
+    }
+    if (!_sweep.isAnimating) _sweep.repeat();
+    if (!_drift.isAnimating) _drift.repeat(reverse: true);
   }
 
   @override
   void dispose() {
     _sweep.dispose();
+    _drift.dispose();
     super.dispose();
   }
 
@@ -118,36 +176,41 @@ class _ScanAnimationViewState extends State<ScanAnimationView>
         child: Stack(
           fit: StackFit.expand,
           children: [
-            Image.file(
-              File(widget.imagePath),
-              fit: BoxFit.cover,
-              cacheWidth: 900,
-              errorBuilder: (_, _, _) => Container(color: Colors.black26),
-            ),
-
-            // Dim the photo a little so the scan line and labels stand out.
-            AnimatedContainer(
-              duration: const Duration(milliseconds: 400),
-              color: Colors.black.withValues(alpha: _revealing ? 0.18 : 0.38),
-            ),
-
-            // Corner brackets.
-            IgnorePointer(
-              child: CustomPaint(painter: _BracketPainter(color: accent)),
-            ),
-
-            // Sweeping scan line (only while analysing).
-            if (!_revealing)
-              AnimatedBuilder(
-                animation: _sweep,
-                builder: (context, _) {
-                  final t = Curves.easeInOut.transform(_sweep.value);
-                  return Align(
-                    alignment: Alignment(0, -1 + 2 * t),
-                    child: _ScanLine(color: accent),
-                  );
-                },
+            // Slow drift, isolated in its own layer so the zoom never forces a
+            // repaint of the painter above it.
+            RepaintBoundary(
+              child: AnimatedBuilder(
+                animation: _driftScale,
+                builder: (context, child) =>
+                    Transform.scale(scale: _driftScale.value, child: child),
+                child: Image.file(
+                  File(widget.imagePath),
+                  fit: BoxFit.cover,
+                  cacheWidth: 900,
+                  errorBuilder: (_, _, _) => Container(color: Colors.black26),
+                ),
               ),
+            ),
+
+            // A light dim that lifts once the dishes are found, so the chips
+            // read against the photo without washing it out.
+            AnimatedContainer(
+              duration: const Duration(milliseconds: 450),
+              curve: Curves.easeOutCubic,
+              color: Colors.black.withValues(alpha: _revealing ? 0.10 : 0.24),
+            ),
+
+            // Vignette, sweep and brackets: one paint pass, repainting straight
+            // off the controller.
+            RepaintBoundary(
+              child: CustomPaint(
+                painter: ScanOverlayPainter(
+                  sweep: _sweep,
+                  color: accent,
+                  revealing: _revealing,
+                ),
+              ),
+            ),
 
             // Dish labels popping one by one.
             for (var i = 0; i < labels.length; i++)
@@ -159,7 +222,8 @@ class _ScanAnimationViewState extends State<ScanAnimationView>
                   color: accent,
                   delay: Duration(
                     milliseconds:
-                        500 + ScanAnimationView.labelGap.inMilliseconds * i,
+                        ScanAnimationView._firstLabelDelay.inMilliseconds +
+                        ScanAnimationView.labelGap.inMilliseconds * i,
                   ),
                 ),
               ),
@@ -170,86 +234,7 @@ class _ScanAnimationViewState extends State<ScanAnimationView>
   }
 }
 
-// ─── Scan line with glow ───────────────────────────────────────────────
-
-class _ScanLine extends StatelessWidget {
-  final Color color;
-  const _ScanLine({required this.color});
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      height: 46,
-      width: double.infinity,
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [
-              color.withValues(alpha: 0.0),
-              color.withValues(alpha: 0.28),
-              color.withValues(alpha: 0.85),
-            ],
-            stops: const [0.0, 0.7, 1.0],
-          ),
-          border: Border(
-            bottom: BorderSide(
-              color: Colors.white.withValues(alpha: 0.9),
-              width: 2,
-            ),
-          ),
-          boxShadow: [
-            BoxShadow(
-              color: color.withValues(alpha: 0.6),
-              blurRadius: 14,
-              spreadRadius: 1,
-              offset: const Offset(0, 6),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-// ─── Corner brackets ───────────────────────────────────────────────────
-
-class _BracketPainter extends CustomPainter {
-  final Color color;
-  _BracketPainter({required this.color});
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final p = Paint()
-      ..color = Colors.white.withValues(alpha: 0.95)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 3
-      ..strokeCap = StrokeCap.round;
-
-    const inset = 14.0;
-    const len = 26.0;
-    final l = inset, t = inset, r = size.width - inset, b = size.height - inset;
-
-    // top-left
-    canvas.drawLine(Offset(l, t + len), Offset(l, t), p);
-    canvas.drawLine(Offset(l, t), Offset(l + len, t), p);
-    // top-right
-    canvas.drawLine(Offset(r - len, t), Offset(r, t), p);
-    canvas.drawLine(Offset(r, t), Offset(r, t + len), p);
-    // bottom-left
-    canvas.drawLine(Offset(l, b - len), Offset(l, b), p);
-    canvas.drawLine(Offset(l, b), Offset(l + len, b), p);
-    // bottom-right
-    canvas.drawLine(Offset(r - len, b), Offset(r, b), p);
-    canvas.drawLine(Offset(r, b), Offset(r, b - len), p);
-  }
-
-  @override
-  bool shouldRepaint(covariant _BracketPainter old) => old.color != color;
-}
-
-// ─── Label chip that pops in with a bounce ─────────────────────────────
+// ─── Label chip: a short, confident landing (not a rubber-band bounce) ──
 
 class _PopLabel extends StatefulWidget {
   final String text;
@@ -278,12 +263,17 @@ class _PopLabelState extends State<_PopLabel>
     super.initState();
     _c = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 520),
+      duration: ScanAnimationView._popDuration,
     );
-    _scale = CurvedAnimation(parent: _c, curve: Curves.elasticOut);
+    // easeOutBack lands with a few pixels of overshoot — the same feel as the
+    // chips in Cal AI — where elasticOut wobbled for half a second.
+    _scale = Tween<double>(
+      begin: 0.86,
+      end: 1.0,
+    ).animate(CurvedAnimation(parent: _c, curve: Curves.easeOutBack));
     _fade = CurvedAnimation(
       parent: _c,
-      curve: const Interval(0.0, 0.35, curve: Curves.easeOut),
+      curve: const Interval(0.0, 0.45, curve: Curves.easeOut),
     );
     Future.delayed(widget.delay, () {
       if (!mounted) return;
@@ -300,51 +290,58 @@ class _PopLabelState extends State<_PopLabel>
 
   @override
   Widget build(BuildContext context) {
-    return FadeTransition(
-      opacity: _fade,
-      child: ScaleTransition(
-        scale: _scale,
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 160),
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-            decoration: BoxDecoration(
-              color: Colors.black.withValues(alpha: 0.72),
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: widget.color, width: 1.5),
-              boxShadow: [
-                BoxShadow(
-                  color: widget.color.withValues(alpha: 0.45),
-                  blurRadius: 12,
+    return AnimatedBuilder(
+      animation: _c,
+      builder: (context, child) {
+        // A few pixels of rise on arrival, tied to the fade.
+        return Opacity(
+          opacity: _fade.value,
+          child: Transform.translate(
+            offset: Offset(0, 8 * (1 - _fade.value)),
+            child: Transform.scale(scale: _scale.value, child: child),
+          ),
+        );
+      },
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 160),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+          decoration: BoxDecoration(
+            color: Colors.black.withValues(alpha: 0.72),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: widget.color, width: 1.5),
+            boxShadow: [
+              BoxShadow(
+                color: widget.color.withValues(alpha: 0.45),
+                blurRadius: 12,
+              ),
+            ],
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 8,
+                height: 8,
+                decoration: BoxDecoration(
+                  color: widget.color,
+                  shape: BoxShape.circle,
                 ),
-              ],
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(
-                  width: 8,
-                  height: 8,
-                  decoration: BoxDecoration(
-                    color: widget.color,
-                    shape: BoxShape.circle,
+              ),
+              const SizedBox(width: 7),
+              Flexible(
+                child: Text(
+                  widget.text,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
                   ),
                 ),
-                const SizedBox(width: 7),
-                Flexible(
-                  child: Text(
-                    widget.text,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 13,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ),
-              ],
-            ),
+              ),
+            ],
           ),
         ),
       ),

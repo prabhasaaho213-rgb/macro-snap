@@ -9,8 +9,6 @@ import 'package:macro_snap/screens/phone_login_screen.dart';
 import 'package:macro_snap/screens/referral_screen.dart';
 import 'package:macro_snap/screens/settings_screen.dart';
 import 'package:macro_snap/screens/subscription_screen.dart';
-import 'package:macro_snap/widgets/notification_prompt.dart';
-import 'package:permission_handler/permission_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// Regression sweep: every screen must render at the largest system font
@@ -102,59 +100,6 @@ void main() {
           },
         );
       });
-    }
-  }
-
-  for (final sizeEntry in sizes.entries) {
-    for (final mode in themes.entries) {
-      testWidgets(
-        'Notification prompt dialog (${mode.key}, ${sizeEntry.key}) renders '
-        'at 2x without overflow',
-        (tester) async {
-          tester.view.physicalSize = sizeEntry.value;
-          tester.view.devicePixelRatio = 1.0;
-          addTearDown(tester.view.resetPhysicalSize);
-          addTearDown(tester.view.resetDevicePixelRatio);
-
-          await tester.pumpWidget(
-            MaterialApp(
-              theme: mode.value,
-              builder: (context, child) => MediaQuery(
-                data: MediaQuery.of(
-                  context,
-                ).copyWith(textScaler: const TextScaler.linear(2.0)),
-                child: child!,
-              ),
-              home: Scaffold(
-                body: Builder(
-                  builder: (context) => TextButton(
-                    onPressed: () => maybeShowNotificationPrompt(
-                      context,
-                      statusOf: () async => PermissionStatus.denied,
-                      request: () async => PermissionStatus.denied,
-                      openSettings: () async {},
-                    ),
-                    child: const Text('open'),
-                  ),
-                ),
-              ),
-            ),
-          );
-          await tester.tap(find.text('open'));
-          for (var i = 0; i < 4; i++) {
-            await tester.pump(const Duration(milliseconds: 300));
-          }
-          final exception = tester.takeException();
-          if (exception != null &&
-              exception.toString().toLowerCase().contains('overflow')) {
-            fail(
-              'NotificationPrompt dialog (${mode.key}, ${sizeEntry.key}) '
-              'overflowed at 2x font scale: $exception',
-            );
-          }
-          await tester.pumpWidget(const SizedBox());
-        },
-      );
     }
   }
 }

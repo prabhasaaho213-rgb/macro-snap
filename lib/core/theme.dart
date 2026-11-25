@@ -10,13 +10,19 @@ final ValueNotifier<String> userNameNotifier = ValueNotifier('');
 /// saturated burnt-orange accent used for coins/rewards/CTAs. Public API
 /// (color/method names) is unchanged so existing screens keep compiling;
 /// only the underlying values moved off the old neon-rainbow palette.
-/// Slides a pushed page in from the right without ever making it
-/// semi-transparent.
+/// The app's ONE page transition: a horizontal push with parallax, in both
+/// directions — forward and back are the same motion reversed.
 ///
-/// Replaces the platform default (see
-/// [MacroSnapTheme._opaquePageTransitions]). A fade on a route means the route
-/// underneath shows through while it runs, and two screens drawn over each
-/// other is what reads as a rendering glitch rather than a transition.
+/// The entering page slides in from the right while the page it covers drifts
+/// slightly left, which is the push every native app has (iOS, Instagram,
+/// Linear). Both pages are fully opaque for the whole run, so they never blend
+/// into each other — a fade on a route is what used to read as a rendering
+/// glitch rather than a transition.
+///
+/// This is installed in the [PageTransitionsTheme] (see
+/// [MacroSnapTheme._opaquePageTransitions]), so it covers every push in the
+/// app: `MaterialPageRoute` and the `habitFlowRoute` helper both use it, and
+/// both animate and go back identically.
 class OpaqueSlidePageTransitionsBuilder extends PageTransitionsBuilder {
   const OpaqueSlidePageTransitionsBuilder();
 
@@ -28,19 +34,29 @@ class OpaqueSlidePageTransitionsBuilder extends PageTransitionsBuilder {
     Animation<double> secondaryAnimation,
     Widget child,
   ) {
-    return SlideTransition(
-      position:
-          Tween<Offset>(
-            begin: const Offset(0.15, 0),
-            end: Offset.zero,
-          ).animate(
-            CurvedAnimation(
-              parent: animation,
-              curve: Curves.easeOutCubic,
-              reverseCurve: Curves.easeInCubic,
-            ),
+    // Incoming page: starts a little to the right and eases to rest.
+    final enter = Tween<Offset>(begin: const Offset(0.18, 0), end: Offset.zero)
+        .animate(
+          CurvedAnimation(
+            parent: animation,
+            curve: Curves.easeOutCubic,
+            reverseCurve: Curves.easeInCubic,
           ),
-      child: child,
+        );
+    // The page underneath: drifts left as it is covered, and slides back as
+    // the top page is popped. This is what makes the push feel layered instead
+    // of like a sheet swapping in place.
+    final exit = Tween<Offset>(begin: Offset.zero, end: const Offset(-0.06, 0))
+        .animate(
+          CurvedAnimation(
+            parent: secondaryAnimation,
+            curve: Curves.easeOutCubic,
+            reverseCurve: Curves.easeInCubic,
+          ),
+        );
+    return SlideTransition(
+      position: enter,
+      child: SlideTransition(position: exit, child: child),
     );
   }
 }
@@ -567,7 +583,9 @@ class MacroSnapTheme {
   ///
   /// [OpaqueSlidePageTransitionsBuilder] only slides: the new page is fully
   /// opaque from its first frame and covers the old one, so a push reads as a
-  /// push instead of a dissolve.
+  /// push instead of a dissolve. It is the single transition for the whole app
+  /// — every `MaterialPageRoute` and every `habitFlowRoute` push, in both
+  /// directions.
   static const PageTransitionsTheme _opaquePageTransitions =
       PageTransitionsTheme(
         builders: <TargetPlatform, PageTransitionsBuilder>{

@@ -51,40 +51,49 @@ extension _HomeHeader on _HomeScreenState {
           Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              // Scans remaining badge (Habitly neon pill style)
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 6,
-                ),
-                decoration: MacroSnapTheme.neonPill(
-                  _scansLeft > 0
-                      ? MacroSnapTheme.neonGreen
-                      : MacroSnapTheme.neonPink,
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      Icons.bolt_rounded,
-                      size: 14,
-                      color: _scansLeft > 0
-                          ? MacroSnapTheme.neonGreen
-                          : MacroSnapTheme.neonPink,
+              // Scans remaining badge (Habitly neon pill style). It renders the
+              // one value ScanGate publishes, so it cannot flicker between a
+              // stale free count and the server's "Unlimited".
+              ValueListenableBuilder<int?>(
+                valueListenable: ScanGate.remaining,
+                builder: (context, scans, _) {
+                  final count = scans;
+                  final unknown = count == null;
+                  final exhausted = count != null && count <= 0;
+                  final accent = unknown
+                      ? MacroSnapTheme.textTertiary(context)
+                      : exhausted
+                      ? MacroSnapTheme.neonPink
+                      : MacroSnapTheme.neonGreen;
+                  return Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 6,
                     ),
-                    const SizedBox(width: 4),
-                    Text(
-                      _scansLeft >= 99 ? 'Unlimited' : '$_scansLeft',
-                      style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w800,
-                        color: _scansLeft > 0
-                            ? MacroSnapTheme.greenText(context)
-                            : MacroSnapTheme.neonPink,
-                      ),
+                    decoration: MacroSnapTheme.neonPill(accent),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.bolt_rounded, size: 14, color: accent),
+                        const SizedBox(width: 4),
+                        Text(
+                          unknown
+                              ? '—'
+                              : count >= 99
+                              ? 'Unlimited'
+                              : '$count',
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w800,
+                            color: exhausted
+                                ? MacroSnapTheme.neonPink
+                                : MacroSnapTheme.greenText(context),
+                          ),
+                        ),
+                      ],
                     ),
-                  ],
-                ),
+                  );
+                },
               ),
               const SizedBox(width: 8),
               ScaleOnPress(
@@ -114,5 +123,4 @@ extension _HomeHeader on _HomeScreenState {
       ),
     );
   }
-
 }

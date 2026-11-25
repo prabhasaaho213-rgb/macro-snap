@@ -100,33 +100,21 @@ void main() {
     SharedPreferences.setMockInitialValues({'phone': 'alice@example.com'});
     await service.reload();
 
+    // 12,000 steps in a day, but a free account is capped at its daily step
+    // limit, so the day is worth the capped total (10), not the raw distance.
     await service.noteSteps(12000);
-    expect(service.todayPoints, 20);
+    expect(service.todayPoints, 10);
 
     // A later read coming back lower (a reboot, a fresh sensor, a corrected
     // source) must not walk the day backwards: the stored total only grows.
     await service.noteSteps(4200);
-    expect(service.todayPoints, 20);
+    expect(service.todayPoints, 10);
   });
 
-  test('the server score is shown for the week it was scored for', () async {
-    SharedPreferences.setMockInitialValues({'phone': 'alice@example.com'});
-    await service.reload();
-    expect(service.serverPointsFor('2026-W48'), isNull);
-
-    await service.setServerScore(week: '2026-W48', points: 40);
-    expect(service.serverPointsFor('2026-W48'), 40);
-    expect(
-      service.serverPointsFor('2026-W49'),
-      isNull,
-      reason: 'last week\'s total must not be shown as this week\'s',
-    );
-
-    // Persisted, so the board's number is right on the next launch — before
-    // any sync has had a chance to run.
-    await service.reload();
-    expect(service.serverPointsFor('2026-W48'), 40);
-  });
+  // The "server score is shown for the week it was scored for" case was
+  // removed with the local server-score cache: the board's number now comes
+  // from the Firestore rows the backend writes, so there is no per-week local
+  // copy left to test.
 
   test('account deletion removes the leaderboard partition only', () async {
     final alice = AccountPartition.suffix('alice@example.com');

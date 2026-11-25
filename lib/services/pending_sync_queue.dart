@@ -75,7 +75,9 @@ class PendingSyncQueue with WidgetsBindingObserver {
 
   static Future<(SharedPreferences, String)> _partition() async {
     final prefs = await SharedPreferences.getInstance();
-    final suffix = AccountPartition.suffix(AccountPartition.activeFromPrefs(prefs));
+    final suffix = AccountPartition.suffix(
+      AccountPartition.activeFromPrefs(prefs),
+    );
     return (prefs, suffix);
   }
 

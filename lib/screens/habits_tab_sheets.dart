@@ -649,23 +649,23 @@ extension _HabitsSheets on _HabitsTabState {
                               selected: color == value,
                               label: 'Habit colour',
                               child: GestureDetector(
-                              onTap: () => setModalState(() => color = value),
-                              child: Container(
-                                width: 34,
-                                height: 34,
-                                decoration: BoxDecoration(
-                                  color: Color(value),
-                                  shape: BoxShape.circle,
-                                  border: Border.all(
-                                    color: color == value
-                                        ? Theme.of(
-                                            context,
-                                          ).colorScheme.onSurface
-                                        : Colors.transparent,
-                                    width: 3,
+                                onTap: () => setModalState(() => color = value),
+                                child: Container(
+                                  width: 34,
+                                  height: 34,
+                                  decoration: BoxDecoration(
+                                    color: Color(value),
+                                    shape: BoxShape.circle,
+                                    border: Border.all(
+                                      color: color == value
+                                          ? Theme.of(
+                                              context,
+                                            ).colorScheme.onSurface
+                                          : Colors.transparent,
+                                      width: 3,
+                                    ),
                                   ),
                                 ),
-                              ),
                               ),
                             ),
                           )

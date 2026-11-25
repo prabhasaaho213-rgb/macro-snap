@@ -335,7 +335,9 @@ class _DietPlanScreenState extends State<DietPlanScreen> {
           return;
         }
         if (resp.statusCode == 429) {
-          throw Exception('Too many plan requests. Wait a minute and try again.');
+          throw Exception(
+            'Too many plan requests. Wait a minute and try again.',
+          );
         }
         if (resp.statusCode >= 500) {
           throw Exception(

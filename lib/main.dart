@@ -24,14 +24,17 @@ import 'services/meal_sync_service.dart';
 import 'services/crash_reporting.dart';
 import 'services/badge_service.dart';
 import 'services/meal_streak_service.dart';
+import 'services/scan_gate.dart';
 import 'services/pending_sync_queue.dart';
 import 'services/leaderboard_remote.dart';
+import 'services/league_invite.dart';
 import 'services/friends_league_service.dart';
 import 'services/leaderboard_service.dart';
 import 'services/step_counter_service.dart';
 import 'services/in_app_review_service.dart';
 import 'services/account_partition.dart';
 import 'core/app_nav.dart';
+import 'core/theme.dart';
 
 Future<void> main() async {
   // ── Global crash safety net ────────────────────────────────────────
@@ -135,6 +138,18 @@ Future<void> _bootstrap() async {
     ),
   ]);
 
+  // The Play Install Referrer, read in the background at launch. An invite for
+  // someone without the app arrives as `referrer=join_code=CODE` on the
+  // install, and this is what turns it into the pending invite MainShell
+  // applies once the shell is up. Started here, awaited there — a fresh
+  // install signs in long before this finishes, and the read is memoised.
+  unawaited(
+    _guard(
+      LeagueInvite.captureInstallReferrer,
+      'LeagueInvite.captureInstallReferrer',
+    ),
+  );
+
   // Bind the admin-claim listener: Firebase restores the session after
   // `load()` has already run, so this is what grants lifetime Pro to the
   // owner (and strips a leaked marker when someone else signs in).
@@ -158,9 +173,8 @@ Future<void> _bootstrap() async {
   // through the collision fix, and onboarding's pre-login data into the
   // account that has since signed in.
   await _guardStartup(
-    () async => AccountPartition.ensureCurrent(
-      await SharedPreferences.getInstance(),
-    ),
+    () async =>
+        AccountPartition.ensureCurrent(await SharedPreferences.getInstance()),
     'AccountPartition.ensureCurrent',
   );
 
@@ -177,6 +191,9 @@ Future<void> _bootstrap() async {
     } else if (nickname.isEmpty && name.isNotEmpty) {
       await prefs.setString('nickname', name);
     }
+    // Publish the healed name before the shell exists, so Home's first frame
+    // already has it instead of painting a placeholder and swapping.
+    userNameNotifier.value = name.isNotEmpty ? name : nickname;
   }, 'Name reconciliation');
 
   // Each of these is an independent prefs/file read, so they run together
@@ -194,6 +211,18 @@ Future<void> _bootstrap() async {
     ),
     _guardStartup(() => HabitStore.instance.load(), 'HabitStore.load'),
     _guardStartup(() => WeightStore.instance.load(), 'WeightStore.load'),
+    // Read before the shell exists so the surfaces that show these on the
+    // first frame have a real value instead of a placeholder that swaps a
+    // moment later: the streak flame, the scan badge and the week's points.
+    _guardStartup(() => MealStreakService.load(), 'MealStreakService.load'),
+    _guardStartup(
+      () => ScanGate.getScansRemaining(),
+      'ScanGate.getScansRemaining',
+    ),
+    _guardStartup(
+      () => LeaderboardService.instance.load(),
+      'LeaderboardService.load',
+    ),
   ]);
 
   // Cloud writes that failed in an earlier session are replayed from here on:
@@ -239,9 +268,7 @@ Future<void> _bootstrap() async {
   // it lost yesterday's movement when the app was reinstalled.
   LeaderboardService.instance.addListener(_scheduleLeaderboardPush);
 
-  unawaited(
-    _guard(PendingSyncQueue.instance.drain, 'PendingSyncQueue.drain'),
-  );
+  unawaited(_guard(PendingSyncQueue.instance.drain, 'PendingSyncQueue.drain'));
 
   // The review ask otherwise only rides on a meal save, so an account that
   // already logged the meals it waits for before this shipped would never see
@@ -408,9 +435,7 @@ void _announceUncaughtError() {
   _uncaughtErrorAnnounced = true;
   messenger.showSnackBar(
     const SnackBar(
-      content: Text(
-        'Something went wrong. If the app misbehaves, restart it.',
-      ),
+      content: Text('Something went wrong. If the app misbehaves, restart it.'),
     ),
   );
 }

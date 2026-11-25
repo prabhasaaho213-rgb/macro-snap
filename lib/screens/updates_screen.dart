@@ -50,14 +50,14 @@ class _UpdatesScreenState extends State<UpdatesScreen> {
   static const List<_UpdateEntry> _changelog = [
     _UpdateEntry(
       version: UpdatesScreen.latestVersion,
-      date: '2026-11-24',
+      date: '2026-11-25',
       isLatest: true,
       notes: [
-        'Steps now count without Health Connect: the app reads your phone\'s own step sensor, and Health Connect is an optional extra for a watch and calorie burn',
-        'Movement pays 10 points for every 5,000 steps, instead of only rewarding one step goal',
-        'Yesterday\'s points stay on the leaderboard after a reinstall, and an account that already joined is not asked to join again',
-        'Your name updates everywhere at once — profile, greeting and the leaderboard row',
-        'One Analysis button in Quick Actions; the extra icon on each activity card is gone',
+        'Friends League: start a league, share an invite link, and see everyone\'s week on one board',
+        'Invite links open straight to the league — including for someone who has not installed the app yet',
+        'The photo scan sweeps like a viewfinder now: one smooth pass, a gently drifting photo, and dish names that land one by one',
+        'The barcode scanner uses the same motion, with a green catch the moment a code is read',
+        'Streak, Pro and scan-limit values no longer flash a placeholder before the real number appears',
       ],
     ),
     _UpdateEntry(

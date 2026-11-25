@@ -43,7 +43,10 @@ class _ScanScreenState extends State<ScanScreen> with WidgetsBindingObserver {
   /// that state request() never re-shows the dialog, so the user must be
   /// sent to the system Settings screen instead.
   bool _cameraPermanentlyDenied = false;
-  int _scansLeft = 3;
+  // Seed from the value Home already published (999 = unlimited) instead of a
+  // hardcoded free count, so opening Cam on a Pro account does not flash "3
+  // left" before the first server read.
+  int _scansLeft = ScanGate.remaining.value ?? ScanGate.freeLimitPerDay;
   String? _capturedImagePath;
   Timer? _previewTimer;
 
@@ -89,6 +92,7 @@ class _ScanScreenState extends State<ScanScreen> with WidgetsBindingObserver {
   Widget _roundCameraButton({
     required IconData icon,
     required VoidCallback onTap,
+
     /// What TalkBack reads: the icon alone names nothing, and this button has
     /// no visible text to fall back on.
     required String label,
@@ -115,9 +119,7 @@ class _ScanScreenState extends State<ScanScreen> with WidgetsBindingObserver {
           ),
           child: Icon(
             icon,
-            color: active
-                ? Colors.black
-                : Colors.white.withValues(alpha: 0.85),
+            color: active ? Colors.black : Colors.white.withValues(alpha: 0.85),
             size: 22,
           ),
         ),
@@ -350,21 +352,23 @@ class _ScanScreenState extends State<ScanScreen> with WidgetsBindingObserver {
     final controller = _controller;
     final hadPreview = controller != null && controller.value.isInitialized;
     if (hadPreview) unawaited(controller.pausePreview());
+    // The app-wide slide, not a route of its own: this page used to dissolve in
+    // over 500 ms while every other push slid, which made the camera the one
+    // place that entered differently (and the one place that also left
+    // differently on back).
+    //
+    // What kept the fade around was the camera black flash: during a slide the
+    // outgoing page is still on screen, and a paused preview texture can paint
+    // black there. The captured photo is left on screen for the whole hand-off
+    // (it is the Hero source, so it is what the slide uncovers on the left),
+    // and cleared only once the result is popped — the camera texture is never
+    // the thing sliding out.
     Navigator.push(
       context,
-      PageRouteBuilder(
-        transitionDuration: const Duration(milliseconds: 500),
-        reverseTransitionDuration: const Duration(milliseconds: 300),
-        pageBuilder: (_, _, _) => ResultScreen(imagePath: path),
-        transitionsBuilder: (_, animation, _, child) {
-          return FadeTransition(
-            opacity: CurvedAnimation(parent: animation, curve: Curves.easeOut),
-            child: child,
-          );
-        },
-      ),
+      habitFlowRoute(ResultScreen(imagePath: path)),
     ).whenComplete(() {
       if (!mounted) return;
+      setState(() => _capturedImagePath = null);
       final live = _controller;
       if (hadPreview &&
           live != null &&
@@ -393,13 +397,12 @@ class _ScanScreenState extends State<ScanScreen> with WidgetsBindingObserver {
 
   void _showPreview(String path) {
     setState(() => _capturedImagePath = path);
-    // Auto-navigate after a brief preview so Hero can animate
+    // Auto-navigate after a brief look at the shot. The preview is NOT cleared
+    // here: it stays as the Hero source and as what the slide uncovers, and
+    // _navigateToResult clears it when the result comes back.
     _previewTimer?.cancel();
     _previewTimer = Timer(const Duration(milliseconds: 500), () {
-      if (mounted) {
-        setState(() => _capturedImagePath = null);
-        _navigateToResult(path);
-      }
+      if (mounted) _navigateToResult(path);
     });
   }
 
@@ -706,89 +709,88 @@ class _ScanScreenState extends State<ScanScreen> with WidgetsBindingObserver {
                 child: GestureDetector(
                   onTap: () {
                     _previewTimer?.cancel();
-                  if (mounted) {
-                    final path = _capturedImagePath!;
-                    setState(() => _capturedImagePath = null);
-                    _navigateToResult(path);
-                  }
-                },
-                child: Stack(
-                  fit: StackFit.expand,
-                  children: [
-                    Hero(
-                      tag: 'food_image_$_capturedImagePath',
-                      child: Image.file(
-                        File(_capturedImagePath!),
-                        fit: BoxFit.cover,
-                        // Keep the preview area dark if the temp file vanished
-                        // between capture and paint.
-                        errorBuilder: (_, _, _) =>
-                            const ColoredBox(color: MacroSnapTheme.surfaceDark),
+                    // Same hand-off as the auto timer: the photo stays until
+                    // the result is popped.
+                    if (mounted) _navigateToResult(_capturedImagePath!);
+                  },
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      Hero(
+                        tag: 'food_image_$_capturedImagePath',
+                        child: Image.file(
+                          File(_capturedImagePath!),
+                          fit: BoxFit.cover,
+                          // Keep the preview area dark if the temp file vanished
+                          // between capture and paint.
+                          errorBuilder: (_, _, _) => const ColoredBox(
+                            color: MacroSnapTheme.surfaceDark,
+                          ),
+                        ),
                       ),
-                    ),
-                    // Dark overlay + hint text
-                    Container(
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          begin: Alignment.bottomCenter,
-                          end: Alignment.topCenter,
-                          colors: [
-                            Colors.black.withValues(alpha: 0.6),
-                            Colors.transparent,
-                            Colors.transparent,
+                      // Dark overlay + hint text
+                      Container(
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.bottomCenter,
+                            end: Alignment.topCenter,
+                            colors: [
+                              Colors.black.withValues(alpha: 0.6),
+                              Colors.transparent,
+                              Colors.transparent,
+                            ],
+                          ),
+                        ),
+                      ),
+                      Positioned(
+                        bottom: 40,
+                        left: 0,
+                        right: 0,
+                        child: Column(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 20,
+                                vertical: 10,
+                              ),
+                              decoration: BoxDecoration(
+                                color: Colors.black.withValues(alpha: 0.4),
+                                borderRadius: BorderRadius.circular(20),
+                              ),
+                              child: const Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(
+                                    Icons.auto_awesome_rounded,
+                                    color: MacroSnapTheme.neonGreen,
+                                    size: 18,
+                                  ),
+                                  SizedBox(width: 8),
+                                  Text(
+                                    'Analyzing your meal...',
+                                    style: TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              'Tap anywhere to continue',
+                              style: TextStyle(
+                                color: Colors.white.withValues(alpha: 0.5),
+                                fontSize: 12,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
                           ],
                         ),
                       ),
-                    ),
-                    Positioned(
-                      bottom: 40,
-                      left: 0,
-                      right: 0,
-                      child: Column(
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 20,
-                              vertical: 10,
-                            ),
-                            decoration: BoxDecoration(
-                              color: Colors.black.withValues(alpha: 0.4),
-                              borderRadius: BorderRadius.circular(20),
-                            ),
-                            child: const Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Icon(
-                                  Icons.auto_awesome_rounded,
-                                  color: MacroSnapTheme.neonGreen,
-                                  size: 18,
-                                ),
-                                SizedBox(width: 8),
-                                Text(
-                                  'Analyzing your meal...',
-                                  style: TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            'Tap anywhere to continue',
-                            style: TextStyle(
-                              color: Colors.white.withValues(alpha: 0.5),
-                              fontSize: 12,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
+                    ],
+                  ),
                 ),
               ),
             ),
@@ -982,14 +984,14 @@ class _ScanScreenState extends State<ScanScreen> with WidgetsBindingObserver {
                           child: Container(
                             width: 78,
                             height: 78,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            color: Colors.white.withValues(alpha: 0.18),
-                            border: Border.all(
-                              color: Colors.white.withValues(alpha: 0.85),
-                              width: 3,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: Colors.white.withValues(alpha: 0.18),
+                              border: Border.all(
+                                color: Colors.white.withValues(alpha: 0.85),
+                                width: 3,
+                              ),
                             ),
-                          ),
                             child: Center(
                               child: Container(
                                 width: 56,

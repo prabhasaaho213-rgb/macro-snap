@@ -15,6 +15,8 @@ import android.os.Bundle
 import android.os.Environment
 import android.provider.MediaStore
 import androidx.core.view.WindowCompat
+import com.android.installreferrer.api.InstallReferrerClient
+import com.android.installreferrer.api.InstallReferrerStateListener
 import io.flutter.embedding.android.FlutterFragmentActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.EventChannel
@@ -61,6 +63,23 @@ class MainActivity : FlutterFragmentActivity() {
             }
         }
 
+        // The Play Install Referrer — how an invite survives the install.
+        //
+        // A /join/CODE link opened by someone without the app sends them to the
+        // store with `referrer=join_code=CODE`. Play records that string
+        // against the install, and this is the only place it can be read back;
+        // without it the code was consumed by the install and lost, so the
+        // friend had to tap the link a second time once the app was there.
+        MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            "macrosnap/install_referrer",
+        ).setMethodCallHandler { call, result ->
+            when (call.method) {
+                "getReferrer" -> readInstallReferrer(result)
+                else -> result.notImplemented()
+            }
+        }
+
         // The phone's own step counter. Health Connect is OPTIONAL in this app:
         // steps have to keep working for a phone that never installed or
         // authorised a health app, and the hardware counter the OS already
@@ -86,6 +105,69 @@ class MainActivity : FlutterFragmentActivity() {
                 }
             },
         )
+    }
+
+    /**
+     * Hands Dart the referrer string Play recorded for this install.
+     *
+     * Answers exactly once. An empty string means Play has no referrer (an
+     * organic install) and is final; null means the read itself failed, which
+     * the Dart side treats as "try again next launch" rather than burning the
+     * single read. The connection is closed on every path — a live
+     * [InstallReferrerClient] holds a bound Play Store service.
+     */
+    private fun readInstallReferrer(result: MethodChannel.Result) {
+        val client = try {
+            InstallReferrerClient.newBuilder(applicationContext).build()
+        } catch (_: Exception) {
+            result.success(null)
+            return
+        }
+        var answered = false
+        fun reply(value: String?) {
+            if (answered) return
+            answered = true
+            try {
+                client.endConnection()
+            } catch (_: Exception) {
+                // Already closed, or the service was never bound.
+            }
+            runOnUiThread { result.success(value) }
+        }
+        try {
+            client.startConnection(
+                object : InstallReferrerStateListener {
+                    override fun onInstallReferrerSetupFinished(responseCode: Int) {
+                        if (responseCode == InstallReferrerClient.InstallReferrerResponse.FEATURE_NOT_SUPPORTED) {
+                            // No Play Store on this device: there will never be a
+                            // referrer here, so answer "none" rather than make
+                            // Dart retry this every launch.
+                            reply("")
+                            return
+                        }
+                        if (responseCode != InstallReferrerClient.InstallReferrerResponse.OK) {
+                            // SERVICE_UNAVAILABLE is what Play reports in the first
+                            // moments after an install; null asks Dart to try again
+                            // on the next launch instead of burning the read.
+                            reply(null)
+                            return
+                        }
+                        val referrer = try {
+                            client.installReferrer.installReferrer
+                        } catch (_: Exception) {
+                            null
+                        }
+                        reply(referrer)
+                    }
+
+                    override fun onInstallReferrerServiceDisconnected() {
+                        reply(null)
+                    }
+                },
+            )
+        } catch (_: Exception) {
+            reply(null)
+        }
     }
 
     /**

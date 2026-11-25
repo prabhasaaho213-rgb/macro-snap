@@ -43,11 +43,7 @@ class WeightEntry {
     }
     // Absent means a real entry: everything logged before seeding existed was
     // typed in by the user, so the default must be false.
-    return WeightEntry(
-      date: date,
-      kg: kg,
-      seeded: json['seeded'] == true,
-    );
+    return WeightEntry(date: date, kg: kg, seeded: json['seeded'] == true);
   }
 
   static WeightEntry? tryFromJson(Map<String, dynamic> json) {

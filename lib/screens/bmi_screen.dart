@@ -71,10 +71,7 @@ class _BmiScreenState extends State<BmiScreen> {
     // to hand out "First Weigh-In" to anyone who tapped the BMI card, which is
     // the opposite of "earned by logging": nothing was measured or entered.
     if (profile != null && WeightStore.instance.entries.isEmpty) {
-      await WeightStore.instance.record(
-        profile.weightKg,
-        awardBadge: false,
-      );
+      await WeightStore.instance.record(profile.weightKg, awardBadge: false);
     }
     if (!mounted) return;
     setState(() {

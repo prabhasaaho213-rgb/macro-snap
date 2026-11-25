@@ -11,6 +11,7 @@ MacroSnap collects only the data needed to run the app:
 - **Subscription status** — handled by Razorpay; we store only your subscription status and start date. No card, UPI or banking details are ever stored on our servers.
 - **App usage counters** — anonymous interaction counts (for example, how often each tab is opened) stored against your account, used only to decide which interface layout works better. They contain no content and no location.
 - **Crash reports** — if the app crashes, a technical report (stack trace, device model, app version) is sent to Google Firebase Crashlytics so the bug can be fixed. Release builds only; it never contains your meals, photos or messages.
+- **Invite links and install attribution** — when you open a Friends League invite link, or install the app from one, we record the invite code, which step it was (link opened, install, league joined) and the time, so invites can be counted and the league found. On first launch the app reads Google Play's Install Referrer once for this purpose; it carries only the referral data Play attaches to the install, not your Google account, contacts or advertising ID. These records contain no account identifier, and a league you join is visible to the other members of that league.
 
 ## Camera & Photos
 
@@ -38,6 +39,7 @@ MacroSnap uses:
 - Guru conversations: kept on your device, and used only to build the context for your next question.
 - Meal photos: the local window you choose (24 hours by default); cloud copies only while you keep the backup setting on.
 - Crash reports: retained by Firebase Crashlytics for 90 days.
+- Invite events (invite code, step, time): kept while the invite campaign is in use; they carry no account identifier.
 - **Deletion record: a one-way fingerprint, kept at most 24 months.** When you delete your account we keep one record: a keyed hash (HMAC) of the email address you signed up with, plus the date of deletion. It is not your email address — it cannot be turned back into one without a secret key that exists only in our server environment — and it holds no meals, habits, name, phone, photos, history, trial data or subscription state. No user and no other part of the app can read it. Its only purpose is to answer "has this identity already had the ₹1 offer?". After 24 months it stops counting for that purpose, and the record itself is deleted at the next account deletion. You can also ask us to erase it sooner (see Your Rights); the only consequence is that the ₹1 offer could then be claimed again with that address.
 
 ## Your Rights

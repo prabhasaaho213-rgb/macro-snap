@@ -246,7 +246,11 @@ class ReminderRegistry {
 
   /// Schedules the built-in (non-habit) reminders that apply to the current
   /// subscription state.
-  Future<void> _scheduleBuiltIns(String? subscribedDate, {bool paidSubscription = false, String? proUntil}) async {
+  Future<void> _scheduleBuiltIns(
+    String? subscribedDate, {
+    bool paidSubscription = false,
+    String? proUntil,
+  }) async {
     // Lifetime subscribers (admin) never get expiry reminders — the
     // '1900-01-01T00:00:00.000' marker means the subscription never expires.
     final isLifetime =
@@ -255,14 +259,16 @@ class ReminderRegistry {
     // its original activation timestamp, so day-27/30 reminders derived
     // from subscribedAt are wrong for a renewing user. Skip them unless
     // there is an explicit windowed end date (e.g. a referral grant).
-    final skipExpiryForPaid = paidSubscription && (proUntil == null || proUntil.isEmpty);
+    final skipExpiryForPaid =
+        paidSubscription && (proUntil == null || proUntil.isEmpty);
     for (final spec in _reminders) {
       if (spec.subscriberOnly &&
           (subscribedDate == null || subscribedDate.isEmpty)) {
         continue;
       }
       // Skip expiry/expired reminders for lifetime subscribers.
-      if (skipExpiryForPaid && (spec.id == expiryReminderId || spec.id == expiredId)) {
+      if (skipExpiryForPaid &&
+          (spec.id == expiryReminderId || spec.id == expiredId)) {
         await _safe(() => _plugin.cancel(spec.id));
         continue;
       }
@@ -345,7 +351,11 @@ class ReminderRegistry {
     final subscribed = subscribedDate != null && subscribedDate.isNotEmpty;
     final isLifetime = subscribed && subscribedDate.startsWith('1900');
     if (subscribed) {
-      await _scheduleBuiltIns(subscribedDate, paidSubscription: paidSubscription, proUntil: proUntil);
+      await _scheduleBuiltIns(
+        subscribedDate,
+        paidSubscription: paidSubscription,
+        proUntil: proUntil,
+      );
     } else {
       // A FREE user must never carry subscriber-only alarms (admin-strip on
       // a shared device, cancelled subscription, etc.).
@@ -505,7 +515,11 @@ class ReminderRegistry {
     for (final spec in _reminders)
       '#${spec.id} ${spec.channelName} '
           '${spec.subscriberOnly ? '(subscriber only)' : '(always)'} '
-          '${spec.match == DateTimeComponents.dayOfWeekAndTime ? '(weekly)' : spec.match == null ? '(one-off)' : '(daily)'}',
+          '${spec.match == DateTimeComponents.dayOfWeekAndTime
+              ? '(weekly)'
+              : spec.match == null
+              ? '(one-off)'
+              : '(daily)'}',
   ];
 
   Future<void> _loadArmedHabitIds() async {

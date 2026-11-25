@@ -517,9 +517,7 @@ extension _ResultCard on _ResultScreenState {
         style: TextStyle(
           fontSize: 13,
           fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
-          color: selected
-              ? accent
-              : MacroSnapTheme.textSecondary(context),
+          color: selected ? accent : MacroSnapTheme.textSecondary(context),
         ),
       ),
     );

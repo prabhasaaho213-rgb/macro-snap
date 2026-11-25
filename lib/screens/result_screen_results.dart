@@ -1,4 +1,4 @@
-﻿part of 'result_screen.dart';
+part of 'result_screen.dart';
 
 // Split out of result_screen.dart. Same library, so these builders keep access to
 // the screen's private state without threading parameters through.
@@ -841,9 +841,7 @@ class _GramKeypadDialogState extends State<_GramKeypadDialog> {
             if (value == null) {
               // Say why nothing happened instead of clearing the field and
               // closing over nothing (what the Save button used to do).
-              setState(
-                () => _error = 'Enter a weight between 1 and 10,000 g.',
-              );
+              setState(() => _error = 'Enter a weight between 1 and 10,000 g.');
               HapticFeedback.selectionClick();
               return;
             }
@@ -901,7 +899,11 @@ class SemanticTapTarget extends StatelessWidget {
   final VoidCallback onTap;
   final Widget child;
 
-  const SemanticTapTarget({super.key, required this.onTap, required this.child});
+  const SemanticTapTarget({
+    super.key,
+    required this.onTap,
+    required this.child,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -916,4 +918,3 @@ class SemanticTapTarget extends StatelessWidget {
     );
   }
 }
-

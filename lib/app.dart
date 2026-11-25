@@ -5,9 +5,12 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'core/app_nav.dart';
 import 'core/theme.dart';
 import 'navigation/route_observer.dart';
+import 'screens/friends_league_screen.dart';
 import 'screens/main_shell.dart';
 import 'screens/onboarding_screen.dart';
 import 'screens/phone_login_screen.dart';
+import 'services/invite_analytics.dart';
+import 'services/league_invite.dart';
 import 'widgets/startup_splash.dart';
 
 /// Last-resort cap on the whole splash.
@@ -53,7 +56,8 @@ class MacroSnapApp extends StatefulWidget {
   State<MacroSnapApp> createState() => _MacroSnapAppState();
 }
 
-class _MacroSnapAppState extends State<MacroSnapApp> {
+class _MacroSnapAppState extends State<MacroSnapApp>
+    with WidgetsBindingObserver {
   bool _loading = true;
   bool _booting = true;
   String? _savedPhone;
@@ -68,11 +72,65 @@ class _MacroSnapAppState extends State<MacroSnapApp> {
   @override
   void initState() {
     super.initState();
+    // League invites arrive as links (see [didPushRouteInformation]).
+    WidgetsBinding.instance.addObserver(this);
+    // The cold-start link is also the engine's initial route — reading it here
+    // does not depend on this observer being registered before the engine
+    // delivers it.
+    final launchCode = LeagueInvite.codeFromUri(
+      Uri.parse(WidgetsBinding.instance.platformDispatcher.defaultRouteName),
+    );
+    if (launchCode != null) unawaited(LeagueInvite.save(launchCode));
     _booting = widget.startup != null;
     // No startup work means no real launch (widget tests): no floor either.
     if (widget.startup != null) _introFloor = _introFloorForLaunch();
     _checkOnboardingAndLogin();
     _awaitStartup();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  /// A friends-league invite opened the app (or arrived while it was running).
+  ///
+  /// The code is parked in prefs FIRST, because a cold start reaches here
+  /// before the account is known — [MainShell] takes it once the shell is up
+  /// and signed in. When the app is already past the gate, the league screen
+  /// opens immediately instead of waiting for the next launch.
+  @override
+  Future<bool> didPushRouteInformation(
+    RouteInformation routeInformation,
+  ) async {
+    final uri = routeInformation.uri;
+    final code = LeagueInvite.codeFromUri(uri);
+    if (code == null) {
+      // A malformed invite must not be pushed as a Navigator route — there is
+      // no generator for it, and the user would get an error page.
+      if (LeagueInvite.isJoinLink(uri)) return true;
+      return super.didPushRouteInformation(routeInformation);
+    }
+    await LeagueInvite.save(code);
+    unawaited(InviteAnalytics.log(InviteAnalytics.linkOpen, code: code));
+    if (!mounted) return true;
+    final signedIn = _onboardingDone && _savedPhone != null;
+    if (signedIn) {
+      // Peek: the league screen clears the code only once the join really
+      // happens, so a paywall or a back press cannot lose the invite.
+      await LeagueInvite.markAutoShown(code);
+      final pending = await LeagueInvite.peek();
+      if (pending != null && mounted) {
+        await appNavigatorKey.currentState?.push(
+          MaterialPageRoute(
+            builder: (_) => FriendsLeagueScreen(initialCode: pending),
+          ),
+        );
+      }
+    }
+    // Handled: the link must never become a Navigator route of its own.
+    return true;
   }
 
   /// Holds the splash until the work `main()` handed over is done.
@@ -171,6 +229,9 @@ class _MacroSnapAppState extends State<MacroSnapApp> {
     return MaterialApp(
       title: 'MacroSnap',
       debugShowCheckedModeBanner: false,
+      // Pinned so a deep link's path can never be used as the first route: the
+      // invite is read from `defaultRouteName` and applied in-app instead.
+      initialRoute: '/',
       navigatorKey: appNavigatorKey,
       scaffoldMessengerKey: appMessengerKey,
       navigatorObservers: [routeObserver],

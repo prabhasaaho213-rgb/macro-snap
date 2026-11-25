@@ -80,9 +80,7 @@ class DishItem {
     ingredients:
         (json['ingredients'] as List<dynamic>?)
             ?.whereType<Map>()
-            .map(
-              (i) => DishIngredient.fromJson(Map<String, dynamic>.from(i)),
-            )
+            .map((i) => DishIngredient.fromJson(Map<String, dynamic>.from(i)))
             .where((i) => i.name.isNotEmpty)
             .toList() ??
         const [],

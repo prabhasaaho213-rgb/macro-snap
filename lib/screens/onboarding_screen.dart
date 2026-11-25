@@ -93,8 +93,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
   /// [_weight] is always kilograms and [_height] always centimetres; the
   /// dials convert only what they SHOW. Mixing stored and shown units is what
   /// made a one-tap switch to lbs read 70 kg as 31.8 kg.
-  double? get _bmi =>
-      BmiCalculator.value(weightKg: _weight, heightCm: _height);
+  double? get _bmi => BmiCalculator.value(weightKg: _weight, heightCm: _height);
 
   bool get _isUnderweight {
     final bmi = _bmi;
@@ -872,9 +871,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
                 final shown = minW + index * step;
                 // Store kilograms: the unit toggle then only changes what is
                 // displayed, so BMI and the saved profile stay correct.
-                setState(
-                  () => _weight = _isKg ? shown : shown * 0.453592,
-                );
+                setState(() => _weight = _isKg ? shown : shown * 0.453592);
               },
               labelBuilder: (index) {
                 final val = minW + index * step;
@@ -969,9 +966,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
                 HapticFeedback.mediumImpact();
                 final shown = minH + index * step;
                 // Store centimetres; only the label converts.
-                setState(
-                  () => _height = _isCm ? shown : shown * 2.54,
-                );
+                setState(() => _height = _isCm ? shown : shown * 2.54);
               },
               labelBuilder: (index) {
                 final val = minH + index * step;

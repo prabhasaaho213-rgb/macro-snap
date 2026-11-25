@@ -190,6 +190,7 @@ class BadgeService extends ChangeNotifier {
     required int totalMeals,
     required int streakDays,
     required bool hasWeighIn,
+
     /// The calorie-goal days on record, so a streak badge can carry the day the
     /// run was actually completed instead of today.
     List<String> hitDates = const [],
@@ -227,12 +228,13 @@ class BadgeService extends ChangeNotifier {
   /// The day a run of [length] consecutive banked days was completed, or null
   /// when the history never reached it.
   static DateTime? _streakReachedOn(List<String> hitDates, int length) {
-    final days = hitDates
-        .map(DateTime.tryParse)
-        .whereType<DateTime>()
-        .map((d) => DateTime(d.year, d.month, d.day))
-        .toList()
-      ..sort();
+    final days =
+        hitDates
+            .map(DateTime.tryParse)
+            .whereType<DateTime>()
+            .map((d) => DateTime(d.year, d.month, d.day))
+            .toList()
+          ..sort();
     if (days.isEmpty) return null;
     var run = 1;
     if (run >= length) return days.first;

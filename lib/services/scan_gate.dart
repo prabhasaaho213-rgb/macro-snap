@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'auth_http.dart';
@@ -65,17 +66,45 @@ class ScanGate {
     return server.used < server.limit!;
   }
 
-  /// Scans left to show in the UI (999 = unlimited).
+  /// The badge's single source of truth: scans left today, [unlimited] for
+  /// Pro/admin, or null until the first answer.
+  ///
+  /// Every screen renders THIS instead of keeping its own copy. Before, Home,
+  /// Cam and the result screen each held an `int` that different async paths
+  /// wrote at different times, so the header could flicker between a stale
+  /// free count and "Unlimited" while a subscription or scan answer landed.
+  static final ValueNotifier<int?> remaining = ValueNotifier<int?>(null);
+
+  /// The sentinel the UI reads as "no limit" (the server sends a null limit).
+  static const int unlimited = 999;
+
+  /// Scans left to show in the UI ([unlimited] = no limit).
   static Future<int> getScansRemaining() async {
-    if (_isSubscribed()) return 999;
+    final value = await _computeRemaining();
+    _publish(value);
+    return value;
+  }
+
+  static Future<int> _computeRemaining() async {
+    if (_isSubscribed()) return unlimited;
     final server = await _serverState();
-    if (server.isFresh && server.limit != null) {
+    if (server.isFresh) {
+      // A fresh report with no limit is the server saying "unlimited". Falling
+      // through to the local estimate here is what let a Pro account show a
+      // free count right after the server had said otherwise.
+      if (server.limit == null) return unlimited;
       return (server.limit! - server.used).clamp(0, server.limit!);
     }
     // Nothing trustworthy from the server yet — show the local estimate.
     final prefs = await SharedPreferences.getInstance();
     final used = await _localUsed(prefs);
     return (freeLimitPerDay - used).clamp(0, freeLimitPerDay);
+  }
+
+  /// Publishes a new value only when it actually changed, so listeners are not
+  /// woken (and the badge not rebuilt) for identical numbers.
+  static void _publish(int value) {
+    if (remaining.value != value) remaining.value = value;
   }
 
   /// Today's usage as far as the UI knows.
@@ -117,6 +146,13 @@ class ScanGate {
     // Keep the local estimate in step so the two can't disagree on screen.
     await prefs.setInt(_usedKey, used);
     await prefs.setString(_dayKey, istDayKey());
+    // Publish immediately: every badge reflects the number the server just
+    // reported instead of waiting for the next screen to ask for it.
+    _publish(
+      _isSubscribed() || limit == null
+          ? unlimited
+          : (limit - used).clamp(0, limit),
+    );
   }
 
   /// The server answered 403 `scan_limit_reached`: today's allowance is gone.

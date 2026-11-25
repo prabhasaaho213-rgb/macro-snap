@@ -53,14 +53,20 @@ class _HomeScreenState extends State<HomeScreen>
   late AnimationController _animController;
   late Animation<double> _fadeAnim;
   late Animation<Offset> _slideAnim;
-  String _name = '';
-  int _scansLeft = 3;
+
+  /// Seeded from the name the app already resolved (bootstrap, login or an
+  /// edit) so the first frame shows the real name instead of a placeholder
+  /// that swaps a moment later.
+  String _name = userNameNotifier.value;
   bool _previousGoalMet = false; // Track to detect transition to goal-met
 
   /// The calorie-goal streak (consecutive banked days the goal was met),
   /// loaded with the rest of Home so the flame on the calorie card reads
   /// it synchronously. Updated when a new day is banked.
-  int _calorieStreak = 0;
+  ///
+  /// Seeded from the streak bootstrap already read, so a 5-day streak does not
+  /// paint as 0 and then swap.
+  int _calorieStreak = MealStreakService.cachedCurrent ?? 0;
 
   /// How many meals were logged today the last time Home painted. Used to
   /// spot the 0 → 1 transition that is a user's first log of the day.
@@ -82,10 +88,7 @@ class _HomeScreenState extends State<HomeScreen>
     // the stores are still loading. Waiting for the loads to finish before
     // showing the screen is what left the home blank for seconds after the
     // splash disappeared on cold starts.
-    _fadeAnim = CurvedAnimation(
-      parent: _animController,
-      curve: Curves.easeOut,
-    );
+    _fadeAnim = CurvedAnimation(parent: _animController, curve: Curves.easeOut);
     _slideAnim = Tween<Offset>(
       begin: const Offset(0, 0.02),
       end: Offset.zero,
@@ -100,7 +103,11 @@ class _HomeScreenState extends State<HomeScreen>
     WeightStore.instance.addListener(_onWeightChanged);
     // Reflect the subscription state the app already loaded, so the button is
     // correct on the first frame; _loadAll() and the listener keep it current.
-    _guruUnlocked = SubscriptionService.instance.isSubscribed;
+    // The admin claim is included when this process has already read it — the
+    // owner otherwise saw the Guru button locked and then unlock.
+    _guruUnlocked =
+        SubscriptionService.instance.isSubscribed ||
+        SubscriptionService.instance.adminKnown == true;
     _loadAll();
     // The admin's lifetime grant often lands after the first frame (Firebase
     // restores the session asynchronously) — re-check the claim so the owner
@@ -146,21 +153,36 @@ class _HomeScreenState extends State<HomeScreen>
     setState(() {
       _guruUnlocked = SubscriptionService.instance.isSubscribed;
     });
+    // A grant or its expiry changes "Unlimited" right away; the badge renders
+    // the value ScanGate publishes, so re-read it rather than leave a copy.
+    _loadScansOnly();
     // Pro fell OFF between reads (a windowed grant expiring) while the admin
     // grant may not have been applied yet — re-check the claim so the owner
     // never sees the lock return.
     unawaited(_resolveGuruUnlock());
   }
 
-  Future<void> _refreshName() async {
+  Future<void> _refreshName() => _readName();
+
+  /// Reads the name this account is displayed under — `name`, with `nickname`
+  /// as the fallback for a device where only login has written an identity so
+  /// far — and publishes it to the header and to [userNameNotifier].
+  Future<void> _readName() async {
     final prefs = await SharedPreferences.getInstance();
-    final name = prefs.getString('name') ?? '';
-    if (mounted && name != _name) {
-      setState(() => _name = name);
-    }
+    final name = (prefs.getString('name') ?? prefs.getString('nickname') ?? '')
+        .trim();
+    if (name.isEmpty || !mounted) return;
+    if (name != _name) setState(() => _name = name);
+    if (userNameNotifier.value != name) userNameNotifier.value = name;
   }
 
   void _onDataChanged() {
+    // The meal list, the calorie ring and the macro bars all read the store
+    // during build, so a change to it has to repaint Home. This used to happen
+    // by accident, inside the scan-badge refresh; now that the badge listens to
+    // ScanGate on its own, the repaint has to be asked for explicitly — without
+    // it an undo or a meal logged from the Scan tab left the list stale.
+    if (mounted) setState(() {});
     final count = MealStore.instance.todayMeals.length;
     final previous = _todayMealsSeen;
     _todayMealsSeen = count;
@@ -204,6 +226,11 @@ class _HomeScreenState extends State<HomeScreen>
   /// Everything below the store loads is a warm prefs/file read, so the real
   /// numbers are on screen immediately; the network is a follow-up.
   Future<void> _loadAll() async {
+    // The name is one prefs read and the first thing on screen. It used to be
+    // read AFTER the store loads below, so the header painted its placeholder
+    // ("MacroSnap") and then swapped to the real name — the two-names flicker
+    // on every open.
+    await _readName();
     await MealStore.instance.load();
     // Baseline for the "first log of the day" moment, taken as soon as meals
     // are known — not after the slower profile load below, which can take
@@ -221,12 +248,10 @@ class _HomeScreenState extends State<HomeScreen>
         targetCal > 0 && MealStore.instance.todayCalories >= targetCal;
     _calorieStreak = await MealStreakService.getCurrent();
     await SubscriptionService.instance.load();
-    final prefs = await SharedPreferences.getInstance();
-    final name = prefs.getString('name') ?? '';
-    // Local estimate first (today's remainder, reset on the IST day boundary).
-    final scans = await ScanGate.getScansRemaining();
+    // A name written while startup was running (cloud restore, a rename on
+    // another device) lands here; the fast read at the top already painted one.
+    await _readName();
 
-    if (!mounted) return;
     // unlocksPro() also applies the admin's lifetime grant, so the owner never
     // gets the Guru lock on a cold start where the claim lands after the first
     // frame. Reading isSubscribed alone is what left a Pro account looking
@@ -234,12 +259,12 @@ class _HomeScreenState extends State<HomeScreen>
     final proOrAdmin = await SubscriptionService.instance.unlocksPro();
     if (!mounted) return;
     setState(() {
-      _name = name;
-      _scansLeft = scans;
-      _guruUnlocked = proOrAdmin ||
-          SubscriptionService.instance.isSubscribed;
+      _guruUnlocked = proOrAdmin || SubscriptionService.instance.isSubscribed;
     });
-    userNameNotifier.value = name;
+    // Only NOW is the plan known, so today's allowance can no longer be read as
+    // the free estimate for an account that is actually unlimited. The badge
+    // repaints from ScanGate.remaining; this screen keeps no copy to go stale.
+    _loadScansOnly();
     // Entrance is already visible; glide the rest of the way now that the
     // real numbers are on screen.
     _animController.forward(from: 0.97);
@@ -255,18 +280,17 @@ class _HomeScreenState extends State<HomeScreen>
   Future<void> _refreshScansFromServer() async {
     try {
       if (!await ScanGate.refreshFromServer()) return;
-      final scans = await ScanGate.getScansRemaining();
-      if (mounted && scans != _scansLeft) {
-        setState(() => _scansLeft = scans);
-      }
+      // Reading is what publishes the new value; the badge listens to it.
+      await ScanGate.getScansRemaining();
     } catch (e) {
       debugPrint('Error refreshing scans: $e');
     }
   }
 
-  Future<void> _loadScansOnly() async {
-    final scans = await ScanGate.getScansRemaining();
-    if (mounted) setState(() => _scansLeft = scans);
+  /// Re-reads today's allowance. [ScanGate.remaining] publishes the value, so
+  /// the badge repaints without this screen holding a copy that can go stale.
+  void _loadScansOnly() {
+    unawaited(ScanGate.getScansRemaining());
   }
 
   /// Rebuild helper for the builders that now live in part files.

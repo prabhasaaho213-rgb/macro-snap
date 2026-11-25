@@ -317,8 +317,9 @@ class MealImageStore {
 
   static Future<bool> saveToGallery(String path) async {
     try {
-      final ok = await _launcherChannel
-          .invokeMethod<bool>('saveToGallery', {'path': path});
+      final ok = await _launcherChannel.invokeMethod<bool>('saveToGallery', {
+        'path': path,
+      });
       return ok ?? false;
     } catch (e, st) {
       logError('MealImageStore.saveToGallery', e, st);

@@ -523,9 +523,7 @@ class _RecentFoodsScreenState extends State<RecentFoodsScreen> {
   /// One chip in the filter row. [value] null means "All"; '★' means the
   /// favorites filter, everything else is a derived [RecentFood.tag].
   Widget _tagChip(String label, String? value, bool isDark) {
-    final selected = value == null
-        ? _activeTag == null
-        : (_activeTag == value);
+    final selected = value == null ? _activeTag == null : (_activeTag == value);
     return GestureDetector(
       onTap: () => setState(() => _activeTag = value),
       child: Container(

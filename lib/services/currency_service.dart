@@ -113,7 +113,9 @@ class CurrencyService {
   /// Persists the user's market pick. [code] null clears it (back to auto).
   /// Applied immediately: the next price label build shows it.
   Future<void> setMarket(String? code) async {
-    _marketOverride = (code == null || code.isEmpty) ? null : code.toUpperCase();
+    _marketOverride = (code == null || code.isEmpty)
+        ? null
+        : code.toUpperCase();
     try {
       final prefs = await SharedPreferences.getInstance();
       if (_marketOverride == null) {
@@ -361,7 +363,8 @@ class CurrencyService {
       // No prefs (or a test harness without a binding) — locale still resolves.
     }
     try {
-      _timezone = timezoneOverride ??
+      _timezone =
+          timezoneOverride ??
           (await FlutterTimezone.getLocalTimezone()).identifier;
     } catch (_) {
       // No platform plugin (a pure Dart test, an unsupported platform): the

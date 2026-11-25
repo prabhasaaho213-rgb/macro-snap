@@ -182,8 +182,9 @@ class GuruService {
   static Future<List<Map<String, String>>> loadChatHistory() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      final raw = prefs
-          .getString(AccountPartition.key(_chatPrefsKey, await _chatSuffix()));
+      final raw = prefs.getString(
+        AccountPartition.key(_chatPrefsKey, await _chatSuffix()),
+      );
       if (raw == null || raw.isEmpty) return const [];
       final decoded = jsonDecode(raw);
       if (decoded is! List) return const [];
@@ -193,10 +194,7 @@ class GuruService {
               (e['role'] == 'user' || e['role'] == 'model') &&
               e['text'] is String &&
               (e['text'] as String).trim().isNotEmpty)
-            {
-              'role': e['role'] as String,
-              'text': e['text'] as String,
-            },
+            {'role': e['role'] as String, 'text': e['text'] as String},
       ];
     } catch (_) {
       return const [];

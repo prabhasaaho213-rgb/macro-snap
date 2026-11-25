@@ -176,6 +176,11 @@ class _PhoneLoginScreenState extends State<PhoneLoginScreen>
           await prefs.setString('name', nickname);
         }
       }
+      // The greeting reads this synchronously. Without it, the shell's first
+      // Home build after signing in could paint the previous account's name
+      // and then swap to this one.
+      userNameNotifier.value = (prefs.getString('name') ?? nickname ?? name)
+          .trim();
       try {
         // The token identifies the account — only the chosen nickname travels.
         await AuthHttp.post(
@@ -252,17 +257,44 @@ class _PhoneLoginScreenState extends State<PhoneLoginScreen>
                   mainAxisAlignment: MainAxisAlignment.center,
                   crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
+                    // The real app icon, not a stand-in glyph: the first screen
+                    // of a fresh install should show the mark the person just
+                    // tapped in the launcher, not a fork-and-knife placeholder.
                     Container(
                       width: 96,
                       height: 96,
                       decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: MacroSnapTheme.neonGreen.withValues(alpha: 0.15),
+                        borderRadius: BorderRadius.circular(22),
+                        boxShadow: [
+                          BoxShadow(
+                            color: MacroSnapTheme.neonOrange.withValues(
+                              alpha: 0.28,
+                            ),
+                            blurRadius: 24,
+                            offset: const Offset(0, 8),
+                          ),
+                        ],
                       ),
-                      child: const Icon(
-                        Icons.restaurant_rounded,
-                        size: 48,
-                        color: MacroSnapTheme.neonGreen,
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(22),
+                        child: Image.asset(
+                          'assets/branding/app_icon_512.png',
+                          width: 96,
+                          height: 96,
+                          fit: BoxFit.cover,
+                          // A missing asset must not break sign-in: fall back
+                          // to the old glyph rather than an error box.
+                          errorBuilder: (_, _, _) => Container(
+                            color: MacroSnapTheme.neonGreen.withValues(
+                              alpha: 0.15,
+                            ),
+                            child: const Icon(
+                              Icons.restaurant_rounded,
+                              size: 48,
+                              color: MacroSnapTheme.neonGreen,
+                            ),
+                          ),
+                        ),
                       ),
                     ),
                     const SizedBox(height: 16),

@@ -191,10 +191,7 @@ class _BadgeRowState extends State<_BadgeRow>
             offset: Offset(24 * (1 - t), 0),
             child: Opacity(
               opacity: t,
-              child: Transform.scale(
-                scale: 0.92 + 0.08 * t,
-                child: child,
-              ),
+              child: Transform.scale(scale: 0.92 + 0.08 * t, child: child),
             ),
           );
         },
@@ -336,7 +333,9 @@ class _BadgeMedallionState extends State<_BadgeMedallion>
       child: Icon(
         widget.earned ? widget.badge.icon : Icons.lock_rounded,
         size: 19,
-        color: widget.earned ? Colors.black : (isDark ? Colors.white30 : const Color(0xFFB0B0B0)),
+        color: widget.earned
+            ? Colors.black
+            : (isDark ? Colors.white30 : const Color(0xFFB0B0B0)),
       ),
     );
 
@@ -353,9 +352,9 @@ class _BadgeMedallionState extends State<_BadgeMedallion>
                 animation: _shine,
                 builder: (context, _) {
                   final x = (-0.6 + 1.6 * _shine.value) * 38;
-          return Transform.translate(
-            offset: Offset(x.toDouble(), 0),
-            child: Container(
+                  return Transform.translate(
+                    offset: Offset(x.toDouble(), 0),
+                    child: Container(
                       width: 38,
                       height: 38,
                       decoration: BoxDecoration(
@@ -519,15 +518,16 @@ class _BadgeCelebrationState extends State<BadgeCelebration> {
             curve: Curves.easeOutBack,
             builder: (_, t, child) {
               // Scale-in with a little overshoot, plus the drop from above.
-              final drop = -40.0 * (1 - Curves.easeOutCubic.transform(t.clamp(0.0, 1.0)));
+              final drop =
+                  -40.0 *
+                  (1 - Curves.easeOutCubic.transform(t.clamp(0.0, 1.0)));
               return Transform.translate(
                 offset: Offset(0, drop),
                 child: Transform.scale(
-                  scale: Curves.elasticOut.transform(t.clamp(0.0, 1.0)) * 0.9 + 0.1,
-                  child: Opacity(
-                    opacity: t.clamp(0.0, 1.0),
-                    child: child,
-                  ),
+                  scale:
+                      Curves.elasticOut.transform(t.clamp(0.0, 1.0)) * 0.9 +
+                      0.1,
+                  child: Opacity(opacity: t.clamp(0.0, 1.0), child: child),
                 ),
               );
             },

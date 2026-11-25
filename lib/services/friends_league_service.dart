@@ -52,6 +52,10 @@ class FriendsLeague {
   final int? rank;
   final List<FriendsLeagueRow> rows;
 
+  /// Names of members who arrived through an invite (newest first), so the
+  /// inviter sees the invite working instead of having to guess.
+  final List<String> invitedNames;
+
   const FriendsLeague({
     required this.id,
     required this.name,
@@ -63,10 +67,12 @@ class FriendsLeague {
     required this.points,
     required this.rank,
     required this.rows,
+    this.invitedNames = const [],
   });
 
   factory FriendsLeague.fromJson(Map data) {
     final rawRows = data['rows'];
+    final rawInvites = data['invites'];
     return FriendsLeague(
       id: data['id'] is String ? data['id'] as String : '',
       name: data['name'] is String && (data['name'] as String).trim().isNotEmpty
@@ -85,8 +91,32 @@ class FriendsLeague {
                 if (row is Map) FriendsLeagueRow.fromJson(row),
             ]
           : const [],
+      invitedNames: rawInvites is List
+          ? [
+              for (final member in rawInvites)
+                if (member is Map &&
+                    member['name'] is String &&
+                    (member['name'] as String).trim().isNotEmpty)
+                  (member['name'] as String).trim(),
+            ]
+          : const [],
     );
   }
+}
+
+/// What an invite code points at, read before joining.
+class InvitePreview {
+  final String name;
+  final int memberCount;
+  final bool full;
+  final bool alreadyMember;
+
+  const InvitePreview({
+    required this.name,
+    required this.memberCount,
+    required this.full,
+    required this.alreadyMember,
+  });
 }
 
 /// A user-facing reason a league action failed (bad code, not Pro, offline).
@@ -178,6 +208,23 @@ class FriendsLeagueService {
     return league;
   }
 
+  /// What an invite code points at, without joining.
+  ///
+  /// An expired code or a full league gets its own answer here, before the
+  /// screen opens a board or a free account is sent into the paywall.
+  Future<InvitePreview> previewInvite(String code) async {
+    final resp = await AuthHttp.get(
+      _url('/friends/invite/$code'),
+    ).timeout(const Duration(seconds: 10));
+    final data = _decode(resp);
+    return InvitePreview(
+      name: data['name'] is String ? data['name'] as String : 'Friends league',
+      memberCount: (data['memberCount'] as num?)?.toInt() ?? 0,
+      full: data['full'] == true,
+      alreadyMember: data['alreadyMember'] == true,
+    );
+  }
+
   /// Leaves [leagueId]. The last member out deletes the league server-side.
   Future<void> leave(String leagueId) async {
     final resp = await AuthHttp.post(
@@ -201,9 +248,7 @@ class FriendsLeagueService {
     try {
       final body = <String, dynamic>{
         'name': await LeaderboardRemote.publicName(),
-        'days': LeaderboardRemote.weekDaysForSync(
-          LeaderboardService.instance,
-        ),
+        'days': LeaderboardRemote.weekDaysForSync(LeaderboardService.instance),
       };
       final resp = await AuthHttp.post(
         _url('/friends/sync'),

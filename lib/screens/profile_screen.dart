@@ -32,11 +32,18 @@ class ProfileScreen extends StatefulWidget {
 }
 
 class _ProfileScreenState extends State<ProfileScreen> {
-  String _name = 'User';
+  /// Seeded from the name already resolved this session, so the header does
+  /// not paint "User" and then swap to the real name.
+  String _name = userNameNotifier.value.isNotEmpty
+      ? userNameNotifier.value
+      : 'User';
   String _email = '';
   String _phone = '';
-  bool _subscribed = false;
-  bool _isAdmin = false;
+
+  /// Seeded from the plan bootstrap already loaded, so the badge does not
+  /// paint "Free User" and then swap to "Pro Member".
+  bool _subscribed = SubscriptionService.instance.isSubscribed;
+  bool _isAdmin = SubscriptionService.instance.adminKnown == true;
 
   DietProfile? get _profile => DietPlanService.instance.profile;
 
@@ -84,8 +91,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       // `nickname` is the fallback for a device where only login has written
       // an identity so far — otherwise the page would show "User" while the
       // greeting already knows the name.
-      _name =
-          prefs.getString('name') ?? prefs.getString('nickname') ?? 'User';
+      _name = prefs.getString('name') ?? prefs.getString('nickname') ?? 'User';
       _email = prefs.getString('email') ?? '';
       _phone = prefs.getString('phone') ?? '';
     });
@@ -155,10 +161,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     setState(() => _name = newName);
     // Same auto-sync the Settings name editor does.
     unawaited(
-      MealSyncService.syncPreferences({
-        'name': newName,
-        'nickname': newName,
-      }),
+      MealSyncService.syncPreferences({'name': newName, 'nickname': newName}),
     );
     // Save it against the ACCOUNT, not just this phone: the name a fresh
     // install restores comes from the server, and without this write the
@@ -233,44 +236,41 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ),
             Expanded(
               child: ListView(
-                      padding: const EdgeInsets.fromLTRB(20, 8, 20, 28),
-                      children: [
-                        AnimatedEntrance(
-                          delayMs: 0,
-                          child: _buildIdentityCard(context, isDark),
-                        ),
-                        const SizedBox(height: 16),
-                        AnimatedEntrance(
-                          delayMs: 90,
-                          child: _buildDetailsCard(context, isDark),
-                        ),
-                        const SizedBox(height: 16),
-                        AnimatedEntrance(
-                          delayMs: 130,
-                          child: const BadgeBoard(),
-                        ),
-                        const SizedBox(height: 16),
-                        AnimatedEntrance(
-                          delayMs: 150,
-                          child: _buildBmiCard(context, isDark),
-                        ),
-                        const SizedBox(height: 16),
-                        AnimatedEntrance(
-                          delayMs: 210,
-                          child: _buildAccountCard(context, isDark),
-                        ),
-                        const SizedBox(height: 18),
-                        Text(
-                          'Your details stay on this phone unless you sign in.',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            fontSize: 11.5,
-                            height: 1.4,
-                            color: MacroSnapTheme.textTertiary(context),
-                          ),
-                        ),
-                      ],
+                padding: const EdgeInsets.fromLTRB(20, 8, 20, 28),
+                children: [
+                  AnimatedEntrance(
+                    delayMs: 0,
+                    child: _buildIdentityCard(context, isDark),
+                  ),
+                  const SizedBox(height: 16),
+                  AnimatedEntrance(
+                    delayMs: 90,
+                    child: _buildDetailsCard(context, isDark),
+                  ),
+                  const SizedBox(height: 16),
+                  AnimatedEntrance(delayMs: 130, child: const BadgeBoard()),
+                  const SizedBox(height: 16),
+                  AnimatedEntrance(
+                    delayMs: 150,
+                    child: _buildBmiCard(context, isDark),
+                  ),
+                  const SizedBox(height: 16),
+                  AnimatedEntrance(
+                    delayMs: 210,
+                    child: _buildAccountCard(context, isDark),
+                  ),
+                  const SizedBox(height: 18),
+                  Text(
+                    'Your details stay on this phone unless you sign in.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 11.5,
+                      height: 1.4,
+                      color: MacroSnapTheme.textTertiary(context),
                     ),
+                  ),
+                ],
+              ),
             ),
           ],
         ),

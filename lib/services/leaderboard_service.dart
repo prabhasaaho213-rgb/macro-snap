@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'account_partition.dart';
 import 'crash_reporting.dart';
 import 'habit_store.dart';
 import 'meal_store.dart';
@@ -54,6 +55,7 @@ class LeaderboardService extends ChangeNotifier {
   static const int waterDailyCap = 5;
 
   static const int waterGoalBonus = 5;
+
   /// Entries (5) + goal bonus (5).
   static const int hydrationDailyCap = 10;
 
@@ -66,6 +68,7 @@ class LeaderboardService extends ChangeNotifier {
   static const int weighInPoints = 5;
 
   static const int calorieGoalPoints = 10;
+
   /// Meals (30) + the calorie-goal bonus (10).
   static const int nutritionDailyCap = 40;
 
@@ -80,8 +83,12 @@ class LeaderboardService extends ChangeNotifier {
 
   /// The most a user can bank in one day with today's table (170).
   static const int dailyMax =
-      mealDailyCap + habitDailyCap + hydrationDailyCap + movementDailyCap +
-      weighInPoints + calorieGoalPoints;
+      mealDailyCap +
+      habitDailyCap +
+      hydrationDailyCap +
+      movementDailyCap +
+      weighInPoints +
+      calorieGoalPoints;
 
   // ─── Preferences keys ─────────────────────────────────────────────
   static const String _daysKey = 'leaderboard_days_v1';
@@ -121,6 +128,13 @@ class LeaderboardService extends ChangeNotifier {
   bool _optIn = false;
   String? _stateKey;
   String? _district;
+
+  /// Which account's partition this state belongs to, resolved on every
+  /// [load]. Two accounts on one phone must never share points, an opt-in or a
+  /// district.
+  String _suffix = '';
+
+  String _key(String base) => AccountPartition.key(base, _suffix);
 
   bool get optIn => _optIn;
   String? get stateKey => _stateKey;
@@ -192,7 +206,10 @@ class LeaderboardService extends ChangeNotifier {
     if (_loaded) return;
     try {
       final prefs = await SharedPreferences.getInstance();
-      final raw = prefs.getString(_daysKey);
+      _suffix = AccountPartition.suffix(
+        AccountPartition.activeFromPrefs(prefs),
+      );
+      final raw = prefs.getString(_key(_daysKey));
       if (raw != null && raw.isNotEmpty) {
         final data = jsonDecode(raw);
         if (data is Map && data['days'] is Map) {
@@ -205,7 +222,7 @@ class LeaderboardService extends ChangeNotifier {
           });
         }
       }
-      final stepsDaysRaw = prefs.getString(_stepsDaysKey);
+      final stepsDaysRaw = prefs.getString(_key(_stepsDaysKey));
       if (stepsDaysRaw != null && stepsDaysRaw.isNotEmpty) {
         final data = jsonDecode(stepsDaysRaw);
         if (data is Map) {
@@ -217,8 +234,8 @@ class LeaderboardService extends ChangeNotifier {
           });
         }
       }
-      _stepsDay = prefs.getString(_stepsDayKey);
-      _stepsToday = prefs.getInt(_stepsValueKey) ?? 0;
+      _stepsDay = prefs.getString(_key(_stepsDayKey));
+      _stepsToday = prefs.getInt(_key(_stepsValueKey)) ?? 0;
       if (_stepsDay != _dayKey(DateTime.now())) {
         // Yesterday's step total must not count toward today's goal.
         _stepsToday = 0;
@@ -229,15 +246,31 @@ class LeaderboardService extends ChangeNotifier {
         final previous = _stepDays[_stepsDay!] ?? 0;
         if (_stepsToday > previous) _stepDays[_stepsDay!] = _stepsToday;
       }
-      _optIn = prefs.getBool(_optInKey) ?? false;
-      _stateKey = prefs.getString(_statePrefKey);
-      _district = prefs.getString(_districtPrefKey);
+      _optIn = prefs.getBool(_key(_optInKey)) ?? false;
+      _stateKey = prefs.getString(_key(_statePrefKey));
+      _district = prefs.getString(_key(_districtPrefKey));
       _prune();
     } catch (e, st) {
       logError('LeaderboardService.load', e, st);
     }
     _loaded = true;
     notifyListeners();
+  }
+
+  /// Re-reads this account's state from disk, discarding what is in memory.
+  ///
+  /// [load] is a once-per-launch read; this is what a mid-session account
+  /// switch needs, so one account's points can never be shown as another's.
+  Future<void> reload() async {
+    _loaded = false;
+    _days.clear();
+    _stepDays.clear();
+    _stepsDay = null;
+    _stepsToday = 0;
+    _optIn = false;
+    _stateKey = null;
+    _district = null;
+    await load();
   }
 
   /// Registers the store listeners once, so a meal logged anywhere (scan,
@@ -293,7 +326,7 @@ class LeaderboardService extends ChangeNotifier {
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString(
-        _daysKey,
+        _key(_daysKey),
         jsonEncode({
           'days': {
             for (final entry in _days.entries) entry.key: entry.value.toJson(),
@@ -437,9 +470,9 @@ class LeaderboardService extends ChangeNotifier {
     if (steps > previous) _stepDays[today] = steps;
     try {
       final prefs = await SharedPreferences.getInstance();
-      await prefs.setString(_stepsDayKey, today);
-      await prefs.setInt(_stepsValueKey, steps);
-      await prefs.setString(_stepsDaysKey, jsonEncode(_stepDays));
+      await prefs.setString(_key(_stepsDayKey), today);
+      await prefs.setInt(_key(_stepsValueKey), steps);
+      await prefs.setString(_key(_stepsDaysKey), jsonEncode(_stepDays));
     } catch (e, st) {
       logError('LeaderboardService.noteSteps', e, st);
     }
@@ -459,7 +492,7 @@ class LeaderboardService extends ChangeNotifier {
     if (!changed) return;
     try {
       final prefs = await SharedPreferences.getInstance();
-      await prefs.setString(_stepsDaysKey, jsonEncode(_stepDays));
+      await prefs.setString(_key(_stepsDaysKey), jsonEncode(_stepDays));
     } catch (e, st) {
       logError('LeaderboardService.applyServerStepDays', e, st);
     }
@@ -524,16 +557,16 @@ class LeaderboardService extends ChangeNotifier {
     notifyListeners();
     try {
       final prefs = await SharedPreferences.getInstance();
-      await prefs.setBool(_optInKey, _optIn);
+      await prefs.setBool(_key(_optInKey), _optIn);
       if (_stateKey == null) {
-        await prefs.remove(_statePrefKey);
+        await prefs.remove(_key(_statePrefKey));
       } else {
-        await prefs.setString(_statePrefKey, _stateKey!);
+        await prefs.setString(_key(_statePrefKey), _stateKey!);
       }
       if (_district == null) {
-        await prefs.remove(_districtPrefKey);
+        await prefs.remove(_key(_districtPrefKey));
       } else {
-        await prefs.setString(_districtPrefKey, _district!);
+        await prefs.setString(_key(_districtPrefKey), _district!);
       }
     } catch (e, st) {
       logError('LeaderboardService.setProfile', e, st);

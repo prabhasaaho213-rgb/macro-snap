@@ -48,3 +48,12 @@
   public static final <fields>;
 }
 -keepattributes *Annotation*,Signature,InnerClasses,EnclosingMethod
+
+# Play Install Referrer ----------------------------------------------------
+# The referrer is what carries a friends-league invite through the store
+# install. It is only ever reached through the Play Store's bound service, so
+# a release build that shrinks it would drop league invites silently while
+# debug builds kept working. The AAR ships its own rules; this keeps the
+# client classes regardless of how the dependency is packaged.
+-keep class com.android.installreferrer.** { *; }
+-dontwarn com.android.installreferrer.**

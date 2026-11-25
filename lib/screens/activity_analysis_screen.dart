@@ -30,8 +30,7 @@ class ActivityAnalysisScreen extends StatefulWidget {
   final AnalysisSection? focus;
 
   @override
-  State<ActivityAnalysisScreen> createState() =>
-      _ActivityAnalysisScreenState();
+  State<ActivityAnalysisScreen> createState() => _ActivityAnalysisScreenState();
 }
 
 class _ActivityAnalysisScreenState extends State<ActivityAnalysisScreen> {
@@ -109,8 +108,8 @@ class _ActivityAnalysisScreenState extends State<ActivityAnalysisScreen> {
   /// this mirrors the `isDark ? white : near-black` choice used on Home.
   Color _primary(BuildContext context) =>
       Theme.of(context).brightness == Brightness.dark
-          ? Colors.white
-          : const Color(0xFF1A1A1A);
+      ? Colors.white
+      : const Color(0xFF1A1A1A);
 
   static List<DateTime> get _weekDays {
     final today = _dayOnly(DateTime.now());
@@ -130,17 +129,16 @@ class _ActivityAnalysisScreenState extends State<ActivityAnalysisScreen> {
       _weekDays.fold(0, (sum, day) => sum + _caloriesOn(day));
 
   /// Habit completions across all habits for one day.
-  int _habitsDoneOn(DateTime day) => HabitStore.instance.habits
-      .where((h) => h.isCompleted(day))
-      .length;
+  int _habitsDoneOn(DateTime day) =>
+      HabitStore.instance.habits.where((h) => h.isCompleted(day)).length;
 
   int get _weekHabitCompletions =>
       _weekDays.fold(0, (sum, day) => sum + _habitsDoneOn(day));
 
   int get _weekWater => _weekDays.fold(
-        0,
-        (sum, day) => sum + (HabitStore.instance.waterLog[dateKey(day)] ?? 0),
-      );
+    0,
+    (sum, day) => sum + (HabitStore.instance.waterLog[dateKey(day)] ?? 0),
+  );
 
   double? get _weightDeltaKg {
     final entries = WeightStore.instance.entries;
@@ -329,7 +327,11 @@ class _ActivityAnalysisScreenState extends State<ActivityAnalysisScreen> {
       section: AnalysisSection.nutrition,
       isDark: isDark,
       children: [
-        _sectionTitle('Nutrition', Icons.restaurant_rounded, MacroSnapTheme.neonOrange),
+        _sectionTitle(
+          'Nutrition',
+          Icons.restaurant_rounded,
+          MacroSnapTheme.neonOrange,
+        ),
         const SizedBox(height: 12),
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -353,11 +355,17 @@ class _ActivityAnalysisScreenState extends State<ActivityAnalysisScreen> {
           ],
         ),
         const SizedBox(height: 8),
-        _bar(target == null || target <= 0 ? 0 : eaten / target,
-            MacroSnapTheme.neonOrange),
+        _bar(
+          target == null || target <= 0 ? 0 : eaten / target,
+          MacroSnapTheme.neonOrange,
+        ),
         const SizedBox(height: 14),
-        _macroRow('Protein', protein, profile?.targetProtein,
-            MacroSnapTheme.neonGreen),
+        _macroRow(
+          'Protein',
+          protein,
+          profile?.targetProtein,
+          MacroSnapTheme.neonGreen,
+        ),
         const SizedBox(height: 8),
         _macroRow('Carbs', carbs, null, MacroSnapTheme.neonCyan),
         const SizedBox(height: 8),
@@ -375,12 +383,7 @@ class _ActivityAnalysisScreenState extends State<ActivityAnalysisScreen> {
     );
   }
 
-  Widget _macroRow(
-    String label,
-    double value,
-    double? target,
-    Color color,
-  ) {
+  Widget _macroRow(String label, double value, double? target, Color color) {
     return Row(
       children: [
         SizedBox(
@@ -425,7 +428,11 @@ class _ActivityAnalysisScreenState extends State<ActivityAnalysisScreen> {
       section: AnalysisSection.habits,
       isDark: isDark,
       children: [
-        _sectionTitle('Habits', Icons.check_circle_rounded, MacroSnapTheme.neonGreen),
+        _sectionTitle(
+          'Habits',
+          Icons.check_circle_rounded,
+          MacroSnapTheme.neonGreen,
+        ),
         const SizedBox(height: 12),
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -473,7 +480,11 @@ class _ActivityAnalysisScreenState extends State<ActivityAnalysisScreen> {
       section: AnalysisSection.water,
       isDark: isDark,
       children: [
-        _sectionTitle('Water', Icons.water_drop_rounded, MacroSnapTheme.neonPurple),
+        _sectionTitle(
+          'Water',
+          Icons.water_drop_rounded,
+          MacroSnapTheme.neonPurple,
+        ),
         const SizedBox(height: 12),
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -511,7 +522,11 @@ class _ActivityAnalysisScreenState extends State<ActivityAnalysisScreen> {
       section: AnalysisSection.movement,
       isDark: isDark,
       children: [
-        _sectionTitle('Movement', Icons.directions_walk_rounded, MacroSnapTheme.neonCyan),
+        _sectionTitle(
+          'Movement',
+          Icons.directions_walk_rounded,
+          MacroSnapTheme.neonCyan,
+        ),
         const SizedBox(height: 12),
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -535,7 +550,10 @@ class _ActivityAnalysisScreenState extends State<ActivityAnalysisScreen> {
           ],
         ),
         const SizedBox(height: 8),
-        _bar(steps == null || goal <= 0 ? 0 : steps / goal, MacroSnapTheme.neonCyan),
+        _bar(
+          steps == null || goal <= 0 ? 0 : steps / goal,
+          MacroSnapTheme.neonCyan,
+        ),
         const SizedBox(height: 12),
         Text(
           steps == null
@@ -558,10 +576,16 @@ class _ActivityAnalysisScreenState extends State<ActivityAnalysisScreen> {
       section: AnalysisSection.weight,
       isDark: isDark,
       children: [
-        _sectionTitle('Weight', Icons.monitor_weight_rounded, MacroSnapTheme.neonOrange),
+        _sectionTitle(
+          'Weight',
+          Icons.monitor_weight_rounded,
+          MacroSnapTheme.neonOrange,
+        ),
         const SizedBox(height: 12),
         Text(
-          latest == null ? 'No weigh-in yet' : '${latest.toStringAsFixed(1)} kg',
+          latest == null
+              ? 'No weigh-in yet'
+              : '${latest.toStringAsFixed(1)} kg',
           style: TextStyle(
             fontSize: 18,
             fontWeight: FontWeight.w900,

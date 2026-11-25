@@ -85,7 +85,10 @@ class ReferralService {
   ///
   /// Without the timeout a hung request left the screen on its spinner, and a
   /// raw `SocketException: Failed host lookup…` reached the user as-is.
-  static Future<http.Response> _post(String path, Map<String, dynamic> body) async {
+  static Future<http.Response> _post(
+    String path,
+    Map<String, dynamic> body,
+  ) async {
     try {
       return await AuthHttp.post(
         Uri.parse('$_baseUrl$path'),
@@ -93,7 +96,9 @@ class ReferralService {
         body: jsonEncode(body),
       ).timeout(const Duration(seconds: 15));
     } on TimeoutException {
-      throw Exception('That took too long. Check your connection and try again.');
+      throw Exception(
+        'That took too long. Check your connection and try again.',
+      );
     } catch (e) {
       // SocketException / ClientException / DNS: all the same story to a user.
       throw Exception('Could not reach the server. Check your connection.');

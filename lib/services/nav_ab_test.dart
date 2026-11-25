@@ -74,9 +74,7 @@ class NavAbTest {
         _variant = NavVariant.circle;
       } else {
         // First launch of the test: draw 50/50 and freeze it.
-        final drawn = Random().nextBool()
-            ? NavVariant.pill
-            : NavVariant.circle;
+        final drawn = Random().nextBool() ? NavVariant.pill : NavVariant.circle;
         _variant = drawn;
         await prefs.setString(_prefsKey, drawn.name);
       }
@@ -115,15 +113,12 @@ class NavAbTest {
       // `selects.home` / `selects.cam` / … fields alongside the new nested
       // map, so a report has to read BOTH shapes (old flat keys plus
       // selects.<tab>) or it will undercount the older installs.
-      await FirebaseFirestore.instance
-          .collection('analytics')
-          .doc(uid)
-          .set({
-            'navAb': {
-              'variant': _variant!.name,
-              'selects': {tab: FieldValue.increment(1)},
-            },
-          }, SetOptions(merge: true));
+      await FirebaseFirestore.instance.collection('analytics').doc(uid).set({
+        'navAb': {
+          'variant': _variant!.name,
+          'selects': {tab: FieldValue.increment(1)},
+        },
+      }, SetOptions(merge: true));
     } catch (_) {
       // Analytics must never surface an error to the user.
     }

@@ -15,6 +15,7 @@ import '../services/step_limit.dart';
 import '../services/subscription_service.dart';
 import '../widgets/animations.dart';
 import '../widgets/glass_card.dart';
+import 'settings_screen.dart';
 import 'subscription_screen.dart';
 
 /// The Health dashboard — steps and calories burned from Health Connect,
@@ -29,7 +30,7 @@ import 'subscription_screen.dart';
 ///
 /// It polls the platform every [_pollInterval] while it is the visible tab
 /// (the phone keeps counting steps whether or not the app is open) and offers
-/// a manual refresh in the app bar and by pulling down.
+/// a manual refresh by pulling down, with a settings shortcut in the app bar.
 class HealthDashboardScreen extends StatefulWidget {
   const HealthDashboardScreen({super.key});
 
@@ -59,7 +60,6 @@ class _HealthDashboardScreenState extends State<HealthDashboardScreen>
   double? _caloriesBurned;
   double? _activeCalories;
   bool _loadFailed = false;
-  bool _refreshing = false;
   DateTime? _lastUpdated;
 
   Timer? _pollTimer;
@@ -69,7 +69,10 @@ class _HealthDashboardScreenState extends State<HealthDashboardScreen>
   /// is optional, and a user who never connects it still gets steps, a ring and
   /// leaderboard movement points from the sensor the phone already has.
   bool _sensorActive = false;
-  int? _sensorSteps;
+
+  /// Seeded from the sensor service bootstrap already started, so the ring
+  /// does not paint 0 steps and then swap to today's real total.
+  int? _sensorSteps = StepCounterService.instance.todaySteps;
 
   /// Today's steps from whichever source has the higher count. Health Connect
   /// de-duplicates a phone and a watch, so when it is connected its number can
@@ -144,7 +147,7 @@ class _HealthDashboardScreenState extends State<HealthDashboardScreen>
     // phone kept counting steps while the app was in the background, and
     // waiting up to a full poll interval made the dashboard look stuck.
     if (!wasForeground && _appInForeground && _connected) {
-      unawaited(_loadToday(silent: true));
+      unawaited(_loadToday());
     }
   }
 
@@ -153,7 +156,7 @@ class _HealthDashboardScreenState extends State<HealthDashboardScreen>
     // Returning to the tab should show current numbers immediately, not the
     // ones from up to [_pollInterval] ago.
     if (healthTabVisible.value && _connected) {
-      unawaited(_loadToday(silent: true));
+      unawaited(_loadToday());
     }
   }
 
@@ -171,7 +174,7 @@ class _HealthDashboardScreenState extends State<HealthDashboardScreen>
     if (_pollTimer != null) return;
     _pollTimer = Timer.periodic(_pollInterval, (_) {
       if (!mounted) return;
-      unawaited(_loadToday(silent: true));
+      unawaited(_loadToday());
     });
   }
 
@@ -220,7 +223,7 @@ class _HealthDashboardScreenState extends State<HealthDashboardScreen>
       _hasReadPermission = access.canReadActivity;
     });
     if (access.canReadActivity) {
-      await _loadToday(silent: true);
+      await _loadToday();
     }
     _syncPolling();
   }
@@ -277,12 +280,10 @@ class _HealthDashboardScreenState extends State<HealthDashboardScreen>
 
   /// Refresh today's steps and calories from the health platform.
   ///
-  /// [silent] is the background poll: it updates the numbers without flipping
-  /// the app-bar button into its spinner, and a failed silent read keeps the
-  /// last good numbers on screen instead of blanking them.
-  Future<void> _loadToday({bool silent = false}) async {
+  /// Background polls use the same path as pull-to-refresh: a failed read keeps
+  /// the last good numbers on screen instead of blanking them.
+  Future<void> _loadToday() async {
     if (!_connected) return;
-    if (!silent && mounted) setState(() => _refreshing = true);
     try {
       final today = await HealthService.instance.fetchToday();
       if (!mounted) return;
@@ -298,7 +299,6 @@ class _HealthDashboardScreenState extends State<HealthDashboardScreen>
           // is not an error, because the sensor is still counting.
           _loadFailed = true;
         }
-        _refreshing = false;
       });
       // The streak advances the moment the target is crossed, not at the next
       // launch — the poll runs while the tab is open, so this is the only
@@ -314,10 +314,7 @@ class _HealthDashboardScreenState extends State<HealthDashboardScreen>
       }
     } catch (_) {
       if (!mounted) return;
-      setState(() {
-        _loadFailed = true;
-        _refreshing = false;
-      });
+      setState(() => _loadFailed = true);
     }
   }
 
@@ -476,28 +473,12 @@ class _HealthDashboardScreenState extends State<HealthDashboardScreen>
         backgroundColor: Colors.transparent,
         elevation: 0,
         actions: [
-          if (_refreshing)
-            const Padding(
-              padding: EdgeInsets.symmetric(horizontal: 18),
-              child: Center(
-                child: SizedBox(
-                  width: 18,
-                  height: 18,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    color: MacroSnapTheme.neonGreen,
-                  ),
-                ),
-              ),
-            )
-          else
-            IconButton(
-              tooltip: 'Refresh',
-              icon: const Icon(Icons.refresh_rounded, size: 22),
-              // Never disabled while the screen is up: tapping it while
-              // disconnected starts the connect flow rather than doing nothing.
-              onPressed: _initialized ? _refresh : null,
-            ),
+          IconButton(
+            tooltip: 'Settings',
+            icon: const Icon(Icons.settings_rounded, size: 22),
+            onPressed: () =>
+                Navigator.push(context, habitFlowRoute(const SettingsScreen())),
+          ),
         ],
       ),
       body: _buildBody(context, isDark),
@@ -738,8 +719,7 @@ class _HealthDashboardScreenState extends State<HealthDashboardScreen>
             if (_loadFailed) ...[
               const SizedBox(height: 12),
               Text(
-                'Health Connect did not answer just now. Pull down (or tap '
-                'refresh) to try again.',
+                'Health Connect did not answer just now. Pull down to try again.',
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   fontSize: 12.5,
@@ -1582,7 +1562,9 @@ class _HealthDashboardScreenState extends State<HealthDashboardScreen>
             width: 34,
             height: 34,
             decoration: BoxDecoration(
-              color: MacroSnapTheme.borderSubtle(context).withValues(alpha: 0.6),
+              color: MacroSnapTheme.borderSubtle(
+                context,
+              ).withValues(alpha: 0.6),
               borderRadius: BorderRadius.circular(10),
             ),
             child: Icon(icon, color: iconColor, size: 16),

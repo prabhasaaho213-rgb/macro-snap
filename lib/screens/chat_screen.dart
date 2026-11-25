@@ -15,7 +15,11 @@ class _ChatMessage {
   /// displayed but never remembered: it is not part of the real
   /// conversation and must not be replayed to the backend as history.
   final bool persist;
-  const _ChatMessage({required this.role, required this.text, this.persist = true});
+  const _ChatMessage({
+    required this.role,
+    required this.text,
+    this.persist = true,
+  });
 }
 
 /// In-app nutrition assistant "Guru", opened from the Home screen's floating
@@ -140,7 +144,11 @@ class _ChatScreenState extends State<ChatScreen> {
       if (mounted) {
         setState(() {
           _messages.add(
-            _ChatMessage(role: _Role.assistant, text: e.message, persist: false),
+            _ChatMessage(
+              role: _Role.assistant,
+              text: e.message,
+              persist: false,
+            ),
           );
           _proRequired = true;
           _busy = false;

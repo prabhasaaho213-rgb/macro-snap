@@ -1,4 +1,4 @@
-﻿import 'dart:async';
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
@@ -11,6 +11,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_sign_in/google_sign_in.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../core/haptics.dart';
 import '../core/theme.dart';
@@ -109,10 +110,8 @@ Future<void> _wipeAccountData(SharedPreferences prefs) async {
   for (final key in _sessionPrefKeys) {
     await prefs.remove(key);
   }
-  for (final key in prefs
-      .getKeys()
-      .where((k) => k.startsWith('nav_ab'))
-      .toList()) {
+  for (final key
+      in prefs.getKeys().where((k) => k.startsWith('nav_ab')).toList()) {
     await prefs.remove(key);
   }
 
@@ -294,7 +293,9 @@ Future<void> deleteAccountFlow(
         if (body is Map) {
           authDeleted = body['auth_deleted'] == true;
           final message = body['message'];
-          if (message is String && message.isNotEmpty) incompleteMessage = message;
+          if (message is String && message.isNotEmpty) {
+            incompleteMessage = message;
+          }
         }
       } catch (_) {}
     }
@@ -378,21 +379,33 @@ class SettingsScreen extends StatefulWidget {
 }
 
 class _SettingsScreenState extends State<SettingsScreen> {
-  String _name = 'User';
+  /// Seeded from the name already resolved this session, so the account card
+  /// does not paint "User" and then swap to the real name.
+  String _name = userNameNotifier.value.isNotEmpty
+      ? userNameNotifier.value
+      : 'User';
   String _email = '';
-  bool _subscribed = false;
-  bool _isAdmin = false;
-  String? _subscribedDate;
-  String? _proUntil;
+
+  /// Seeded from the plan bootstrap already loaded, so the subscription row
+  /// does not paint "Upgrade to Pro" and then swap to "Manage Subscription".
+  bool _subscribed = SubscriptionService.instance.isSubscribed;
+  bool _isAdmin = SubscriptionService.instance.adminKnown == true;
+  String? _subscribedDate = SubscriptionService.instance.subscribedAt;
+  String? _proUntil = SubscriptionService.instance.proUntil;
 
   /// True while the newest release has not been opened from here yet —
   /// drives the dot on the "What's New" row. (This used to live on the
   /// bottom-nav Updates tab; the tab is gone, the badge moved with it.)
   bool _hasUnseenUpdate = false;
 
+  /// True when the OS has notifications blocked for this app: reminders are
+  /// scheduled but can never be delivered.
+  bool _notificationsBlocked = false;
+
   @override
   void initState() {
     super.initState();
+    unawaited(_loadNotificationState());
     // Pro can be granted or expire while this screen is open (server check,
     // admin claim, referral window ending). The account card and the
     // subscription row follow it instead of freezing the first reading.
@@ -423,16 +436,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Future<void> _load() async {
-    await SubscriptionService.instance.load();
+    // Identity first: the card used to paint "User" while the slower
+    // subscription read ran, then swap to the real name.
     final prefs = await SharedPreferences.getInstance();
     // _load() does several awaits; the screen can be popped before it
     // finishes, and setState() on a disposed State throws.
     if (!mounted) return;
     setState(() {
-      _name =
-          prefs.getString('name') ?? prefs.getString('nickname') ?? 'User';
+      _name = prefs.getString('name') ?? prefs.getString('nickname') ?? 'User';
       _email = prefs.getString('email') ?? '';
       _phone = prefs.getString('phone') ?? '';
+    });
+    await SubscriptionService.instance.load();
+    if (!mounted) return;
+    setState(() {
       _subscribed = SubscriptionService.instance.isSubscribed;
       _subscribedDate = SubscriptionService.instance.subscribedAt;
       _proUntil = SubscriptionService.instance.proUntil;
@@ -520,6 +537,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
     await prefs.remove('phone');
     await prefs.remove('email');
     await prefs.remove('photo_url');
+    // The greeting name belongs to the account that just left; a stale value
+    // here is how the next account briefly saw the previous one's name.
+    userNameNotifier.value = '';
     await prefs.remove('last_sync');
     await prefs.remove('subscription_offered');
     // Logging out restarts the whole onboarding process (welcome → name →
@@ -591,10 +611,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       setState(() => _name = newName);
       // Auto-sync name to cloud.
       unawaited(
-        MealSyncService.syncPreferences({
-          'name': newName,
-          'nickname': newName,
-        }),
+        MealSyncService.syncPreferences({'name': newName, 'nickname': newName}),
       );
       // Save it against the account so a reinstall restores THIS name.
       unawaited(LeaderboardRemote.instance.saveName(newName));
@@ -825,6 +842,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       showBadge: _hasUnseenUpdate,
                     ),
                   ),
+                  if (_notificationsBlocked) ...[
+                    const Divider(height: 24),
+                    AnimatedEntrance(
+                      delayMs: 230,
+                      child: _settingTile(
+                        Icons.notifications_off_rounded,
+                        'Notifications are blocked',
+                        'Reminders cannot be delivered — tap to open settings',
+                        () => unawaited(openAppSettings()),
+                        isDark,
+                      ),
+                    ),
+                  ],
                   const Divider(height: 24),
                   AnimatedEntrance(
                     delayMs: 250,
@@ -932,6 +962,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
         ),
       ),
     );
+  }
+
+  /// Reads the notification permission so a blocked app can say so.
+  ///
+  /// Launch deliberately stays silent on a permanent denial (no dialog, no
+  /// nag), which left reminders failing with nothing on screen to explain it.
+  Future<void> _loadNotificationState() async {
+    try {
+      final status = await Permission.notification.status;
+      if (!mounted) return;
+      setState(() => _notificationsBlocked = status.isPermanentlyDenied);
+    } catch (_) {
+      // No permission plugin (tests, a build without it): keep the row hidden.
+    }
   }
 
   Widget _settingTile(

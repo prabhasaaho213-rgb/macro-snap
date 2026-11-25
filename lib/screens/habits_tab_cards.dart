@@ -296,43 +296,43 @@ extension _HabitsCards on _HabitsTabState {
                 label:
                     'Glass ${i + 1} of $goal, ${filled ? 'filled' : 'empty'}',
                 child: GestureDetector(
-                onTap: () {
-                  HapticFeedback.lightImpact();
-                  if (filled) {
-                    store.removeWater();
-                  } else {
-                    store.addWater();
-                  }
-                },
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 200),
-                  width: 34,
-                  height: 34,
-                  decoration: BoxDecoration(
-                    color: filled
-                        ? MacroSnapTheme.neonCyan.withValues(alpha: 0.2)
-                        : (isDark
-                              ? const Color(0xFF303030)
-                              : const Color(0xFFE8DEFF)),
-                    borderRadius: BorderRadius.circular(10),
-                    border: filled
-                        ? Border.all(
-                            color: MacroSnapTheme.neonCyan.withValues(
-                              alpha: 0.4,
-                            ),
-                          )
-                        : null,
+                  onTap: () {
+                    HapticFeedback.lightImpact();
+                    if (filled) {
+                      store.removeWater();
+                    } else {
+                      store.addWater();
+                    }
+                  },
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 200),
+                    width: 34,
+                    height: 34,
+                    decoration: BoxDecoration(
+                      color: filled
+                          ? MacroSnapTheme.neonCyan.withValues(alpha: 0.2)
+                          : (isDark
+                                ? const Color(0xFF303030)
+                                : const Color(0xFFE8DEFF)),
+                      borderRadius: BorderRadius.circular(10),
+                      border: filled
+                          ? Border.all(
+                              color: MacroSnapTheme.neonCyan.withValues(
+                                alpha: 0.4,
+                              ),
+                            )
+                          : null,
+                    ),
+                    child: Icon(
+                      filled
+                          ? Icons.water_drop_rounded
+                          : Icons.water_drop_outlined,
+                      color: filled
+                          ? MacroSnapTheme.neonCyan
+                          : (MacroSnapTheme.textQuaternary(context)),
+                      size: 18,
+                    ),
                   ),
-                  child: Icon(
-                    filled
-                        ? Icons.water_drop_rounded
-                        : Icons.water_drop_outlined,
-                    color: filled
-                        ? MacroSnapTheme.neonCyan
-                        : (MacroSnapTheme.textQuaternary(context)),
-                    size: 18,
-                  ),
-                ),
                 ),
               );
             }),

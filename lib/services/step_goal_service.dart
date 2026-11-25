@@ -94,6 +94,15 @@ class StepGoalService extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Re-reads the target and streak from disk, discarding what is in memory.
+  ///
+  /// [load] is once per launch; an account switch needs the store read again,
+  /// the same way `LeaderboardService.reload` does.
+  Future<void> reload() async {
+    _loaded = false;
+    await load();
+  }
+
   /// Persists a new daily target.
   ///
   /// The target is snapped to the 5,000-step grid and clamped, so a value from
@@ -143,7 +152,14 @@ class StepGoalService extends ChangeNotifier {
       // The target was met earlier today and the read now comes back below it
       // (a record was deleted in Health Connect). Take the day back instead of
       // leaving a streak for a day that no longer qualifies.
-      _lastGoalDay = null;
+      //
+      // The run stays recoverable: the last counted day becomes YESTERDAY, so a
+      // read that comes back up on the same day extends the run again (5 → 4 →
+      // 5). Clearing the day entirely made the recovery restart at 1 — a
+      // two-second dip cost the whole streak.
+      _lastGoalDay = _dayKey(
+        DateTime.now().subtract(const Duration(days: 1)),
+      );
       _streak = _streak > 0 ? _streak - 1 : 0;
       changed = true;
     }

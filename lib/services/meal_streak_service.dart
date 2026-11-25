@@ -35,6 +35,12 @@ class MealStreakService {
 
   static bool get isLoaded => _loaded;
 
+  /// The streak as of the last [load], for a first frame that already knows
+  /// it. Null until the banked dates have been read, so a screen can tell
+  /// "no streak yet" apart from "not loaded yet" instead of painting 0 and
+  /// swapping to the real number.
+  static int? get cachedCurrent => _loaded ? computeCurrentStreak() : null;
+
   /// Reads the banked dates once per process. Legacy counter + date are
   /// converted by replaying the old streak back from its last date, so an
   /// updating user keeps their number.
@@ -46,7 +52,9 @@ class MealStreakService {
   /// The preferences key for the ACTIVE account's banked days.
   static Future<String> _datesKey() async {
     final prefs = await SharedPreferences.getInstance();
-    final suffix = AccountPartition.suffix(AccountPartition.activeFromPrefs(prefs));
+    final suffix = AccountPartition.suffix(
+      AccountPartition.activeFromPrefs(prefs),
+    );
     return AccountPartition.key(_keyDates, suffix);
   }
 
@@ -80,11 +88,7 @@ class MealStreakService {
           // day and the same date can be banked twice.
           dates.add(
             dateKey(
-              DateTime(
-                legacyDate.year,
-                legacyDate.month,
-                legacyDate.day - i,
-              ),
+              DateTime(legacyDate.year, legacyDate.month, legacyDate.day - i),
             ),
           );
         }
@@ -95,7 +99,8 @@ class MealStreakService {
       // streak on every rebuild.
       // The scoped key first; the old global key seeds a pre-scoping install
       // once, then is removed below so it cannot leak to a second account.
-      final raw = prefs.getString(scopedKey) ?? prefs.getString(_keyDates) ?? '';
+      final raw =
+          prefs.getString(scopedKey) ?? prefs.getString(_keyDates) ?? '';
       for (final entry in jsonList(raw)) {
         if (DateTime.tryParse(entry) != null) dates.add(entry);
       }
@@ -139,7 +144,9 @@ class MealStreakService {
     await load();
     final today = dateKey(DateTime.now());
     if (_hitDates.contains(today)) return computeCurrentStreak();
-    _hitDates..add(today)..sort();
+    _hitDates
+      ..add(today)
+      ..sort();
     final streak = computeCurrentStreak();
     try {
       final prefs = await SharedPreferences.getInstance();

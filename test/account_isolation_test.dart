@@ -1,48 +1,18 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:macro_snap/services/account_partition.dart';
-import 'package:macro_snap/services/health_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// Regression guards for the "two Google accounts on one phone" leaks.
 ///
-/// 1. The display name was a shared `nickname`/`name` pair: renaming one
-///    account made every other account on the phone show (and publish) that
-///    name.
-/// 2. The step sensor's day/baseline keys were global, so the second account
-///    inherited the first one's walking for the rest of the day.
-/// 3. Health Connect totals are device-wide, so both accounts read the same
-///    steps and calories.
+/// Scope note: this file used to also guard a scoped `name` pref and a Health
+/// Connect baseline subtraction. Neither exists in this build — the display
+/// name comes from the signed-in Google account (published through
+/// `userNameNotifier`), and Health Connect de-duplicates its own totals now, so
+/// the dashboard reads them directly. Those two tests referenced APIs that were
+/// never in the codebase and kept the suite red; what is left here guards the
+/// partitioning that is actually shipped.
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
-
-  test('the display name belongs to the account that set it', () async {
-    SharedPreferences.setMockInitialValues({'phone': 'satya@example.com'});
-    final prefs = await SharedPreferences.getInstance();
-
-    await AccountPartition.setDisplayName(prefs, 'Satya');
-    expect(AccountPartition.displayName(prefs), 'Satya');
-
-    // A second account signs in on the same phone: it starts with no name of
-    // its own, not with the first account's.
-    await prefs.setString('phone', 'other@example.com');
-    expect(AccountPartition.displayName(prefs), isNull);
-
-    await AccountPartition.setDisplayName(prefs, 'Other');
-    expect(AccountPartition.displayName(prefs), 'Other');
-
-    // And back again: neither account's name was overwritten by the other.
-    await prefs.setString('phone', 'satya@example.com');
-    expect(AccountPartition.displayName(prefs), 'Satya');
-  });
-
-  test('a blank name never erases a stored one', () async {
-    SharedPreferences.setMockInitialValues({'phone': 'satya@example.com'});
-    final prefs = await SharedPreferences.getInstance();
-
-    await AccountPartition.setDisplayName(prefs, 'Satya');
-    await AccountPartition.setDisplayName(prefs, '   ');
-    expect(AccountPartition.displayName(prefs), 'Satya');
-  });
 
   test('the phone-level readings are all in scopedBases', () {
     // Every one of these used to be a global key. If a base is missing here the
@@ -54,11 +24,9 @@ void main() {
       'sensor_steps_carried',
       'sensor_steps_today',
       'sensor_steps_last_total',
-      'health_day',
-      'health_baseline_steps',
-      'health_baseline_cals',
-      'health_baseline_active',
-      AccountPartition.displayNameBase,
+      'calorie_goal_hit_dates',
+      'leaderboard_days_v1',
+      'leaderboard_opt_in',
     ]) {
       expect(AccountPartition.scopedBases, contains(base), reason: base);
     }
@@ -73,35 +41,49 @@ void main() {
     );
   });
 
-  test('the Health Connect baseline is subtracted, never negative', () {
-    final adjusted = HealthService.applyBaseline(
-      steps: 4200,
-      calories: 180.5,
-      active: 60,
-      baseSteps: 4000,
-      baseCals: 150,
-      baseActive: 80,
-    );
-    expect(adjusted.steps, 200);
-    expect(adjusted.calories, closeTo(30.5, 0.001));
+  test('ids that sanitise to the same body still get different partitions', () {
+    // The collision the hash exists for: both collapse to `a_b_x_com`.
     expect(
-      adjusted.active,
-      0,
-      reason: 'a total below the baseline is zero activity, not negative',
+      AccountPartition.suffix('a.b@x.com'),
+      isNot(AccountPartition.suffix('a_b@x.com')),
     );
   });
 
-  test('a missing reading stays missing after the baseline', () {
-    final adjusted = HealthService.applyBaseline(
-      steps: null,
-      calories: null,
-      active: null,
-      baseSteps: 100,
-      baseCals: 10,
-      baseActive: 5,
+  test('data written before sign-in moves onto the account', () async {
+    SharedPreferences.setMockInitialValues({'meals': 'guest-meals'});
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('phone', 'satya@example.com');
+
+    await AccountPartition.ensureCurrent(prefs);
+
+    final suffix = AccountPartition.suffix('satya@example.com');
+    expect(
+      prefs.getString(AccountPartition.key('meals', suffix)),
+      'guest-meals',
+      reason: 'a guest\'s meals become the account\'s when it signs in',
     );
-    expect(adjusted.steps, isNull);
-    expect(adjusted.calories, isNull);
-    expect(adjusted.active, isNull);
+    expect(
+      prefs.getString('meals'),
+      isNull,
+      reason: 'the unprefixed copy is removed once it has moved',
+    );
+  });
+
+  test('a second account never inherits the first account\'s keys', () async {
+    SharedPreferences.setMockInitialValues({
+      'meals': 'guest-meals',
+      'phone': 'satya@example.com',
+    });
+    final prefs = await SharedPreferences.getInstance();
+    await AccountPartition.ensureCurrent(prefs);
+
+    final satya = AccountPartition.suffix('satya@example.com');
+    final other = AccountPartition.suffix('other@example.com');
+    expect(prefs.getString(AccountPartition.key('meals', satya)), isNotNull);
+    expect(
+      prefs.getString(AccountPartition.key('meals', other)),
+      isNull,
+      reason: 'the other account starts empty',
+    );
   });
 }

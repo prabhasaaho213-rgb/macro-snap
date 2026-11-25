@@ -62,9 +62,8 @@ class HealthScore {
     // scored on what is IN it (sugar) rather than judged like a meal. Without
     // this, water scored 1/5 for having no protein and no fibre, and milk
     // scored 2/5 — a scale that calls milk bad teaches the user to ignore it.
-    final isDrink = caloriesPer100g <= 60 &&
-        proteinPer100g < 6 &&
-        fatsPer100g <= 4;
+    final isDrink =
+        caloriesPer100g <= 60 && proteinPer100g < 6 && fatsPer100g <= 4;
 
     // Neutral start: an unknown dish is neither praised nor punished.
     var score = 3;
@@ -112,10 +111,7 @@ class HealthScore {
       reasons.add('Very energy dense');
     }
 
-    return HealthScore(
-      score.clamp(0, max),
-      List<String>.unmodifiable(reasons),
-    );
+    return HealthScore(score.clamp(0, max), List<String>.unmodifiable(reasons));
   }
 
   /// Short verdict shown next to the score.

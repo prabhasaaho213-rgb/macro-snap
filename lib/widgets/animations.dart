@@ -3,61 +3,22 @@ import 'package:flutter/material.dart';
 
 // ─── PAGE TRANSITIONS (Habit Flow style) ──────────────────────
 
-/// A Hero-style page route that slides up with a spring curve,
-/// mimicking the Habit Flow app feel.
-Route<T> habitFlowRoute<T>(Widget page) {
-  return PageRouteBuilder<T>(
-    pageBuilder: (_, animation, _) => page,
-    transitionsBuilder: (_, animation, _, child) {
-      // Slide only, no page-wide fade.
-      //
-      // The previous version faded the whole route in on top of the one below
-      // it. A fading Scaffold is a *transparent* Scaffold, so for the length of
-      // the transition both screens were painted at once and visibly blended —
-      // the "two interfaces for a second" every pushed page showed, most
-      // obviously Profile and the BMI calculator. A route with an opaque
-      // background and no fade covers the old page immediately, which is what
-      // makes a push read as a push.
-      return SlideTransition(
-        position: Tween<Offset>(begin: const Offset(0, 0.05), end: Offset.zero)
-            .animate(
-              CurvedAnimation(
-                parent: animation,
-                curve: Curves.easeOutCubic,
-                reverseCurve: Curves.easeInCubic,
-              ),
-            ),
-        child: child,
-      );
-    },
-    transitionDuration: const Duration(milliseconds: 320),
-    reverseTransitionDuration: const Duration(milliseconds: 240),
-  );
-}
-
-/// A route that slides from the right (like a push nav).
-Route<T> slideRightRoute<T>(Widget page) {
-  return PageRouteBuilder<T>(
-    pageBuilder: (_, animation, _) => page,
-    transitionsBuilder: (_, animation, _, child) {
-      return SlideTransition(
-        position: Tween<Offset>(begin: const Offset(0.15, 0), end: Offset.zero)
-            .animate(
-              CurvedAnimation(
-                parent: animation,
-                curve: Curves.easeOutCubic,
-                reverseCurve: Curves.easeInCubic,
-              ),
-            ),
-        // No page-wide fade: a translucent page shows the one underneath it
-        // through the whole transition (see [habitFlowRoute]).
-        child: child,
-      );
-    },
-    transitionDuration: const Duration(milliseconds: 350),
-    reverseTransitionDuration: const Duration(milliseconds: 250),
-  );
-}
+/// The one route the app pushes pages with.
+///
+/// It is a plain [MaterialPageRoute] on purpose: the animation comes from the
+/// app's [PageTransitionsTheme] (OpaqueSlidePageTransitionsBuilder in
+/// core/theme.dart). A page opened through here and a page opened with a bare
+/// `MaterialPageRoute` therefore animate — and go back — identically.
+///
+/// This used to be its own `PageRouteBuilder` with a slide-UP and its own
+/// 320/240 ms timings, while everything else used the theme's horizontal
+/// slide. That is why some screens rose into place, others came in from the
+/// side, and only some backs matched the push.
+///
+/// Kept as a named helper so call sites read as "open a page", and so a future
+/// change to the app's page motion has one obvious place to change it.
+Route<T> habitFlowRoute<T>(Widget page) =>
+    MaterialPageRoute<T>(builder: (_) => page);
 
 // ─── SCALE ON PRESS (micro-interaction) ───────────────────────
 
@@ -178,6 +139,7 @@ class _StaggeredItemState extends State<_StaggeredItem>
     );
   }
 }
+
 class AnimatedValue extends StatefulWidget {
   final double target;
   final Widget Function(BuildContext context, double value) builder;

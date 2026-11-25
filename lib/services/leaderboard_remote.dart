@@ -227,8 +227,13 @@ class LeaderboardRemote {
   /// ISO weeks start on Monday, which is also how the local score is added up
   /// — a board and the number on it cannot disagree about which week it is.
   static String weekId([DateTime? day]) {
-    final date = day ?? DateTime.now();
-    final local = DateTime(date.year, date.month, date.day);
+    // The week is the IST week. The server scores in IST, so a device in
+    // another timezone must not file the same instant under a different week
+    // (a Sunday-night sync from abroad would land on the wrong board).
+    final ist = (day ?? DateTime.now()).toUtc().add(
+      const Duration(hours: 5, minutes: 30),
+    );
+    final local = DateTime(ist.year, ist.month, ist.day);
     // The ISO week belongs to the year its Thursday falls in.
     final thursday = local.add(Duration(days: 4 - local.weekday));
     final jan4 = DateTime(thursday.year, 1, 4);
@@ -367,10 +372,9 @@ class LeaderboardRemote {
       if (state is! String || state.isEmpty) return false;
       if (districtKey is! String || districtKey.isEmpty) return false;
       // The server stores the slug; the picker works with display names.
-      final district = districtsFor(state).firstWhere(
-        (d) => slug(d) == districtKey,
-        orElse: () => districtKey,
-      );
+      final district = districtsFor(
+        state,
+      ).firstWhere((d) => slug(d) == districtKey, orElse: () => districtKey);
       if (!service.optIn ||
           service.stateKey != state ||
           service.district != district) {
@@ -485,10 +489,7 @@ class LeaderboardRemote {
     }
   }
 
-  LeaderboardSyncResult? _applyResponse(
-    LeaderboardService service,
-    Map data,
-  ) {
+  LeaderboardSyncResult? _applyResponse(LeaderboardService service, Map data) {
     final week = data['week'] as String? ?? weekId();
     final days = <({String dateKey, int points, Map<String, int> buckets})>[];
     final raw = data['dayPoints'];
@@ -559,7 +560,9 @@ class LeaderboardRemote {
   /// is only listed when it has one of them.
   /// Shared with the friends-league sync: both boards must be scored from the
   /// same facts, so both send this exact list of days.
-  static List<Map<String, dynamic>> weekDaysForSync(LeaderboardService service) {
+  static List<Map<String, dynamic>> weekDaysForSync(
+    LeaderboardService service,
+  ) {
     final now = DateTime.now();
     final start = DateTime(
       now.year,
@@ -580,11 +583,7 @@ class LeaderboardRemote {
       final steps = service.stepsForDay(key);
       final weighedIn = weighIns.contains(key);
       if (steps <= 0 && !weighedIn) continue;
-      days.add({
-        'dateKey': key,
-        'steps': steps,
-        'weighIn': weighedIn,
-      });
+      days.add({'dateKey': key, 'steps': steps, 'weighIn': weighedIn});
     }
     return days;
   }
@@ -604,6 +603,87 @@ class LeaderboardRemote {
   /// The caller's own document is watched separately from the top slice, so a
   /// user outside the top [boardLimit] still sees that they are on the board
   /// (rank 100+) rather than "not ranked".
+  /// Where the last board this device painted for a scope is kept.
+  ///
+  /// The names arrive from Firestore, which is a network round-trip on a cold
+  /// or offline open. The cached rows paint first, so the ranking is never a
+  /// spinner, and a failed fetch still has something to show.
+  String _cacheKey(
+    String week,
+    LeaderboardScope scope,
+    String? stateKey,
+    String? districtKey,
+  ) =>
+      'lb_board_${week}_${scopeKey(scope, stateKey: stateKey, districtKey: districtKey)}';
+
+  Future<LeaderboardBoard?> cachedBoard({
+    required String week,
+    required LeaderboardScope scope,
+    String? stateKey,
+    String? districtKey,
+  }) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getString(
+        _cacheKey(week, scope, stateKey, districtKey),
+      );
+      if (raw == null) return null;
+      final data = jsonDecode(raw);
+      if (data is! Map) return null;
+      final rows = data['rows'];
+      if (rows is! List || rows.isEmpty) return null;
+      return LeaderboardBoard(
+        rows: [
+          for (final row in rows)
+            if (row is Map)
+              LeaderboardRow(
+                uid: row['uid'] is String ? row['uid'] as String : '',
+                name:
+                    row['name'] is String && (row['name'] as String).isNotEmpty
+                    ? row['name'] as String
+                    : 'MacroSnap user',
+                points: (row['points'] as num?)?.toInt() ?? 0,
+                isMe: row['isMe'] == true,
+              ),
+        ],
+        myRank: (data['myRank'] as num?)?.toInt(),
+      );
+    } catch (_) {
+      // A corrupt cache is only a lost head start.
+      return null;
+    }
+  }
+
+  Future<void> cacheBoard({
+    required String week,
+    required LeaderboardScope scope,
+    required LeaderboardBoard board,
+    String? stateKey,
+    String? districtKey,
+  }) async {
+    try {
+      if (board.rows.isEmpty || !board.ok) return;
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(
+        _cacheKey(week, scope, stateKey, districtKey),
+        jsonEncode({
+          'myRank': board.myRank,
+          'rows': [
+            for (final row in board.rows)
+              {
+                'uid': row.uid,
+                'name': row.name,
+                'points': row.points,
+                'isMe': row.isMe,
+              },
+          ],
+        }),
+      );
+    } catch (_) {
+      // Caching is best-effort.
+    }
+  }
+
   Stream<LeaderboardBoard> watch({
     required String week,
     required LeaderboardScope scope,

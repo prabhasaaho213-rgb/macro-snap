@@ -37,7 +37,10 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
   /// a user can plausibly top; the other two are a tap away.
   LeaderboardScope _scope = LeaderboardScope.district;
   LeaderboardBoard _board = LeaderboardBoard.empty;
-  bool _loadingBoard = false;
+  // True until the first listener answer: without this the card painted its
+  // "nobody has scored yet" empty state on the first frames and then swapped
+  // to the real rows.
+  bool _loadingBoard = true;
   bool _publishing = false;
 
   /// A score change that landed while a write was in flight, so the newer total
@@ -90,11 +93,28 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
     // Re-reads today from the stores: opening the page after a meal logged on
     // another tab must show that meal's points, not the ones from last open.
     await _service.sync();
-    // A fresh install has no join flag and no step history of its own; the
-    // server still knows this account, so restore BEFORE syncing.
+
+    // The RANKING NAMES come from the board listener, so subscribe to it before
+    // the network work below. It used to run last, after restore + publish —
+    // two round-trips — and the list sat blank (or on its skeleton) for the
+    // length of them on every open, which is the "names take a few seconds"
+    // the page showed.
+    //
+    // A fresh install does not know its area until the restore answers, so that
+    // case waits for it; everyone else is listening while it is in flight.
+    final wasState = _service.stateKey;
+    final wasDistrict = _service.district;
+    var listening = _service.hasLocation ? _listen() : null;
     await LeaderboardRemote.instance.restoreFromServer();
+    // The restore is the account's copy of the area and can correct what is on
+    // the device; if it did, the board subscribed above is the wrong one.
+    final moved =
+        wasState != _service.stateKey || wasDistrict != _service.district;
+    if (listening == null || moved) listening = _listen();
+    // The write is the slow part and changes only this user's row — the board
+    // is already on screen while it happens.
     await _publish();
-    await _listen();
+    await listening;
   }
 
   /// Sends this week's activity to the server, which scores it and writes the
@@ -146,13 +166,28 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
       return;
     }
     if (!mounted || token != _listenToken) return;
-    setState(() => _loadingBoard = true);
+    final week = LeaderboardRemote.weekId();
+    final stateKey = _service.stateKey;
+    final districtKey = LeaderboardRemote.slug(_service.district ?? '');
+    // Paint the last board this device saw while Firestore answers, so the
+    // names are on screen immediately (and something is readable offline).
+    if (_board.rows.isEmpty) {
+      final cached = await remote.cachedBoard(
+        week: week,
+        scope: _scope,
+        stateKey: stateKey,
+        districtKey: districtKey,
+      );
+      if (!mounted || token != _listenToken) return;
+      if (cached != null) setState(() => _board = cached);
+    }
+    setState(() => _loadingBoard = _board.rows.isEmpty);
     _boardSub = remote
         .watch(
-          week: LeaderboardRemote.weekId(),
+          week: week,
           scope: _scope,
-          stateKey: _service.stateKey,
-          districtKey: LeaderboardRemote.slug(_service.district ?? ''),
+          stateKey: stateKey,
+          districtKey: districtKey,
         )
         .listen((board) {
           if (!mounted || token != _listenToken) return;
@@ -160,6 +195,15 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
             _board = board;
             _loadingBoard = false;
           });
+          unawaited(
+            remote.cacheBoard(
+              week: week,
+              scope: _scope,
+              stateKey: stateKey,
+              districtKey: districtKey,
+              board: board,
+            ),
+          );
         });
   }
 
@@ -1779,7 +1823,9 @@ class _LocationField extends StatelessWidget {
                         style: TextStyle(
                           fontSize: 14,
                           height: 1.2,
-                          fontWeight: filled ? FontWeight.w700 : FontWeight.w400,
+                          fontWeight: filled
+                              ? FontWeight.w700
+                              : FontWeight.w400,
                           color: filled ? titleColour : subtle,
                         ),
                       ),

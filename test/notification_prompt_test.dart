@@ -1,197 +1,92 @@
-import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:macro_snap/widgets/notification_prompt.dart';
 import 'package:permission_handler/permission_handler.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
-/// Pins the in-app notification-permission prompt: the prompt asks to send
-/// reminders when permission is denied, "Not now" sets a cooldown, and the
-/// dialog escalates to Open Settings when the permission is permanently
-/// denied.
+/// Pins the notification ask: the phone's own Allow / Deny dialog is the only
+/// prompt. There is no in-app dialog, "Not now" or cooldown any more.
 void main() {
-  setUp(() {
-    SharedPreferences.setMockInitialValues({});
+  test('granted → the phone is not asked again', () async {
+    var requests = 0;
+    final granted = await maybeShowNotificationPrompt(
+      statusOf: () async => PermissionStatus.granted,
+      request: () async {
+        requests++;
+        return PermissionStatus.granted;
+      },
+    );
+
+    expect(granted, isTrue);
+    expect(requests, 0);
   });
 
-  Widget host({
-    required Future<PermissionStatus> Function() statusOf,
-    Future<PermissionStatus> Function()? request,
-    Future<void> Function()? openSettings,
-    bool force = false,
-  }) {
-    return MaterialApp(
-      home: Scaffold(
-        body: Builder(
-          builder: (context) => TextButton(
-            onPressed: () => maybeShowNotificationPrompt(
-              context,
-              statusOf: statusOf,
-              request: request ?? () async => PermissionStatus.granted,
-              openSettings: openSettings ?? () async {},
-              force: force,
-            ),
-            child: const Text('go'),
-          ),
-        ),
-      ),
+  test('denied → the system dialog is requested directly', () async {
+    var requests = 0;
+    final granted = await maybeShowNotificationPrompt(
+      statusOf: () async => PermissionStatus.denied,
+      request: () async {
+        requests++;
+        return PermissionStatus.granted;
+      },
     );
-  }
 
-  testWidgets('granted permission → no prompt shown', (tester) async {
-    await tester.pumpWidget(
-      host(statusOf: () async => PermissionStatus.granted),
-    );
-    await tester.tap(find.text('go'));
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 300));
-
-    expect(find.byIcon(Icons.notifications_active_rounded), findsNothing);
-    expect(find.text('Not now'), findsNothing);
+    expect(requests, 1, reason: 'The OS dialog is the ask — no in-app step');
+    expect(granted, isTrue);
   });
 
-  testWidgets('denied → prompt shows, Not now closes and sets cooldown', (
-    tester,
-  ) async {
-    await tester.pumpWidget(
-      host(statusOf: () async => PermissionStatus.denied),
+  test('answered Deny → reports not granted', () async {
+    var requests = 0;
+    final granted = await maybeShowNotificationPrompt(
+      statusOf: () async => PermissionStatus.denied,
+      request: () async {
+        requests++;
+        return PermissionStatus.denied;
+      },
     );
-    await tester.tap(find.text('go'));
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 300));
 
-    expect(find.byIcon(Icons.notifications_active_rounded), findsOneWidget);
-    expect(find.text('Let me remind you 💬'), findsOneWidget);
-    expect(find.text('Allow notifications'), findsOneWidget);
-
-    await tester.tap(find.text('Not now'));
-    await tester.pump(); // let the pop fire
-    await tester.pump(const Duration(milliseconds: 300));
-
-    expect(find.byIcon(Icons.notifications_active_rounded), findsNothing);
-    final prefs = await SharedPreferences.getInstance();
-    expect(prefs.getString('notif_prompt_last_shown'), isNotNull);
-    expect(tester.takeException(), isNull);
+    expect(requests, 1);
+    expect(granted, isFalse);
   });
 
-  testWidgets('denied → allowing the permission closes the dialog', (
-    tester,
-  ) async {
-    await tester.pumpWidget(
-      host(
-        statusOf: () async => PermissionStatus.denied,
-        request: () async => PermissionStatus.granted,
-      ),
+  test('permanently denied at launch → no request, no settings jump', () async {
+    var requests = 0;
+    var openedSettings = 0;
+    final granted = await maybeShowNotificationPrompt(
+      statusOf: () async => PermissionStatus.permanentlyDenied,
+      request: () async {
+        requests++;
+        return PermissionStatus.denied;
+      },
+      openSettings: () async => openedSettings++,
     );
-    await tester.tap(find.text('go'));
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 300));
 
-    await tester.tap(find.text('Allow notifications'));
-    await tester.pump(); // let the pop fire
-    await tester.pump(const Duration(milliseconds: 300));
-
-    expect(find.byIcon(Icons.notifications_active_rounded), findsNothing);
+    expect(requests, 0, reason: 'Android would not show a dialog anyway');
+    expect(openedSettings, 0, reason: 'A launch must not leave the app');
+    expect(granted, isFalse);
   });
 
-  testWidgets('denied twice → button flips to Open Settings and opens it', (
-    tester,
-  ) async {
-    var settingsOpened = false;
-    await tester.pumpWidget(
-      host(
-        statusOf: () async => PermissionStatus.denied,
-        request: () async => PermissionStatus.denied,
-        openSettings: () async => settingsOpened = true,
-      ),
+  test('permanently denied + force → opens the system settings', () async {
+    var openedSettings = 0;
+    final granted = await maybeShowNotificationPrompt(
+      statusOf: () async => PermissionStatus.permanentlyDenied,
+      openSettings: () async => openedSettings++,
+      force: true,
     );
-    await tester.tap(find.text('go'));
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 300));
 
-    await tester.tap(find.text('Allow notifications'));
-    await tester.pump(); // let the request complete
-    await tester.pump(const Duration(milliseconds: 300));
-    expect(find.text('Open Settings'), findsOneWidget);
-
-    await tester.tap(find.text('Open Settings'));
-    await tester.pump(); // let the pop fire
-    await tester.pump(const Duration(milliseconds: 300));
-    expect(settingsOpened, isTrue);
-    expect(find.byIcon(Icons.notifications_active_rounded), findsNothing);
+    expect(openedSettings, 1);
+    expect(granted, isFalse);
   });
 
-  testWidgets('permanently denied → shows Open Settings directly', (
-    tester,
-  ) async {
-    var settingsOpened = false;
-    await tester.pumpWidget(
-      host(
-        statusOf: () async => PermissionStatus.permanentlyDenied,
-        openSettings: () async => settingsOpened = true,
-      ),
+  test('unreadable status → asks nothing', () async {
+    var requests = 0;
+    final granted = await maybeShowNotificationPrompt(
+      statusOf: () async => throw Exception('no platform'),
+      request: () async {
+        requests++;
+        return PermissionStatus.granted;
+      },
     );
-    await tester.tap(find.text('go'));
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 300));
 
-    expect(find.text('Open Settings'), findsOneWidget);
-    await tester.tap(find.text('Open Settings'));
-    await tester.pump(); // let the pop fire
-    await tester.pump(const Duration(milliseconds: 300));
-    expect(settingsOpened, isTrue);
-  });
-
-  testWidgets('recently dismissed → prompt is suppressed (cooldown)', (
-    tester,
-  ) async {
-    SharedPreferences.setMockInitialValues({
-      'notif_prompt_last_shown': DateTime.now().toIso8601String(),
-    });
-    await tester.pumpWidget(
-      host(statusOf: () async => PermissionStatus.denied),
-    );
-    await tester.tap(find.text('go'));
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 300));
-
-    expect(find.byIcon(Icons.notifications_active_rounded), findsNothing);
-  });
-
-  testWidgets('force ignores the cooldown (Settings asks on purpose)', (
-    tester,
-  ) async {
-    SharedPreferences.setMockInitialValues({
-      'notif_prompt_last_shown': DateTime.now().toIso8601String(),
-    });
-    await tester.pumpWidget(
-      host(statusOf: () async => PermissionStatus.denied, force: true),
-    );
-    await tester.tap(find.text('go'));
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 300));
-
-    // The launch prompt still respects the three-day quiet period; an explicit
-    // tap in Settings must always be able to reach the permission.
-    expect(find.byIcon(Icons.notifications_active_rounded), findsOneWidget);
-    expect(find.text('Allow notifications'), findsOneWidget);
-  });
-
-  testWidgets('cooldown over → the launch prompt asks again', (tester) async {
-    // With the Settings row gone, this re-ask is the only in-app route back to
-    // reminders, so the expiry has to actually work.
-    SharedPreferences.setMockInitialValues({
-      'notif_prompt_last_shown': DateTime.now()
-          .subtract(const Duration(days: 4))
-          .toIso8601String(),
-    });
-    await tester.pumpWidget(
-      host(statusOf: () async => PermissionStatus.denied),
-    );
-    await tester.tap(find.text('go'));
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 300));
-
-    expect(find.byIcon(Icons.notifications_active_rounded), findsOneWidget);
-    expect(find.text('Allow notifications'), findsOneWidget);
+    expect(requests, 0);
+    expect(granted, isFalse);
   });
 }

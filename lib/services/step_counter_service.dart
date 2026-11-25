@@ -25,7 +25,7 @@ import 'step_limit.dart';
 ///
 /// ## What the number means
 ///
-  /// The channel emits a CUMULATIVE count since boot, so the day is tracked as
+/// The channel emits a CUMULATIVE count since boot, so the day is tracked as
 ///
 ///     today = carried + (total − baseline)
 ///
@@ -159,15 +159,12 @@ class StepCounterService extends ChangeNotifier {
     _granted = true;
     _denied = false;
     await _restore();
-    _sub = _channel.receiveBroadcastStream().listen(
-      (event) {
-        // Kotlin sends the raw sensor value as a Long; accept a num or a string
-        // so a channel-type change cannot silently stop the counter.
-        final total = event is num ? event.toInt() : int.tryParse('$event');
-        if (total != null) _onStepCount(total);
-      },
-      onError: _onError,
-    );
+    _sub = _channel.receiveBroadcastStream().listen((event) {
+      // Kotlin sends the raw sensor value as a Long; accept a num or a string
+      // so a channel-type change cannot silently stop the counter.
+      final total = event is num ? event.toInt() : int.tryParse('$event');
+      if (total != null) _onStepCount(total);
+    }, onError: _onError);
     notifyListeners();
     return true;
   }
@@ -242,7 +239,9 @@ class StepCounterService extends ChangeNotifier {
         final storedDay = prefs.getString(_key(prefs, _dayPref));
         final lastTotal = prefs.getInt(_key(prefs, _lastTotalPref));
         final lastAt = prefs.getInt(_key(prefs, _lastAtPref));
-        final yesterday = _dayStamp(DateTime.now().subtract(const Duration(days: 1)));
+        final yesterday = _dayStamp(
+          DateTime.now().subtract(const Duration(days: 1)),
+        );
         _overnightFrom = null;
         if (storedDay == yesterday &&
             lastTotal != null &&
@@ -297,10 +296,9 @@ class StepCounterService extends ChangeNotifier {
 
     _lastTotal = total;
     _lastAtMs = DateTime.now().millisecondsSinceEpoch;
-    final steps = (_carried + (total - _baseline!)).clamp(
-      0,
-      maxDailySteps,
-    ).toInt();
+    final steps = (_carried + (total - _baseline!))
+        .clamp(0, maxDailySteps)
+        .toInt();
     if (steps != _todaySteps) changed = true;
     _todaySteps = steps;
 

@@ -169,7 +169,11 @@ class _LeaderboardRanksScreenState extends State<LeaderboardRanksScreen> {
                   padding: const EdgeInsets.symmetric(vertical: 24),
                   child: Text(
                     'Nobody has scored on this board this week yet.',
-                    style: TextStyle(fontSize: 12.5, height: 1.45, color: subtle),
+                    style: TextStyle(
+                      fontSize: 12.5,
+                      height: 1.45,
+                      color: subtle,
+                    ),
                   ),
                 )
               else

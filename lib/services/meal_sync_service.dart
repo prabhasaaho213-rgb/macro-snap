@@ -260,7 +260,6 @@ class MealSyncService {
     return MealRecord.fromJson(normalized);
   }
 
-
   // ═══════════════════════════════════════════════════════════════
   // HABITS & WATER
   // ═══════════════════════════════════════════════════════════════
@@ -415,14 +414,11 @@ class MealSyncService {
       // MERGE, not replace: a plain set() writes exactly these keys and drops
       // every other preference on the document. Adding `streakDates` to this
       // call would otherwise have deleted the user's saved name.
-      await _db
-          .collection('userPreferences')
-          .doc(uid)
-          .set({
-            ...prefs,
-            'uid': uid,
-            'updatedAt': DateTime.now(),
-          }, SetOptions(merge: true));
+      await _db.collection('userPreferences').doc(uid).set({
+        ...prefs,
+        'uid': uid,
+        'updatedAt': DateTime.now(),
+      }, SetOptions(merge: true));
       SyncStatusService.instance.reportSuccess();
       return true;
     } catch (e) {
@@ -451,5 +447,4 @@ class MealSyncService {
       return null;
     }
   }
-
 }

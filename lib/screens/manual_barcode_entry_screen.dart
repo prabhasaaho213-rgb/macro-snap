@@ -52,8 +52,8 @@ class _ManualBarcodeEntryScreenState extends State<ManualBarcodeEntryScreen> {
       name: _nameCtrl.text.trim(),
       brand: 'Manual Entry',
       // The field allows decimals and the validator accepts them, so parsing
-// this as an int turned "380.5" into 0 kcal with no warning.
-caloriesPer100g: (double.tryParse(_calCtrl.text.trim()) ?? 0).round(),
+      // this as an int turned "380.5" into 0 kcal with no warning.
+      caloriesPer100g: (double.tryParse(_calCtrl.text.trim()) ?? 0).round(),
       proteinPer100g: double.tryParse(_proteinCtrl.text.trim()) ?? 0,
       carbsPer100g: double.tryParse(_carbsCtrl.text.trim()) ?? 0,
       fatsPer100g: double.tryParse(_fatsCtrl.text.trim()) ?? 0,
@@ -197,9 +197,7 @@ class _NumberField extends StatelessWidget {
       controller: controller,
       keyboardType: const TextInputType.numberWithOptions(decimal: true),
       textInputAction: TextInputAction.next,
-      inputFormatters: [
-        FilteringTextInputFormatter.allow(RegExp(r'[0-9.]')),
-      ],
+      inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9.]'))],
       decoration: InputDecoration(
         labelText: label,
         hintText: hint,

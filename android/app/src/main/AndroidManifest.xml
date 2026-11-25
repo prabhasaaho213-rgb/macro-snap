@@ -65,6 +65,7 @@
         android:icon="@mipmap/ic_launcher"
         android:usesCleartextTraffic="false"
         android:allowBackup="false"
+        android:enableOnBackInvokedCallback="true"
         android:fullBackupContent="false">
         <activity
             android:name=".MainActivity"
@@ -88,6 +89,31 @@
                 <action android:name="android.intent.action.MAIN"/>
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
+            <!-- League invites: https://<backend>/join/CODE.
+                 With a verified app link Android opens MacroSnap and the code
+                 is applied in-app; without one the same URL opens in the
+                 browser, where the backend route sends the visitor to the
+                 Play Store. The custom scheme is the in-app fallback. -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <category android:name="android.intent.category.BROWSABLE"/>
+                <data
+                    android:scheme="https"
+                    android:host="${appLinkHost}"
+                    android:pathPrefix="/join/"/>
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <category android:name="android.intent.category.BROWSABLE"/>
+                <data android:scheme="macrosnap" android:host="join"/>
+            </intent-filter>
+            <!-- Deliver links to WidgetsBindingObserver.didPushRouteInformation
+                 instead of letting Flutter push them as Navigator routes. -->
+            <meta-data
+                android:name="flutter_deeplinking_enabled"
+                android:value="true"/>
                     <intent-filter>
                 <action android:name="androidx.health.ACTION_SHOW_PERMISSIONS_RATIONALE" />
             </intent-filter>

@@ -27,9 +27,9 @@ class HealthToday {
 
   const HealthToday.unavailable()
     : steps = null,
-        caloriesBurned = null,
-        activeCalories = null,
-        ok = false;
+      caloriesBurned = null,
+      activeCalories = null,
+      ok = false;
 }
 
 /// Which health permissions this app actually holds.
@@ -56,9 +56,9 @@ class HealthAccess {
 
   const HealthAccess.none()
     : steps = false,
-        activeEnergy = false,
-        totalEnergy = false,
-        nutritionWrite = false;
+      activeEnergy = false,
+      totalEnergy = false,
+      nutritionWrite = false;
 
   /// True when at least one activity figure can be read. This — not
   /// "everything was granted" — is what makes the dashboard connected.

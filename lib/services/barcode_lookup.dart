@@ -36,8 +36,10 @@ class BarcodeService {
   /// Only digits are looked up remotely — a QR code, a URL or a Wi-Fi code
   /// carved into the "barcode" field is not a product.
   static bool isProductBarcode(String code) =>
-      code.isNotEmpty && code.length >= 8 && code.length <= 14
-      && RegExp(r'^\d+$').hasMatch(code);
+      code.isNotEmpty &&
+      code.length >= 8 &&
+      code.length <= 14 &&
+      RegExp(r'^\d+$').hasMatch(code);
 
   /// Local table first, then the network.
   static Future<BarcodeFood?> lookup(String barcode) async {
@@ -51,9 +53,11 @@ class BarcodeService {
     http.Client? client,
   }) async {
     if (!isProductBarcode(barcode)) return null;
-    final uri = Uri.https('world.openfoodfacts.org', '/api/v2/product/$barcode.json', {
-      'fields': 'product_name,brands,nutriments,quantity',
-    });
+    final uri = Uri.https(
+      'world.openfoodfacts.org',
+      '/api/v2/product/$barcode.json',
+      {'fields': 'product_name,brands,nutriments,quantity'},
+    );
     // A Client created here has to be closed here: the old code built a new
     // one per lookup and never disposed it, so every scan leaked a connection
     // pool (and its sockets stayed open until GC).
@@ -111,17 +115,16 @@ class BarcodeService {
 
     // A product with a name and nothing else cannot be logged; treat it as a
     // miss so the user gets the manual form instead of a card full of zeros.
-    if (calories == null &&
-        protein == null &&
-        carbs == null &&
-        fats == null) {
+    if (calories == null && protein == null && carbs == null && fats == null) {
       return null;
     }
 
     return BarcodeFood(
       barcode: barcode,
       name: name,
-      brand: _asText(product['brands'])?.split(',').first.trim() ?? 'Packaged food',
+      brand:
+          _asText(product['brands'])?.split(',').first.trim() ??
+          'Packaged food',
       caloriesPer100g: (calories ?? 0).round(),
       proteinPer100g: protein ?? 0,
       carbsPer100g: carbs ?? 0,

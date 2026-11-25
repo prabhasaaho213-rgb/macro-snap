@@ -1,14 +1,17 @@
-﻿import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../core/app_nav.dart';
 import '../core/haptics.dart';
 import '../core/theme.dart';
 import '../services/currency_service.dart';
+import '../services/league_invite.dart';
 import '../services/nav_ab_test.dart';
 import '../services/subscription_service.dart';
+import '../widgets/animations.dart';
 import '../widgets/notification_prompt.dart';
 import '../widgets/badge_board.dart';
+import 'friends_league_screen.dart';
 import 'home_screen.dart';
 import 'habits_tab.dart';
 import 'health_dashboard_screen.dart';
@@ -82,10 +85,39 @@ class _MainShellState extends State<MainShell> {
 
   Future<void> _maybeShowLaunchPrompts() async {
     await _maybeShowSubscription();
-    // Notification permission ask — only if the user denied it.
+    // Notification permission: the phone's own Allow / Deny dialog, asked
+    // once the UI is up. No in-app pre-prompt, and no navigation on a launch.
     if (mounted) {
-      await maybeShowNotificationPrompt(context);
+      await maybeShowNotificationPrompt();
     }
+    // An invite link that opened the app waits until the shell exists: joining
+    // needs the signed-in account, and pushing from the splash would race it.
+    await _openPendingLeagueInvite();
+  }
+
+  /// Opens a league invite parked by the deep-link handler in `app.dart`.
+  ///
+  /// The code survives being read here (it is removed only once taken), so a
+  /// link opened before the user signed in is applied after they do.
+  Future<void> _openPendingLeagueInvite() async {
+    // An invite that arrived with the INSTALL lives in Play's referrer, not in
+    // a link: wait for that read (started at launch, and a no-op after the
+    // first time) before checking for a parked code, or a friend who installed
+    // from the invite would be taken to a normal home screen.
+    await LeagueInvite.captureInstallReferrer();
+    // Peek, never take: the code has to survive the paywall, a back press and
+    // a relaunch. The league screen clears it once a join actually happens.
+    final code = await LeagueInvite.peek();
+    if (code == null || !mounted) return;
+    // Open a saved invite once. Re-pushing it on every launch would nag; the
+    // league screen and the upgrade path still carry the code after that.
+    if (await LeagueInvite.wasAutoShown(code)) return;
+    await LeagueInvite.markAutoShown(code);
+    if (!mounted) return;
+    await Navigator.push(
+      context,
+      habitFlowRoute(FriendsLeagueScreen(initialCode: code)),
+    );
   }
 
   Future<void> _maybeShowSubscription() async {
@@ -372,7 +404,8 @@ class _MainShellState extends State<MainShell> {
             width: 0.5,
           ),
         ),
-      ),          child: SafeArea(
+      ),
+      child: SafeArea(
         child: Padding(
           padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
           child: Row(
@@ -463,63 +496,68 @@ class _NavItem extends StatelessWidget {
         ? Colors.white.withValues(alpha: 0.62)
         : const Color(0xFF64748B);
 
-    return Expanded(child: Center(heightFactor: 1, child:Semantics(
-      button: true,
-      selected: isSelected,
-      label: label,
-      excludeSemantics: true,
-      child: GestureDetector(
-        onTap: onTap,
-        behavior: HitTestBehavior.opaque,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 220),
-          curve: Curves.easeOutCubic,
-          height: 46,
-          constraints: const BoxConstraints(minWidth: 46),
-          padding: EdgeInsets.symmetric(horizontal: isSelected ? 16 : 6),
-          decoration: BoxDecoration(
-            color: isSelected
-                ? MacroSnapTheme.neonGreen
-                : (isDark ? Colors.white : Colors.black).withValues(
-                    alpha: 0.06,
-                  ),
-            borderRadius: BorderRadius.circular(24),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(
-                icon,
-                size: 21,
-                color: isSelected ? Colors.black : unselectedIcon,
+    return Expanded(
+      child: Center(
+        heightFactor: 1,
+        child: Semantics(
+          button: true,
+          selected: isSelected,
+          label: label,
+          excludeSemantics: true,
+          child: GestureDetector(
+            onTap: onTap,
+            behavior: HitTestBehavior.opaque,
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 220),
+              curve: Curves.easeOutCubic,
+              height: 46,
+              constraints: const BoxConstraints(minWidth: 46),
+              padding: EdgeInsets.symmetric(horizontal: isSelected ? 16 : 6),
+              decoration: BoxDecoration(
+                color: isSelected
+                    ? MacroSnapTheme.neonGreen
+                    : (isDark ? Colors.white : Colors.black).withValues(
+                        alpha: 0.06,
+                      ),
+                borderRadius: BorderRadius.circular(24),
               ),
-              if (isSelected) ...[
-                const SizedBox(width: 7),
-                // Capped width: four buttons have to fit a 320 dp phone, and
-                // at 2x system text "Profile" is wider than its share of the
-                // row. Ellipsising the label keeps the row inside its bounds —
-                // an overflowing nav bar is a visible pink stripe on screen.
-                ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 64),
-                  child: Text(
-                    label,
-                    maxLines: 1,
-                    softWrap: false,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w900,
-                      color: Colors.black,
-                    ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    icon,
+                    size: 21,
+                    color: isSelected ? Colors.black : unselectedIcon,
                   ),
-                ),
-              ],
-            ],
+                  if (isSelected) ...[
+                    const SizedBox(width: 7),
+                    // Capped width: four buttons have to fit a 320 dp phone, and
+                    // at 2x system text "Profile" is wider than its share of the
+                    // row. Ellipsising the label keeps the row inside its bounds —
+                    // an overflowing nav bar is a visible pink stripe on screen.
+                    ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 64),
+                      child: Text(
+                        label,
+                        maxLines: 1,
+                        softWrap: false,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w900,
+                          color: Colors.black,
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
           ),
         ),
       ),
-    )));
+    );
   }
 }
 
@@ -544,39 +582,44 @@ class _NavItemCircle extends StatelessWidget {
         ? Colors.white.withValues(alpha: 0.62)
         : const Color(0xFF64748B);
 
-    return Expanded(child: Center(heightFactor: 1, child:Semantics(
-      button: true,
-      selected: isSelected,
-      label: switch (icon) {
-        Icons.home_rounded => 'Home',
-        Icons.photo_camera_rounded => 'Cam',
-        Icons.favorite_rounded => 'Habits',
-        _ => 'Health',
-      },
-      excludeSemantics: true,
-      child: GestureDetector(
-        onTap: onTap,
-        behavior: HitTestBehavior.opaque,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 180),
-          curve: Curves.easeOutCubic,
-          width: 46,
-          height: 46,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            color: isSelected
-                ? MacroSnapTheme.neonGreen
-                : (isDark ? Colors.white : Colors.black).withValues(
-                    alpha: 0.06,
-                  ),
-          ),
-          child: Icon(
-            icon,
-            size: 21,
-            color: isSelected ? Colors.black : unselectedIcon,
+    return Expanded(
+      child: Center(
+        heightFactor: 1,
+        child: Semantics(
+          button: true,
+          selected: isSelected,
+          label: switch (icon) {
+            Icons.home_rounded => 'Home',
+            Icons.photo_camera_rounded => 'Cam',
+            Icons.favorite_rounded => 'Habits',
+            _ => 'Health',
+          },
+          excludeSemantics: true,
+          child: GestureDetector(
+            onTap: onTap,
+            behavior: HitTestBehavior.opaque,
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 180),
+              curve: Curves.easeOutCubic,
+              width: 46,
+              height: 46,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: isSelected
+                    ? MacroSnapTheme.neonGreen
+                    : (isDark ? Colors.white : Colors.black).withValues(
+                        alpha: 0.06,
+                      ),
+              ),
+              child: Icon(
+                icon,
+                size: 21,
+                color: isSelected ? Colors.black : unselectedIcon,
+              ),
+            ),
           ),
         ),
       ),
-    )));
+    );
   }
 }
