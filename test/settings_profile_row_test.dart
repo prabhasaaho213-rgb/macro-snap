@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:macro_snap/models/diet_profile.dart';
 import 'package:macro_snap/screens/profile_screen.dart';
 import 'package:macro_snap/screens/settings_screen.dart';
+import 'package:macro_snap/widgets/snap_avatar.dart';
 import 'package:macro_snap/services/meal_store.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -68,5 +70,45 @@ void main() {
     await tester.pump(const Duration(milliseconds: 300));
     expect(find.text('ACCOUNT'), findsOneWidget);
     expect(find.text('Guest (not linked)'), findsOneWidget);
+  });
+
+  testWidgets('the account card shows the chosen avatar, not a name letter', (
+    tester,
+  ) async {
+    // save() publishes the profile to memory before it touches disk, so the
+    // plan holds the picture even where path_provider is unavailable. It runs
+    // inside runAsync because the write talks to a real plugin channel, which
+    // never answers inside the test's fake async zone.
+    await tester.runAsync(
+      () => DietPlanService.instance.save(
+        DietProfile(
+          weightKg: 70,
+          heightCm: 175,
+          age: 30,
+          gender: Gender.male,
+          goal: Goal.maintain,
+          activity: ActivityLevel.moderate,
+          avatar: SnapAvatars.encode('panda'),
+        ),
+      ),
+    );
+
+    await tester.pumpWidget(const MaterialApp(home: SettingsScreen()));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 500));
+
+    expect(tester.takeException(), isNull);
+    final avatar = tester.widget<SnapAvatar>(find.byType(SnapAvatar));
+    expect(
+      avatar.avatar,
+      'art:panda',
+      reason: 'Settings reads the picture the Profile page saved',
+    );
+    expect(avatar.size, 52);
+    expect(
+      find.descendant(of: find.byType(SnapAvatar), matching: find.text('A')),
+      findsNothing,
+      reason: 'the name-letter tile is gone',
+    );
   });
 }

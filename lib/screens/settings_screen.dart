@@ -18,6 +18,7 @@ import '../core/theme.dart';
 import '../models/diet_profile.dart';
 import '../widgets/glass_card.dart';
 import '../widgets/animations.dart';
+import '../widgets/snap_avatar.dart';
 import '../services/badge_service.dart';
 import '../services/account_partition.dart';
 import '../services/meal_streak_service.dart';
@@ -386,6 +387,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
       : 'User';
   String _email = '';
 
+  /// The picture chosen on the Profile page, read live from the plan so the
+  /// account card shows the face the user picked instead of their first
+  /// letter. A getter, not a field: Profile is pushed from here and the plan is
+  /// re-read when it closes, so the card follows an edit without any plumbing.
+  String get _avatar => DietPlanService.instance.profile?.avatar ?? '';
+
   /// Seeded from the plan bootstrap already loaded, so the subscription row
   /// does not paint "Upgrade to Pro" and then swap to "Manage Subscription".
   bool _subscribed = SubscriptionService.instance.isSubscribed;
@@ -411,6 +418,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
     // subscription row follow it instead of freezing the first reading.
     SubscriptionService.instance.addListener(_onSubscriptionChanged);
     _load();
+    // Opened straight from Home the plan is usually already in memory; if it
+    // is not (cold start into Settings), read it once so the card can show the
+    // chosen avatar rather than falling back to the initial.
+    if (DietPlanService.instance.profile == null) {
+      unawaited(
+        DietPlanService.instance.load().then((_) {
+          if (mounted) setState(() {});
+        }),
+      );
+    }
   }
 
   @override
@@ -669,22 +686,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 children: [
                   Row(
                     children: [
+                      // The same widget the boards and the Profile page use, so
+                      // the account card carries the chosen picture instead of
+                      // a name letter. The pale ring keeps it separated from the
+                      // orange card it sits on.
                       Container(
-                        width: 56,
-                        height: 56,
+                        padding: const EdgeInsets.all(2),
                         decoration: BoxDecoration(
                           color: Colors.white.withValues(alpha: 0.35),
-                          borderRadius: BorderRadius.circular(16),
+                          shape: BoxShape.circle,
                         ),
-                        child: Center(
-                          child: Text(
-                            _name.isNotEmpty ? _name[0].toUpperCase() : 'U',
-                            style: const TextStyle(
-                              color: Colors.black,
-                              fontSize: 24,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
+                        child: SnapAvatar(
+                          avatar: _avatar,
+                          size: 52,
+                          fallbackInitial: _name,
                         ),
                       ),
                       const SizedBox(width: 14),
