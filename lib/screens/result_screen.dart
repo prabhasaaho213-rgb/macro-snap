@@ -506,6 +506,22 @@ class _ResultScreenState extends State<ResultScreen>
             color: isDark ? Colors.white : const Color(0xFF1A1A1A),
           ),
         ),
+        actions: [
+          // A logged meal is opened here from Home's list, and this detail view
+          // had no way to remove it: delete only existed behind the small bolt
+          // button on the list card, which is not where people look once they
+          // have tapped through to the meal.
+          if (widget.existingMeal != null)
+            IconButton(
+              tooltip: 'Delete meal',
+              icon: Icon(
+                Icons.delete_outline_rounded,
+                color: isDark ? Colors.white : const Color(0xFF1A1A1A),
+                size: 22,
+              ),
+              onPressed: _deleteLoggedMeal,
+            ),
+        ],
       ),
       body: PopScope(
         canPop: false,
@@ -521,6 +537,43 @@ class _ResultScreenState extends State<ResultScreen>
         ),
       ),
     );
+  }
+
+  /// Deletes the logged meal this page is showing.
+  ///
+  /// Confirmed first: the page closes afterwards, so a mis-tap would be
+  /// unrecoverable. The store removes the record, its photo and the cloud
+  /// copy (or queues the delete), exactly like Home's delete action.
+  Future<void> _deleteLoggedMeal() async {
+    final meal = widget.existingMeal;
+    if (meal == null) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Delete this meal?'),
+        content: Text(
+          '${meal.name} will be removed from your log. '
+          'This cannot be undone.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: FilledButton.styleFrom(
+              backgroundColor: MacroSnapTheme.neonPink,
+            ),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    await MealStore.instance.remove(meal.id);
+    if (!mounted) return;
+    Navigator.of(context).popUntil((route) => route.isFirst);
   }
 
   /// Serving-weight parentheticals like "(6g)", "(400 g)" or "(approx. 10g)"

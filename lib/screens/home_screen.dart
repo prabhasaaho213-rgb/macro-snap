@@ -68,9 +68,14 @@ class _HomeScreenState extends State<HomeScreen>
   /// paint as 0 and then swap.
   int _calorieStreak = MealStreakService.cachedCurrent ?? 0;
 
-  /// How many meals were logged today the last time Home painted. Used to
-  /// spot the 0 → 1 transition that is a user's first log of the day.
-  int _todayMealsSeen = -1;
+  /// True when the next goal-met check was caused by the user logging a meal
+  /// on this device.
+  ///
+  /// A cloud restore also raises [MealStore.changeNotifier] (and can push
+  /// today's calories over the goal), so the celebration has to be tied to a
+  /// LOCAL add. Without this, signing in after a reinstall replayed the
+  /// confetti for history that was already logged.
+  bool _allowGoalCelebration = false;
 
   /// Whether Guru is unlocked for this account (paid Pro, or inside the
   /// one-time free plan). The backend enforces the same rule on /chat — this
@@ -96,6 +101,7 @@ class _HomeScreenState extends State<HomeScreen>
     // Visible on the very first frame — no waits on the stores.
     _animController.value = 0.97;
     MealStore.instance.changeNotifier.addListener(_onDataChanged);
+    MealStore.instance.mealAddedNotifier.addListener(_onMealAdded);
     userNameNotifier.addListener(_onNameChanged);
     SubscriptionService.instance.addListener(_onSubscriptionChanged);
     // The BMI card draws the weight history, so a weigh-in recorded anywhere
@@ -183,14 +189,22 @@ class _HomeScreenState extends State<HomeScreen>
     // ScanGate on its own, the repaint has to be asked for explicitly — without
     // it an undo or a meal logged from the Scan tab left the list stale.
     if (mounted) setState(() {});
-    final count = MealStore.instance.todayMeals.length;
-    final previous = _todayMealsSeen;
-    _todayMealsSeen = count;
-    // A log is the app's whole promise, so the first one of the day gets a
-    // moment. Only the 0 → 1 transition counts: reopening Home with meals
-    // already logged, or a cloud restore, must not fire it.
-    if (previous == 0 && count == 1) _celebrateFirstLogOfDay();
     _loadScansOnly();
+  }
+
+  /// The user just logged a meal on THIS device.
+  ///
+  /// Both celebrations hang off this instead of the general store change:
+  /// a cloud merge after a reinstall restores today's meals too, and reading
+  /// that as "0 → 1 meals today" fired the first-log confetti on a brand-new
+  /// install with nothing actually logged. [MealStore.mealAddedNotifier] only
+  /// fires from [MealStore.add], which is a real log.
+  void _onMealAdded() {
+    if (!mounted) return;
+    _allowGoalCelebration = true;
+    if (MealStore.instance.todayMeals.length == 1) {
+      unawaited(_celebrateFirstLogOfDay());
+    }
   }
 
   /// One small celebration per day, on the first meal logged. Confetti plus a
@@ -232,11 +246,6 @@ class _HomeScreenState extends State<HomeScreen>
     // on every open.
     await _readName();
     await MealStore.instance.load();
-    // Baseline for the "first log of the day" moment, taken as soon as meals
-    // are known — not after the slower profile load below, which can take
-    // seconds (or never answer) and would make the first log look like a
-    // screen that was already showing one.
-    _todayMealsSeen = MealStore.instance.todayMeals.length;
     await DietPlanService.instance.load();
     // Baseline for the goal-met celebration: if the goal was already met
     // when the app opened, this must not read as a "goal just reached"
@@ -304,6 +313,7 @@ class _HomeScreenState extends State<HomeScreen>
   void dispose() {
     routeObserver.unsubscribe(this);
     MealStore.instance.changeNotifier.removeListener(_onDataChanged);
+    MealStore.instance.mealAddedNotifier.removeListener(_onMealAdded);
     userNameNotifier.removeListener(_onNameChanged);
     SubscriptionService.instance.removeListener(_onSubscriptionChanged);
     WeightStore.instance.removeListener(_onWeightChanged);

@@ -87,21 +87,36 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Future<void> _load() async {
     final prefs = await SharedPreferences.getInstance();
     if (!mounted) return;
-    setState(() {
-      // `nickname` is the fallback for a device where only login has written
-      // an identity so far — otherwise the page would show "User" while the
-      // greeting already knows the name.
-      _name = prefs.getString('name') ?? prefs.getString('nickname') ?? 'User';
-      _email = prefs.getString('email') ?? '';
-      _phone = prefs.getString('phone') ?? '';
-    });
+    // `nickname` is the fallback for a device where only login has written an
+    // identity so far — otherwise the page would show "User" while the
+    // greeting already knows the name. Repaint only when something actually
+    // changed: an unconditional setState here rebuilt the whole page for
+    // nothing on every open.
+    final name =
+        prefs.getString('name') ?? prefs.getString('nickname') ?? 'User';
+    final email = prefs.getString('email') ?? '';
+    final phone = prefs.getString('phone') ?? '';
+    if (name != _name || email != _email || phone != _phone) {
+      setState(() {
+        _name = name;
+        _email = email;
+        _phone = phone;
+      });
+    }
 
-    await DietPlanService.instance.load();
+    // The plan is already loaded at startup, and Settings loads it again before
+    // pushing this page. Re-reading it on open was a second disk/cloud read
+    // that could blank the details card mid-paint; only fill a real gap.
+    if (DietPlanService.instance.profile == null) {
+      await DietPlanService.instance.load();
+    }
     await SubscriptionService.instance.load();
     if (!mounted) return;
-    setState(() {
-      _subscribed = SubscriptionService.instance.isSubscribed;
-    });
+    if (_subscribed != SubscriptionService.instance.isSubscribed) {
+      setState(() {
+        _subscribed = SubscriptionService.instance.isSubscribed;
+      });
+    }
     await _refreshAdmin();
   }
 

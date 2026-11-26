@@ -13,8 +13,8 @@ final ValueNotifier<String> userNameNotifier = ValueNotifier('');
 /// The app's ONE page transition: a horizontal push with parallax, in both
 /// directions — forward and back are the same motion reversed.
 ///
-/// The entering page slides in from the right while the page it covers drifts
-/// slightly left, which is the push every native app has (iOS, Instagram,
+/// The entering page slides in from the right edge while the page it covers
+/// drifts left, which is the push every native app has (iOS, Instagram,
 /// Linear). Both pages are fully opaque for the whole run, so they never blend
 /// into each other — a fade on a route is what used to read as a rendering
 /// glitch rather than a transition.
@@ -34,8 +34,14 @@ class OpaqueSlidePageTransitionsBuilder extends PageTransitionsBuilder {
     Animation<double> secondaryAnimation,
     Widget child,
   ) {
-    // Incoming page: starts a little to the right and eases to rest.
-    final enter = Tween<Offset>(begin: const Offset(0.18, 0), end: Offset.zero)
+    // Incoming page: enters from the right EDGE and eases to rest, so a pop
+    // is the same motion reversed and the page leaves the screen completely.
+    //
+    // It used to travel only 18% of the width: on a pop the page stopped a
+    // fifth of the way across and was then removed, which read as a stutter
+    // or a half-finished animation — the broken back gesture reported on
+    // Settings and Profile.
+    final enter = Tween<Offset>(begin: const Offset(1, 0), end: Offset.zero)
         .animate(
           CurvedAnimation(
             parent: animation,
@@ -46,7 +52,7 @@ class OpaqueSlidePageTransitionsBuilder extends PageTransitionsBuilder {
     // The page underneath: drifts left as it is covered, and slides back as
     // the top page is popped. This is what makes the push feel layered instead
     // of like a sheet swapping in place.
-    final exit = Tween<Offset>(begin: Offset.zero, end: const Offset(-0.06, 0))
+    final exit = Tween<Offset>(begin: Offset.zero, end: const Offset(-0.25, 0))
         .animate(
           CurvedAnimation(
             parent: secondaryAnimation,

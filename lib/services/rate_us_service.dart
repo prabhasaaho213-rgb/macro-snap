@@ -67,20 +67,24 @@ class RateUsService {
     return false;
   }
 
-  /// The Settings "Rate us" action: Play's own review card first, and the
-  /// listing only when Play will not show the card here.
+  /// The Settings "Rate us" action: opens the Play listing.
   ///
-  /// A user who taps Rate us has already decided to rate, so the sheet belongs
-  /// in-app rather than as a jump to the store. Sideloaded builds and installs
-  /// Play will not review report unavailable, and for those the store page is
-  /// still the honest destination. Only marked as rated once something
-  /// actually opened, so a failed attempt does not silently suppress anything.
-  static Future<void> rateNowFromSettings() async {
-    if (await InAppReviewService.requestNow()) return;
-    final opened = await openPlayStore();
-    if (opened) {
+  /// The listing comes FIRST now. This used to raise Play's in-app review
+  /// sheet first, and Play is free to show nothing at all — the quota for this
+  /// version is used up, the install is not one Play will review, or the sheet
+  /// is silently suppressed — so tapping "Rate Us" could do visibly nothing,
+  /// which is exactly the report. A deliberate tap now always lands on a page
+  /// the user can rate from; the in-app sheet is only the fallback when the
+  /// listing cannot be opened.
+  ///
+  /// Returns whether anything opened, so the caller can say so instead of
+  /// leaving a dead-looking row.
+  static Future<bool> rateNowFromSettings() async {
+    if (await openPlayStore()) {
       await prefsMarkRated();
+      return true;
     }
+    return InAppReviewService.requestNow();
   }
 
   static Future<void> prefsMarkRated() async {

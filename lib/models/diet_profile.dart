@@ -211,19 +211,27 @@ class DietPlanService {
   /// without this the read could land mid-write and return the old values.
   static Future<void> _pendingWrite = Future<void>.value();
 
+  /// The account whose profile is in memory. Null until the first [load].
+  String? _loadedSuffix;
+
   Future<void> load() async {
     // Land any write already in flight before reading, or the caller sees the
     // values it just replaced and reports the edit as lost.
     await _pendingWrite;
-    // A stale in-memory profile from another account must never linger when
-    // this account has no profile file of its own.
-    _profile = null;
+    var readSucceeded = false;
     try {
       final dir = await getApplicationDocumentsDirectory();
       final prefs = await SharedPreferences.getInstance();
       final suffix = AccountPartition.suffix(
         AccountPartition.activeFromPrefs(prefs),
       );
+      // A stale in-memory profile from ANOTHER account must never linger. A
+      // re-read for the same account, though, keeps the current profile on
+      // screen while the disk (and, on a fresh device, the cloud) answers:
+      // blanking it first made Profile paint "No height, weight or goal saved
+      // yet" and swap back on every open — the flicker it was reported for.
+      if (_loadedSuffix != suffix) _profile = null;
+      _loadedSuffix = suffix;
       final file = File(
         '${dir.path}/${AccountPartition.key('diet_profile', suffix)}.json',
       );
@@ -239,6 +247,7 @@ class DietPlanService {
       if (await file.exists()) {
         _profile = DietProfile.fromJson(jsonDecode(await file.readAsString()));
       }
+      readSucceeded = true;
       // Cloud restore: if no local profile, try to fetch from Firestore
       if (_profile == null) {
         final cloudProfile = await MealSyncService.fetchDietProfile();
@@ -250,6 +259,11 @@ class DietPlanService {
       }
     } catch (e, st) {
       logError('DietPlanService.load', e, st);
+      // The local store could not be read at all. Keep what is in memory only
+      // when the read itself succeeded above (an absent file is a real answer
+      // and the profile stays); a failed read must not present a profile the
+      // app cannot vouch for.
+      if (!readSucceeded) _profile = null;
     }
   }
 

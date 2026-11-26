@@ -489,10 +489,24 @@ class LeaderboardService extends ChangeNotifier {
       _stepDays[key] = steps;
       changed = true;
     });
-    if (!changed) return;
+    // Today's single-day value has to follow the restored history too. On a
+    // reinstall the week's points came back while [stepsToday] stayed 0, so
+    // the Rank page and the step goal read the day as never walked.
+    final today = _dayKey(DateTime.now());
+    final todaySteps = _stepDays[today] ?? 0;
+    final todayChanged = todaySteps > _stepsToday;
+    if (todayChanged) {
+      _stepsDay = today;
+      _stepsToday = todaySteps;
+    }
+    if (!changed && !todayChanged) return;
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString(_key(_stepsDaysKey), jsonEncode(_stepDays));
+      if (todayChanged) {
+        await prefs.setString(_key(_stepsDayKey), _stepsDay!);
+        await prefs.setInt(_key(_stepsValueKey), _stepsToday);
+      }
     } catch (e, st) {
       logError('LeaderboardService.applyServerStepDays', e, st);
     }
@@ -620,6 +634,12 @@ class LeaderboardService extends ChangeNotifier {
       _serverDays[key] ?? _days[key] ?? DayPoints();
 
   // ─── Date helpers ─────────────────────────────────────────────────
+
+  /// The key a day's steps and points are stored under (`YYYY-MM-DD`).
+  ///
+  /// Public so a restored cloud total can be matched to today by the step
+  /// counter, which keeps the same day boundary.
+  static String dayKey(DateTime day) => _dayKey(day);
 
   static String _dayKey(DateTime day) =>
       '${day.year.toString().padLeft(4, '0')}-'

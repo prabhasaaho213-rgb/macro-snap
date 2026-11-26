@@ -8,4 +8,4 @@
 /// It lives in `core/` rather than on a screen so a service can use it without
 /// importing a widget: the barcode client's user-agent was hardcoded to 1.5.9
 /// and stayed there for seven releases.
-const String kAppVersion = '1.5.25';
+const String kAppVersion = '1.5.26';

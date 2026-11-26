@@ -59,7 +59,13 @@ class MacroBar extends StatelessWidget {
               ),
             ),
             const SizedBox(width: 8),
-            Flexible(
+            // Expanded, not Flexible: both flex children split the free width
+            // 50/50, and a loose Text only takes its intrinsic width — so the
+            // grams value began at the card's midpoint and left a gap after
+            // it, which is the "grams text aligned to the middle" report.
+            // Expanded gives it the right half and textAlign.end puts the
+            // number flush against the card's edge.
+            Expanded(
               child: Text(
                 '${value.toStringAsFixed(0)} / ${target.toStringAsFixed(0)}$unit',
                 maxLines: 1,

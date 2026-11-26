@@ -50,8 +50,22 @@ class _UpdatesScreenState extends State<UpdatesScreen> {
   static const List<_UpdateEntry> _changelog = [
     _UpdateEntry(
       version: UpdatesScreen.latestVersion,
-      date: '2026-11-25',
+      date: '2026-11-26',
       isLatest: true,
+      notes: [
+        'League invite links work again — a shared invite opens the league instead of a missing page',
+        'Rate Us opens Google Play every time instead of sometimes doing nothing',
+        'The Macronutrients card lines each macro\'s grams up with the card edge',
+        'A logged meal can be deleted from its own detail page, not only from the list',
+        'Going back from Settings and Profile animates the whole way out instead of stopping halfway',
+        'Profile no longer flickers or re-loads its details every time it opens',
+        'Steps you had already walked come back after reinstalling the app',
+        'Signing in on a fresh install no longer plays the first-log or goal celebration on its own',
+      ],
+    ),
+    _UpdateEntry(
+      version: '1.5.25',
+      date: '2026-11-25',
       notes: [
         'Friends League: start a league, share an invite link, and see everyone\'s week on one board',
         'Invite links open straight to the league — including for someone who has not installed the app yet',

@@ -101,6 +101,11 @@ class StepCounterService extends ChangeNotifier {
   /// when the last reading was close to midnight (see [_restore]).
   int? _overnightFrom;
 
+  /// Today's total restored from the account's cloud history, waiting to be
+  /// applied. Kept until [_restore] has finished so the empty local day a
+  /// fresh install reads cannot wipe it.
+  int? _pendingCloudSeed;
+
   /// The last permission answer, for an honest empty state in the Health tab.
   bool _denied = false;
 
@@ -173,6 +178,39 @@ class StepCounterService extends ChangeNotifier {
     await _sub?.cancel();
     _sub = null;
     _granted = false;
+    notifyListeners();
+  }
+
+  /// Seeds today's total from the account's cloud history after a reinstall.
+  ///
+  /// The hardware counter only counts from the moment THIS install starts it,
+  /// and a fresh install has no saved day, so the Health tab showed 0 steps
+  /// even though the account had already walked that day. The total the
+  /// account uploaded before the reinstall is the honest starting point;
+  /// steps walked since are added on top by the sensor.
+  ///
+  /// A local count that is already higher always wins — this only fills a gap.
+  Future<void> seedTodayFromCloud(int steps) async {
+    if (steps <= 0) return;
+    _pendingCloudSeed = steps;
+    await _applyCloudSeed();
+  }
+
+  Future<void> _applyCloudSeed() async {
+    final seed = _pendingCloudSeed;
+    if (seed == null) return;
+    final today = _dayStamp();
+    if (_day == today && (_todaySteps ?? 0) >= seed) {
+      _pendingCloudSeed = null;
+      return;
+    }
+    _pendingCloudSeed = null;
+    _day = today;
+    _carried = seed.clamp(0, maxDailySteps).toInt();
+    _todaySteps = _carried;
+    // Continue from the sensor's next reading instead of restarting the day.
+    _baseline = _lastTotal;
+    await _persist();
     notifyListeners();
   }
 
@@ -260,6 +298,10 @@ class StepCounterService extends ChangeNotifier {
     } catch (e, st) {
       logError('StepCounterService.restore', e, st);
     }
+    // A cloud total that arrived while this read was running is applied now:
+    // the reinstall restore and the sensor start are concurrent, and the empty
+    // local day just loaded must not win over the account's real total.
+    await _applyCloudSeed();
   }
 
   void _onStepCount(int total) {

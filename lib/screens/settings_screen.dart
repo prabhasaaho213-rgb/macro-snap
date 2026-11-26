@@ -876,7 +876,22 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       Icons.star_rounded,
                       'Rate Us',
                       'Tell us how MacroSnap is doing on Google Play',
-                      () => RateUsService.rateNowFromSettings(),
+                      () async {
+                        // Await so a tap that could not open anything says so
+                        // instead of looking like a dead row.
+                        final opened =
+                            await RateUsService.rateNowFromSettings();
+                        if (opened || !context.mounted) return;
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text(
+                              'Could not open Google Play. Rate MacroSnap from '
+                              'the Play Store app.',
+                            ),
+                            behavior: SnackBarBehavior.floating,
+                          ),
+                        );
+                      },
                       isDark,
                     ),
                   ),

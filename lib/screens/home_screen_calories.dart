@@ -33,14 +33,26 @@ extension _HomeCalories on _HomeScreenState {
     final progress = (consumed / targetCal).clamp(0.0, 1.0);
 
     // 🎉 Detect: calorie goal just met → confetti celebration!
+    //
+    // Only a meal logged on this device counts. A cloud restore raises the
+    // same store change and can push the day over the goal with history the
+    // user logged days ago on another install, which made a fresh sign-in
+    // fire the goal confetti on its own.
     final goalMet = consumed >= targetCal && targetCal > 0;
     if (goalMet && !_previousGoalMet) {
       _previousGoalMet = true;
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) unawaited(_celebrateGoalMet());
-      });
+      if (_allowGoalCelebration) {
+        _allowGoalCelebration = false;
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) unawaited(_celebrateGoalMet());
+        });
+      }
     } else if (!goalMet) {
       _previousGoalMet = false;
+      // A log that did not reach the goal is spent: it must not license a
+      // celebration for a later store change (a cloud merge) that happens to
+      // cross the threshold.
+      _allowGoalCelebration = false;
     }
 
     return Padding(

@@ -11,6 +11,7 @@ import 'auth_http.dart';
 import 'crash_reporting.dart';
 import 'gemini_service.dart';
 import 'leaderboard_service.dart';
+import 'step_counter_service.dart';
 import 'weight_store.dart';
 
 /// The three boards a user can appear on. The score is the same everywhere —
@@ -461,6 +462,13 @@ class LeaderboardRemote {
       if (data is! Map) return false;
       await LeaderboardService.instance.applyServerStepDays(
         _intMap(data['stepDays']),
+      );
+      // A reinstall's sensor starts counting from today, so today's total has
+      // to come back from the account's history as well: the Health tab and
+      // the step goal read the step counter's day, not the board's day map.
+      final today = LeaderboardService.dayKey(DateTime.now());
+      await StepCounterService.instance.seedTodayFromCloud(
+        LeaderboardService.instance.stepsForDay(today),
       );
       return true;
     } catch (e, st) {
