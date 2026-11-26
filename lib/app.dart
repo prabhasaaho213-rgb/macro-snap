@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'core/app_nav.dart';
 import 'core/theme.dart';
@@ -12,6 +13,24 @@ import 'screens/phone_login_screen.dart';
 import 'services/invite_analytics.dart';
 import 'services/league_invite.dart';
 import 'widgets/startup_splash.dart';
+
+/// System bar styling for the whole app.
+///
+/// MacroSnap is dark-only and draws under the system bars, so both bars are
+/// transparent and their icons are light — always, whatever the phone's own
+/// light/dark setting says. Keeping this `const` and app-wide means no route
+/// can leave the bars in the other polarity.
+const SystemUiOverlayStyle appOverlayStyle = SystemUiOverlayStyle(
+  statusBarColor: Colors.transparent,
+  statusBarIconBrightness: Brightness.light,
+  // iOS reads `statusBarBrightness` (it describes the background, so the
+  // opposite of the icon brightness above).
+  statusBarBrightness: Brightness.dark,
+  systemNavigationBarColor: Colors.transparent,
+  systemNavigationBarDividerColor: Colors.transparent,
+  systemNavigationBarIconBrightness: Brightness.light,
+  systemNavigationBarContrastEnforced: false,
+);
 
 /// Last-resort cap on the whole splash.
 ///
@@ -242,6 +261,19 @@ class _MacroSnapAppState extends State<MacroSnapApp>
       theme: MacroSnapTheme.dark,
       darkTheme: MacroSnapTheme.dark,
       themeMode: ThemeMode.dark,
+      // The window draws edge-to-edge (MainActivity sets
+      // setDecorFitsSystemWindows(false)), so the system bars sit ON the app's
+      // own near-black surface and their icon colour has to be declared here.
+      // Without this, Android uses the activity theme, which follows the
+      // PHONE's light/dark setting rather than this dark-only app: on a phone
+      // in light mode it asks for dark nav-bar icons and draws them black on
+      // the black bar, so the back/home/recents buttons vanish. Android also
+      // adds a translucent contrast scrim behind those buttons by default,
+      // which is what covered the app's own tab bar; the scrim is off here.
+      builder: (context, child) => AnnotatedRegion<SystemUiOverlayStyle>(
+        value: appOverlayStyle,
+        child: child ?? const SizedBox.shrink(),
+      ),
       // The splash is painted on the very first frame; the home below is
       // chosen only once prefs are read and startup work has finished.
       home: _loading || _booting

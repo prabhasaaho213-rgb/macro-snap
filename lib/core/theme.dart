@@ -80,6 +80,15 @@ class MacroSnapTheme {
   static const Color neonPurple = Color(0xFF8B3FE8);
   static const Color neonOrange = Color(0xFFFF6B2B);
   static const Color neonCyan = Color(0xFF9B7BFF); // lighter violet, kept name
+
+  /// True cyan, for the Movement activity.
+  ///
+  /// [neonCyan] is a lighter violet — the name is a leftover from the palette
+  /// before the POP redesign. Reading it at face value painted Movement the
+  /// same violet as Water on the Analysis page; this is the hue those places
+  /// meant. Deliberately outside the brand orange/violet pair because it is
+  /// only ever used for one activity's chart marks, not for a surface.
+  static const Color activityCyan = Color(0xFF22B8CF);
   static const Color neonYellow = Color(0xFFF4A340); // amber, kept name
   static const Color neonRed = Color(0xFFE8481C);
 
@@ -270,14 +279,34 @@ class MacroSnapTheme {
     );
   }
 
+  /// Font families that carry COLOUR emoji, checked after Inter.
+  ///
+  /// Inter has no emoji glyphs, so every emoji in the app is drawn by a fallback
+  /// font — and without naming one, that fallback can land on a monochrome
+  /// outline emoji face, which is why habit icons looked washed out and
+  /// "transparent" rather than like real emoji. Naming the colour emoji
+  /// families first makes the engine prefer them. A family that is not
+  /// installed is skipped, so this is safe on every platform: "Noto Color
+  /// Emoji" on Android, "Apple Color Emoji" on iOS, "Segoe UI Emoji" on
+  /// Windows.
+  static const List<String> emojiFallback = [
+    'Noto Color Emoji',
+    'Apple Color Emoji',
+    'Segoe UI Emoji',
+  ];
+
   /// Style for emoji glyphs — FLAT, with no text shadows.
   ///
   /// Shadows on emoji glyphs previously painted a dark "ghost reflection"
   /// under the emoji (visible when swiping cards or on tinted chips). Every
   /// emoji surface in the app now renders flat; the accent-tinted tile behind
   /// it ([emojiContainer]) provides the depth instead.
+  ///
+  /// The colour font fallback is set here as well as on the text theme, because
+  /// this style is also used where a caller passes a full style of its own
+  /// (the icon picker's preview and chips), which would otherwise drop it.
   static TextStyle emojiStyle({double fontSize = 25}) {
-    return TextStyle(fontSize: fontSize);
+    return TextStyle(fontSize: fontSize, fontFamilyFallback: emojiFallback);
   }
 
   /// Accent pill — POP uses solid-fill badges (e.g. the orange "New" tag),
@@ -378,7 +407,7 @@ class MacroSnapTheme {
       // directly so there is no runtime font fetch. The variable font covers
       // every weight the theme uses.
       textTheme: ThemeData.light().textTheme
-          .apply(fontFamily: 'Inter')
+          .apply(fontFamily: 'Inter', fontFamilyFallback: emojiFallback)
           .copyWith(
             displayLarge: const TextStyle(
               fontSize: 32,
@@ -488,7 +517,7 @@ class MacroSnapTheme {
         ),
       ),
       textTheme: ThemeData.dark().textTheme
-          .apply(fontFamily: 'Inter')
+          .apply(fontFamily: 'Inter', fontFamilyFallback: emojiFallback)
           .copyWith(
             // Headlines are upright. These used to be Inter italic (a "POP
             // editorial" experiment), but on the login/splash headlines the

@@ -211,12 +211,18 @@ extension _HomeCalories on _HomeScreenState {
                     color: isDark ? Colors.white : const Color(0xFF1A1A1A),
                   ),
                 ),
-                const Spacer(),
-                if (p + c + f > 0)
-                  Flexible(
+                // No Spacer here: it claimed half the free width, so the
+                // summary was measured against ~85 px and ellipsized the fats
+                // share ("63% P · 6% C · …"). The summary now takes all the
+                // room the title leaves, right-aligned, and wraps to a second
+                // line rather than losing a number.
+                if (p + c + f > 0) ...[
+                  const SizedBox(width: 12),
+                  Expanded(
                     child: Text(
                       '${(p / max(p + c + f, 1) * 100).round()}% P · ${(c / max(p + c + f, 1) * 100).round()}% C · ${(f / max(p + c + f, 1) * 100).round()}% F',
-                      maxLines: 1,
+                      maxLines: 2,
+                      textAlign: TextAlign.end,
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
                         fontSize: 12,
@@ -225,6 +231,7 @@ extension _HomeCalories on _HomeScreenState {
                       ),
                     ),
                   ),
+                ],
               ],
             ),
             const SizedBox(height: 20),

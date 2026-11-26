@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../core/theme.dart';
 import '../services/leaderboard_remote.dart';
+import '../widgets/snap_avatar.dart';
 
 /// The full weekly board for one scope: the top [LeaderboardRemote.boardLimit]
 /// entries, opened from the Rank page's "View more".
@@ -260,6 +261,12 @@ class _RankRow extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 11),
+          SnapAvatar(
+            avatar: row.avatar.isEmpty ? null : row.avatar,
+            size: 30,
+            fallbackInitial: row.name,
+          ),
+          const SizedBox(width: 10),
           Expanded(
             child: Text(
               row.name,

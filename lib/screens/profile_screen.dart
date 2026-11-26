@@ -7,12 +7,15 @@ import '../core/haptics.dart';
 import '../core/theme.dart';
 import '../models/bmi.dart';
 import '../models/diet_profile.dart';
+import '../services/friends_league_service.dart';
 import '../services/leaderboard_remote.dart';
+import '../services/leaderboard_service.dart';
 import '../services/meal_sync_service.dart';
 import '../services/subscription_service.dart';
 import '../widgets/animations.dart';
 import '../widgets/badge_board.dart';
 import '../widgets/pro_badge.dart';
+import '../widgets/snap_avatar.dart';
 import 'bmi_screen.dart';
 import 'diet_plan_screen.dart';
 import 'subscription_screen.dart';
@@ -78,6 +81,57 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Future<void> _refreshAdmin() async {
     final isAdmin = await SubscriptionService.instance.isAdmin();
     if (mounted && isAdmin != _isAdmin) setState(() => _isAdmin = isAdmin);
+  }
+
+  /// Lets the user pick an illustrated avatar and saves it with the plan.
+  ///
+  /// The picture lives on [DietProfile], which is only written with real body
+  /// details — so with no plan yet the tap explains the order instead of
+  /// storing a face on its own.
+  Future<void> _changeAvatar() async {
+    final profile = _profile;
+    if (profile == null) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Add your body details first — the avatar is saved with your plan.',
+          ),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+    final chosen = await showSnapAvatarPicker(
+      context,
+      current: profile.avatar,
+    );
+    if (chosen == null || !mounted) return;
+    final saved = DietProfile(
+      weightKg: profile.weightKg,
+      heightCm: profile.heightCm,
+      age: profile.age,
+      gender: profile.gender,
+      goal: profile.goal,
+      activity: profile.activity,
+      diet: profile.diet,
+      avatar: chosen,
+    );
+    await DietPlanService.instance.save(saved);
+    // The picture lives on the boards too, so push it now rather than waiting
+    // for the next scored sync — but push ONLY the picture. Scoring a full
+    // week re-reads every meal, habit, water log and weigh-in to recompute
+    // points a new avatar cannot move, so this used to turn one tap in the
+    // avatar picker into two scoring rounds.
+    //
+    // And only for an account that is actually somewhere: no board, no league
+    // means there is no row to update and no request worth sending.
+    final onBoard = LeaderboardService.instance.optIn;
+    final inLeague = await FriendsLeagueService.instance.hasLeague;
+    if (onBoard || inLeague) {
+      unawaited(LeaderboardRemote.instance.pushAvatar());
+    }
+    if (mounted) setState(() {});
   }
 
   /// Fills the identity (prefs are instant) and then the body metrics. A
@@ -182,10 +236,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
     // install restores comes from the server, and without this write the
     // reinstall fetched the old registration name back.
     unawaited(LeaderboardRemote.instance.saveName(newName));
-    // The public board carries this name. Push it now instead of waiting for
-    // the next score change, or a rename would not reach the leaderboard until
-    // the user earned another point.
-    unawaited(LeaderboardRemote.instance.syncWithServer());
+    // The public board carries this name, so push it now — but as a rename, not
+    // as a scoring round: a full sync re-reads a week of meals, habits, water
+    // and weigh-ins to recompute points a label cannot move. Only an account
+    // that is actually on a board or in a league has a row to relabel.
+    final onBoard = LeaderboardService.instance.optIn;
+    final inLeague = await FriendsLeagueService.instance.hasLeague;
+    if (onBoard || inLeague) {
+      unawaited(LeaderboardRemote.instance.pushName(newName));
+    }
   }
 
   /// Opens the diet profile editor and repaints with whatever came back — a
@@ -310,21 +369,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
         children: [
           Row(
             children: [
-              Container(
-                width: 64,
-                height: 64,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  gradient: MacroSnapTheme.accentGradient,
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: Text(
-                  profile?.avatar ??
-                      (_name.isNotEmpty ? _name[0].toUpperCase() : 'U'),
-                  style: TextStyle(
-                    fontSize: profile == null ? 26 : 30,
-                    fontWeight: FontWeight.w800,
-                    color: Colors.black,
+              GestureDetector(
+                onTap: () {
+                  Haptics.tap();
+                  _changeAvatar();
+                },
+                child: Semantics(
+                  button: true,
+                  label: 'Change avatar',
+                  child: SnapAvatar(
+                    avatar: profile?.avatar,
+                    size: 64,
+                    fallbackInitial: _name,
+                    showEditBadge: true,
                   ),
                 ),
               ),

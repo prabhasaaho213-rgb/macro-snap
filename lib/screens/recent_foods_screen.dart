@@ -413,28 +413,61 @@ class _RecentFoodsScreenState extends State<RecentFoodsScreen> {
                   ),
                 ),
                 const SizedBox(width: 14),
-                // Name + serving
+                // Name and calories on the first line, metadata on the second.
+                //
+                // The calorie pill used to sit beside this whole column, which
+                // left the name and the meta line about 100 px on a 360 px
+                // phone. The meta Row then overflowed its column and the pill
+                // painted over the end of it — the text that read as
+                // "overlapped". Moving the pill onto the title line gives the
+                // tag, macros and time the full width of the card.
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        food.name,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w700,
-                          color: isDark
-                              ? Colors.white
-                              : const Color(0xFF1A1A1A),
-                        ),
-                      ),
-                      const SizedBox(height: 3),
                       Row(
                         children: [
-                          // Category tag
+                          Expanded(
+                            child: Text(
+                              food.name,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontSize: 15,
+                                fontWeight: FontWeight.w700,
+                                color: isDark
+                                    ? Colors.white
+                                    : const Color(0xFF1A1A1A),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 10),
                           Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 5,
+                            ),
+                            decoration: BoxDecoration(
+                              color: MacroSnapTheme.neonGreen.withValues(
+                                alpha: 0.12,
+                              ),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Text(
+                              '${food.calories}',
+                              style: const TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w800,
+                                color: MacroSnapTheme.neonGreen,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 4),
+                      LayoutBuilder(
+                        builder: (context, constraints) {
+                          final tag = Container(
                             padding: const EdgeInsets.symmetric(
                               horizontal: 6,
                               vertical: 1.5,
@@ -453,51 +486,46 @@ class _RecentFoodsScreenState extends State<RecentFoodsScreen> {
                                 color: MacroSnapTheme.neonCyan,
                               ),
                             ),
-                          ),
-                          const SizedBox(width: 8),
-                          // Macros
-                          Text(
-                            'P${food.protein.round()} · C${food.carbs.round()} · F${food.fats.round()}',
+                          );
+                          final meta = Text(
+                            'P${food.protein.round()} · C${food.carbs.round()} · F${food.fats.round()} · $timeAgo',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                             style: TextStyle(
                               fontSize: 11,
                               fontWeight: FontWeight.w600,
                               color: MacroSnapTheme.textTertiary(context),
                             ),
-                          ),
-                          const SizedBox(width: 8),
-                          // Time ago
-                          Text(
-                            timeAgo,
-                            style: TextStyle(
-                              fontSize: 11,
-                              color: MacroSnapTheme.textQuaternary(context),
-                            ),
-                          ),
-                        ],
+                          );
+                          // The chip and the numbers need about 215 px in one
+                          // row; a 360 dp phone leaves this column ~184. On a
+                          // narrower column they take a line each instead of
+                          // dropping the age behind an ellipsis.
+                          if (constraints.maxWidth < 200) {
+                            return Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                tag,
+                                const SizedBox(height: 4),
+                                Row(
+                                  children: [Flexible(child: meta)],
+                                ),
+                              ],
+                            );
+                          }
+                          return Row(
+                            children: [
+                              tag,
+                              const SizedBox(width: 8),
+                              Flexible(child: meta),
+                            ],
+                          );
+                        },
                       ),
                     ],
                   ),
                 ),
-                // Calories badge
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 10,
-                    vertical: 5,
-                  ),
-                  decoration: BoxDecoration(
-                    color: MacroSnapTheme.neonGreen.withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Text(
-                    '${food.calories}',
-                    style: const TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w800,
-                      color: MacroSnapTheme.neonGreen,
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 8),
+                const SizedBox(width: 10),
                 // Quick add icon
                 Container(
                   width: 32,

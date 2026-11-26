@@ -12,6 +12,7 @@ import '../services/gemini_service.dart';
 import '../services/invite_analytics.dart';
 import '../services/league_invite.dart';
 import '../services/leaderboard_remote.dart';
+import '../widgets/snap_avatar.dart';
 import '../services/subscription_service.dart';
 import '../widgets/glass_card.dart';
 import 'subscription_screen.dart';
@@ -989,6 +990,14 @@ class _FriendRow extends StatelessWidget {
                 color: medal ?? MacroSnapTheme.textTertiary(context),
               ),
             ),
+          ),
+          const SizedBox(width: 10),
+          // The member's chosen picture, so a friend looks the same on this
+          // board as on their own Profile. No avatar yet → their initial.
+          SnapAvatar(
+            avatar: row.avatar.isEmpty ? null : row.avatar,
+            size: 30,
+            fallbackInitial: row.name,
           ),
           const SizedBox(width: 10),
           Expanded(

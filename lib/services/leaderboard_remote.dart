@@ -7,6 +7,8 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../data/india_districts.dart';
+import '../models/diet_profile.dart';
+import '../widgets/snap_avatar.dart';
 import 'auth_http.dart';
 import 'crash_reporting.dart';
 import 'gemini_service.dart';
@@ -25,11 +27,16 @@ class LeaderboardRow {
   final int points;
   final bool isMe;
 
+  /// The avatar this person chose (`art:hood`), or empty when they have not
+  /// picked one — the row then shows their initial instead.
+  final String avatar;
+
   const LeaderboardRow({
     required this.uid,
     required this.name,
     required this.points,
     required this.isMe,
+    this.avatar = '',
   });
 }
 
@@ -310,6 +317,15 @@ class LeaderboardRemote {
     }
   }
 
+  /// The illustrated avatar this account chose, as a board row stores it.
+  ///
+  /// Only a shipped id is sent: the server refuses anything else, and a legacy
+  /// emoji avatar has no illustration to show on another person's phone.
+  static String publicAvatar() {
+    final stored = DietPlanService.instance.profile?.avatar ?? '';
+    return SnapAvatars.byStored(stored) == null ? '' : stored;
+  }
+
   /// Pushes this account's activity to the server, which scores the week and
   /// writes the board rows.
   ///
@@ -325,6 +341,9 @@ class LeaderboardRemote {
     try {
       final body = <String, dynamic>{
         'name': await publicName(),
+        // The picture on the row other people see. Sent with every sync so
+        // changing it updates the board, not just this phone.
+        'avatar': publicAvatar(),
         'weekId': weekId(),
         'days': weekDaysForSync(service),
       };
@@ -346,6 +365,45 @@ class LeaderboardRemote {
     } catch (e, st) {
       logError('LeaderboardRemote.syncWithServer', e, st);
       return null;
+    }
+  }
+
+  /// Publishes a new avatar without scoring anything.
+  ///
+  /// The rows other people read are plain Firestore documents, so a picture can
+  /// be swapped on the spot. Going through [syncWithServer] and the league sync
+  /// for this meant two full scoring passes — re-reading a week of meals,
+  /// habits, water and weigh-ins — to recompute points a profile edit cannot
+  /// move. The server updates only rows that already exist, so an account that
+  /// is on no board and in no league writes nothing.
+  Future<bool> pushAvatar() => _publish({'avatar': publicAvatar()}, 'pushAvatar');
+
+  /// Publishes a rename to the boards and leagues, without scoring.
+  ///
+  /// A name is a label on the row, like the picture: the server patches the
+  /// rows that already exist (and keeps the name unique on the board, exactly
+  /// as a scoring sync would) instead of re-reading a week of logs. The account
+  /// record is written separately by [saveName], which is what a fresh install
+  /// restores from.
+  Future<bool> pushName(String name) {
+    final clean = name.trim();
+    if (clean.isEmpty) return Future<bool>.value(false);
+    return _publish({'name': clean}, 'pushName');
+  }
+
+  /// The shared lightweight publish used by [pushAvatar] and [pushName].
+  Future<bool> _publish(Map<String, dynamic> fields, String tag) async {
+    if (!canJoin) return false;
+    try {
+      final resp = await AuthHttp.post(
+        _url('/profile/publish'),
+        headers: const {'Content-Type': 'application/json'},
+        body: jsonEncode(fields),
+      ).timeout(const Duration(seconds: 12));
+      return resp.statusCode == 200;
+    } catch (e, st) {
+      logError('LeaderboardRemote.$tag', e, st);
+      return false;
     }
   }
 
@@ -652,6 +710,7 @@ class LeaderboardRemote {
                     : 'MacroSnap user',
                 points: (row['points'] as num?)?.toInt() ?? 0,
                 isMe: row['isMe'] == true,
+                avatar: row['avatar'] is String ? row['avatar'] as String : '',
               ),
         ],
         myRank: (data['myRank'] as num?)?.toInt(),
@@ -681,6 +740,7 @@ class LeaderboardRemote {
               {
                 'uid': row.uid,
                 'name': row.name,
+                'avatar': row.avatar,
                 'points': row.points,
                 'isMe': row.isMe,
               },
@@ -770,6 +830,7 @@ class LeaderboardRemote {
                     name: name.isEmpty ? 'MacroSnap user' : name,
                     points: (data['points'] as num?)?.toInt() ?? 0,
                     isMe: doc.id == me,
+                    avatar: (data['avatar'] as String?)?.trim() ?? '',
                   ),
                 );
               }
@@ -826,6 +887,7 @@ class LeaderboardRemote {
             name: name.isEmpty ? 'MacroSnap user' : name,
             points: points,
             isMe: doc.id == me,
+            avatar: (data['avatar'] as String?)?.trim() ?? '',
           ),
         );
       }

@@ -10,6 +10,7 @@ import '../services/leaderboard_service.dart';
 import '../services/subscription_service.dart';
 import '../widgets/animations.dart';
 import '../widgets/glass_card.dart';
+import '../widgets/snap_avatar.dart';
 import 'friends_league_screen.dart';
 import 'leaderboard_ranks_screen.dart';
 import 'subscription_screen.dart';
@@ -1262,6 +1263,12 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
       padding: const EdgeInsets.symmetric(vertical: 7),
       child: Row(
         children: [
+          SnapAvatar(
+            avatar: row.avatar.isEmpty ? null : row.avatar,
+            size: 26,
+            fallbackInitial: row.name,
+          ),
+          const SizedBox(width: 10),
           Expanded(
             child: Text(
               '$position. ${row.name}',

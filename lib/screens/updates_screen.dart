@@ -50,8 +50,21 @@ class _UpdatesScreenState extends State<UpdatesScreen> {
   static const List<_UpdateEntry> _changelog = [
     _UpdateEntry(
       version: UpdatesScreen.latestVersion,
-      date: '2026-11-26',
+      date: '2026-11-27',
       isLatest: true,
+      notes: [
+        'Pick a cartoon avatar on your profile — the same face now shows on the Rank card, the top-100 board and your friends league',
+        'Habit icons are drawn in full colour again instead of washed-out outlines',
+        'The bottom navigation is visible on phones in light mode, and so are the system buttons below it',
+        'A league invite opens MacroSnap straight away instead of the browser and then the Play Store',
+        'Changing your name or picture updates just that, without re-scoring your whole week',
+        'The Recent Foods card no longer overlaps its own text on a narrow screen',
+        'The analysis page counts the steps you actually have and shows your carb target, with a colour per section',
+      ],
+    ),
+    _UpdateEntry(
+      version: '1.5.26',
+      date: '2026-11-26',
       notes: [
         'League invite links work again — a shared invite opens the league instead of a missing page',
         'Rate Us opens Google Play every time instead of sometimes doing nothing',

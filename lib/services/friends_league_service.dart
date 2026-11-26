@@ -17,11 +17,16 @@ class FriendsLeagueRow {
   final int points;
   final bool isMe;
 
+  /// The avatar this member chose (`art:hood`), or empty when they have not
+  /// picked one — the row then shows their initial instead.
+  final String avatar;
+
   const FriendsLeagueRow({
     required this.uid,
     required this.name,
     required this.points,
     required this.isMe,
+    this.avatar = '',
   });
 
   factory FriendsLeagueRow.fromJson(Map data) => FriendsLeagueRow(
@@ -31,6 +36,7 @@ class FriendsLeagueRow {
         : 'MacroSnap user',
     points: (data['points'] as num?)?.toInt() ?? 0,
     isMe: data['isMe'] == true,
+    avatar: data['avatar'] is String ? (data['avatar'] as String).trim() : '',
   );
 }
 
@@ -184,7 +190,11 @@ class FriendsLeagueService {
     final resp = await AuthHttp.post(
       _url('/friends/league'),
       headers: const {'Content-Type': 'application/json'},
-      body: jsonEncode({'name': name, 'displayName': displayName}),
+      body: jsonEncode({
+        'name': name,
+        'displayName': displayName,
+        'avatar': LeaderboardRemote.publicAvatar(),
+      }),
     ).timeout(const Duration(seconds: 15));
     final data = _decode(resp);
     final league = _leagueFrom(data);
@@ -200,7 +210,11 @@ class FriendsLeagueService {
     final resp = await AuthHttp.post(
       _url('/friends/join'),
       headers: const {'Content-Type': 'application/json'},
-      body: jsonEncode({'code': code, 'displayName': displayName}),
+      body: jsonEncode({
+        'code': code,
+        'displayName': displayName,
+        'avatar': LeaderboardRemote.publicAvatar(),
+      }),
     ).timeout(const Duration(seconds: 15));
     final data = _decode(resp);
     final league = _leagueFrom(data);
@@ -248,6 +262,7 @@ class FriendsLeagueService {
     try {
       final body = <String, dynamic>{
         'name': await LeaderboardRemote.publicName(),
+        'avatar': LeaderboardRemote.publicAvatar(),
         'days': LeaderboardRemote.weekDaysForSync(LeaderboardService.instance),
       };
       final resp = await AuthHttp.post(

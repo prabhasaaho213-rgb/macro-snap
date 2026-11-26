@@ -453,8 +453,11 @@ class _HealthDashboardScreenState extends State<HealthDashboardScreen>
     if (chosen == null) return;
     await StepGoalService.instance.setGoal(chosen);
     if (!mounted) return;
-    // A new, smaller target may already be met by today's steps.
-    final steps = _steps;
+    // A new, smaller target may already be met by today's steps — read the
+    // same number the dashboard shows (phone sensor first, Health Connect
+    // when higher), not the Health-only value, which is null for a user who
+    // never connected Health and would leave a met goal uncounted.
+    final steps = _stepsNow;
     if (steps != null) await StepGoalService.instance.recordToday(steps);
   }
 

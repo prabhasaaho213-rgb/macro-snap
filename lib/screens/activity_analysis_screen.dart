@@ -6,7 +6,9 @@ import '../models/habit.dart';
 import '../services/habit_store.dart';
 import '../services/health_service.dart';
 import '../services/meal_store.dart';
+import '../services/step_counter_service.dart';
 import '../services/step_goal_service.dart';
+import '../services/step_limit.dart';
 import '../services/weight_store.dart';
 
 /// One card of the analysis page. The same enum is the scroll target of the
@@ -92,12 +94,19 @@ class _ActivityAnalysisScreenState extends State<ActivityAnalysisScreen> {
 
   GlobalKey _keyFor(AnalysisSection section) => _keys[section]!;
 
+  /// One distinct colour per activity.
+  ///
+  /// The palette names lie: `neonGreen` is the SAME value as `neonOrange`
+  /// (0xFFFF6B2B, "kept name for API compat") and `neonCyan` is a lighter
+  /// violet. Reading them by name painted Nutrition, Habits and Weight the
+  /// same orange and Water and Movement the same violet — five sections, three
+  /// colours. These are the tokens that actually differ.
   Color _sectionColor(AnalysisSection section) => switch (section) {
     AnalysisSection.nutrition => MacroSnapTheme.neonOrange,
-    AnalysisSection.habits => MacroSnapTheme.neonGreen,
+    AnalysisSection.habits => MacroSnapTheme.successGreen,
     AnalysisSection.water => MacroSnapTheme.neonPurple,
-    AnalysisSection.movement => MacroSnapTheme.neonCyan,
-    AnalysisSection.weight => MacroSnapTheme.neonOrange,
+    AnalysisSection.movement => MacroSnapTheme.activityCyan,
+    AnalysisSection.weight => MacroSnapTheme.neonYellow,
   };
 
   // ─── Date helpers ────────────────────────────────────────────────────────
@@ -125,20 +134,9 @@ class _ActivityAnalysisScreenState extends State<ActivityAnalysisScreen> {
       .where((m) => _dayOnly(m.date) == day)
       .fold(0, (sum, m) => sum + m.calories);
 
-  int get _weekCalories =>
-      _weekDays.fold(0, (sum, day) => sum + _caloriesOn(day));
-
   /// Habit completions across all habits for one day.
   int _habitsDoneOn(DateTime day) =>
       HabitStore.instance.habits.where((h) => h.isCompleted(day)).length;
-
-  int get _weekHabitCompletions =>
-      _weekDays.fold(0, (sum, day) => sum + _habitsDoneOn(day));
-
-  int get _weekWater => _weekDays.fold(
-    0,
-    (sum, day) => sum + (HabitStore.instance.waterLog[dateKey(day)] ?? 0),
-  );
 
   double? get _weightDeltaKg {
     final entries = WeightStore.instance.entries;
@@ -147,6 +145,22 @@ class _ActivityAnalysisScreenState extends State<ActivityAnalysisScreen> {
     final recent = entries.where((e) => !e.date.isBefore(cutoff)).toList();
     if (recent.length < 2) return null;
     return recent.last.kg - recent.first.kg;
+  }
+
+  /// Today's steps from whichever source has the higher count.
+  ///
+  /// This page used to read Health Connect only, so a user whose steps come
+  /// from the phone's own sensor — the Health tab's primary source — was told
+  /// "Not connected" while thousands of steps were already counted. Both
+  /// numbers are capped for a free account, so the two sources mean the same
+  /// thing here and on the dashboard.
+  int? get _stepsNow {
+    final sensor = StepCounterService.instance.todaySteps;
+    final health = _health?.steps;
+    final cappedHealth = health == null ? null : StepLimit.cap(health);
+    if (sensor == null) return cappedHealth;
+    if (cappedHealth == null) return sensor;
+    return sensor > cappedHealth ? sensor : cappedHealth;
   }
 
   // ─── Build ───────────────────────────────────────────────────────────────
@@ -297,7 +311,7 @@ class _ActivityAnalysisScreenState extends State<ActivityAnalysisScreen> {
             _stat(
               habitsTotal == 0 ? '—' : '$habitsDone/$habitsTotal',
               'habits',
-              MacroSnapTheme.neonGreen,
+              _sectionColor(AnalysisSection.habits),
             ),
             _stat(
               '${HabitStore.instance.waterToday}/${HabitStore.instance.waterGoal}',
@@ -305,9 +319,9 @@ class _ActivityAnalysisScreenState extends State<ActivityAnalysisScreen> {
               MacroSnapTheme.neonPurple,
             ),
             _stat(
-              _health?.steps?.toString() ?? '—',
+              _stepsNow?.toString() ?? '—',
               'steps',
-              MacroSnapTheme.neonCyan,
+              _sectionColor(AnalysisSection.movement),
             ),
           ],
         ),
@@ -330,7 +344,7 @@ class _ActivityAnalysisScreenState extends State<ActivityAnalysisScreen> {
         _sectionTitle(
           'Nutrition',
           Icons.restaurant_rounded,
-          MacroSnapTheme.neonOrange,
+          _sectionColor(AnalysisSection.nutrition),
         ),
         const SizedBox(height: 12),
         Row(
@@ -364,12 +378,20 @@ class _ActivityAnalysisScreenState extends State<ActivityAnalysisScreen> {
           'Protein',
           protein,
           profile?.targetProtein,
-          MacroSnapTheme.neonGreen,
+          MacroSnapTheme.macroProtein,
         ),
         const SizedBox(height: 8),
-        _macroRow('Carbs', carbs, null, MacroSnapTheme.neonCyan),
+        // `DietProfile.targetCarbs` already derives the target from whatever
+        // the protein and fat targets leave (4 kcal/g); passing null here made
+        // the carbs bar permanently empty and printed grams with no goal.
+        _macroRow(
+          'Carbs',
+          carbs,
+          profile?.targetCarbs,
+          MacroSnapTheme.macroCarbs,
+        ),
         const SizedBox(height: 8),
-        _macroRow('Fat', fats, profile?.targetFats, MacroSnapTheme.neonPurple),
+        _macroRow('Fat', fats, profile?.targetFats, MacroSnapTheme.macroFats),
         const SizedBox(height: 12),
         Text(
           '${MealStore.instance.todayMeals.length} meal'
@@ -431,7 +453,7 @@ class _ActivityAnalysisScreenState extends State<ActivityAnalysisScreen> {
         _sectionTitle(
           'Habits',
           Icons.check_circle_rounded,
-          MacroSnapTheme.neonGreen,
+          _sectionColor(AnalysisSection.habits),
         ),
         const SizedBox(height: 12),
         Row(
@@ -456,7 +478,10 @@ class _ActivityAnalysisScreenState extends State<ActivityAnalysisScreen> {
           ],
         ),
         const SizedBox(height: 8),
-        _bar(total == 0 ? 0 : done / total, MacroSnapTheme.neonGreen),
+        _bar(
+          total == 0 ? 0 : done / total,
+          _sectionColor(AnalysisSection.habits),
+        ),
         if (streak > 0) ...[
           const SizedBox(height: 12),
           Text(
@@ -483,7 +508,7 @@ class _ActivityAnalysisScreenState extends State<ActivityAnalysisScreen> {
         _sectionTitle(
           'Water',
           Icons.water_drop_rounded,
-          MacroSnapTheme.neonPurple,
+          _sectionColor(AnalysisSection.water),
         ),
         const SizedBox(height: 12),
         Row(
@@ -508,14 +533,20 @@ class _ActivityAnalysisScreenState extends State<ActivityAnalysisScreen> {
           ],
         ),
         const SizedBox(height: 8),
-        _bar(goal <= 0 ? 0 : today / goal, MacroSnapTheme.neonPurple),
+        _bar(
+          goal <= 0 ? 0 : today / goal,
+          _sectionColor(AnalysisSection.water),
+        ),
       ],
     );
   }
 
   Widget _movementCard(bool isDark) {
-    final steps = _health?.steps;
-    final goal = StepGoalService.instance.goal;
+    final steps = _stepsNow;
+    // The target the ring and the streak work toward, not the chosen number:
+    // a free account's 10,000 goal is measured against the 5,000 ceiling, so
+    // this bar can actually fill.
+    final goal = StepGoalService.instance.effectiveGoal;
     final burned = _health?.caloriesBurned;
     return _card(
       key: _keyFor(AnalysisSection.movement),
@@ -525,14 +556,14 @@ class _ActivityAnalysisScreenState extends State<ActivityAnalysisScreen> {
         _sectionTitle(
           'Movement',
           Icons.directions_walk_rounded,
-          MacroSnapTheme.neonCyan,
+          _sectionColor(AnalysisSection.movement),
         ),
         const SizedBox(height: 12),
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             Text(
-              steps == null ? 'Not connected' : '$steps steps',
+              steps == null ? 'No steps yet' : '$steps steps',
               style: TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.w900,
@@ -552,13 +583,15 @@ class _ActivityAnalysisScreenState extends State<ActivityAnalysisScreen> {
         const SizedBox(height: 8),
         _bar(
           steps == null || goal <= 0 ? 0 : steps / goal,
-          MacroSnapTheme.neonCyan,
+          _sectionColor(AnalysisSection.movement),
         ),
         const SizedBox(height: 12),
         Text(
           steps == null
-              ? 'Connect Health in the Health tab to include steps and burn here.'
-              : '${burned == null ? '—' : burned.round()} kcal burned today',
+              ? 'Open the Health tab to start counting steps.'
+              : burned == null
+              ? 'Steps from your phone · connect Health for burn'
+              : '${burned.round()} kcal burned today',
           style: TextStyle(
             fontSize: 11,
             color: MacroSnapTheme.textPrimaryMuted(context),
@@ -579,7 +612,7 @@ class _ActivityAnalysisScreenState extends State<ActivityAnalysisScreen> {
         _sectionTitle(
           'Weight',
           Icons.monitor_weight_rounded,
-          MacroSnapTheme.neonOrange,
+          _sectionColor(AnalysisSection.weight),
         ),
         const SizedBox(height: 12),
         Text(
@@ -608,12 +641,19 @@ class _ActivityAnalysisScreenState extends State<ActivityAnalysisScreen> {
 
   Widget _weekCard(bool isDark) {
     final days = _weekDays;
+    // Each day is read ONCE and the weekly totals are folded from the series.
+    // The summaries used to re-run `_caloriesOn`/`_habitsDoneOn` for all seven
+    // days on top of the series, so a build scanned the whole meal history
+    // fourteen times instead of seven.
     final calorieSeries = days.map(_caloriesOn).toList();
     final habitSeries = days.map(_habitsDoneOn).toList();
     final waterSeries = days
         .map((day) => HabitStore.instance.waterLog[dateKey(day)] ?? 0)
         .toList();
-    final avgCalories = (_weekCalories / 7).round();
+    final weekCalories = calorieSeries.fold(0, (sum, v) => sum + v);
+    final weekHabitCompletions = habitSeries.fold(0, (sum, v) => sum + v);
+    final weekWater = waterSeries.fold(0, (sum, v) => sum + v);
+    final avgCalories = (weekCalories / 7).round();
 
     return _card(
       isDark: isDark,
@@ -644,14 +684,14 @@ class _ActivityAnalysisScreenState extends State<ActivityAnalysisScreen> {
         const SizedBox(height: 16),
         _trendBlock(
           label: 'Habits done',
-          value: '$_weekHabitCompletions this week',
+          value: '$weekHabitCompletions this week',
           series: habitSeries,
           color: MacroSnapTheme.neonGreen,
         ),
         const SizedBox(height: 16),
         _trendBlock(
           label: 'Water',
-          value: '$_weekWater glasses',
+          value: '$weekWater glasses',
           series: waterSeries,
           color: MacroSnapTheme.neonPurple,
         ),
