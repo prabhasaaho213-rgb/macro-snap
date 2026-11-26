@@ -358,20 +358,47 @@ Future<String?> showSnapAvatarPicker(
               // Twenty tiles is five rows on a phone: scroll rather than
               // relying on the sheet being tall enough on a small screen.
               ConstrainedBox(
+                // Tall enough for five rows of full-width tiles on a typical
+                // phone, short enough that the sheet never swallows the page.
                 constraints: BoxConstraints(
-                  maxHeight: MediaQuery.of(ctx).size.height * 0.58,
+                  maxHeight: MediaQuery.of(ctx).size.height * 0.66,
                 ),
                 child: SingleChildScrollView(
-                  child: Wrap(
-                    spacing: 12,
-                    runSpacing: 12,
-                    children: [
-                      for (final style in SnapAvatars.all)
-                        _AvatarChoice(
-                          style: style,
-                          selected: current == SnapAvatars.encode(style.id),
-                        ),
-                    ],
+                  // Four columns that FILL the sheet. Fixed-size tiles in a
+                  // Wrap could not spend the leftover width, so four 58 px
+                  // circles sat against the left padding with a dead strip on
+                  // the right. The tile is derived from the sheet width instead,
+                  // which keeps the grid symmetrical on every screen.
+                  child: LayoutBuilder(
+                    builder: (context, constraints) {
+                      const spacing = 12.0;
+                      const columns = 4;
+                      final fitted =
+                          (constraints.maxWidth - spacing * (columns - 1)) /
+                          columns;
+                      // Capped so a tablet does not paint four dinner-plate
+                      // faces; whatever is left over is then centred rather
+                      // than pushed to one side.
+                      final tile = fitted > _AvatarChoice.maxSize
+                          ? _AvatarChoice.maxSize
+                          : fitted;
+                      return Wrap(
+                        spacing: spacing,
+                        runSpacing: spacing,
+                        alignment: tile < fitted
+                            ? WrapAlignment.center
+                            : WrapAlignment.start,
+                        children: [
+                          for (final style in SnapAvatars.all)
+                            _AvatarChoice(
+                              style: style,
+                              size: tile,
+                              selected:
+                                  current == SnapAvatars.encode(style.id),
+                            ),
+                        ],
+                      );
+                    },
                   ),
                 ),
               ),
@@ -384,12 +411,27 @@ Future<String?> showSnapAvatarPicker(
 }
 
 class _AvatarChoice extends StatelessWidget {
-  const _AvatarChoice({required this.style, required this.selected});
+  const _AvatarChoice({
+    required this.style,
+    required this.size,
+    required this.selected,
+  });
 
   final SnapAvatarStyle style;
+
+  /// The whole tile, ring included. The caller fits this to the sheet width.
+  final double size;
   final bool selected;
 
-  static const double _size = 58;
+  /// Largest a tile is allowed to grow on a wide screen.
+  /// Largest a tile grows on a wide screen. At 76 four of them plus the
+  /// spacing still leave five rows inside the sheet's height cap on a 851 dp
+  /// phone, so no face is hidden behind a scroll.
+  static const double maxSize = 76;
+
+  /// Ring (2 x 1.5) plus the inner padding (2 x 3) sits between [size] and the
+  /// picture, so the picture is this much smaller than its tile.
+  static const double _chrome = 9;
 
   @override
   Widget build(BuildContext context) {
@@ -405,6 +447,8 @@ class _AvatarChoice extends StatelessWidget {
         },
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 140),
+          width: size,
+          height: size,
           padding: const EdgeInsets.all(3),
           decoration: BoxDecoration(
             shape: BoxShape.circle,
@@ -418,7 +462,10 @@ class _AvatarChoice extends StatelessWidget {
           child: Stack(
             alignment: Alignment.center,
             children: [
-              SnapAvatar(avatar: SnapAvatars.encode(style.id), size: _size),
+              SnapAvatar(
+                avatar: SnapAvatars.encode(style.id),
+                size: size - _chrome,
+              ),
               if (selected)
                 Positioned(
                   right: 2,
