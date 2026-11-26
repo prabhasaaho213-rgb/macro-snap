@@ -53,6 +53,15 @@ class _UpdatesScreenState extends State<UpdatesScreen> {
       date: '2026-11-27',
       isLatest: true,
       notes: [
+        'Your picture shows on the Settings account card now, instead of the first letter of your name',
+        'The avatar picker fills the sheet evenly — four columns, no empty strip on one side',
+        'Six avatars were re-cut, so no illustration has a pale border along one edge',
+      ],
+    ),
+    _UpdateEntry(
+      version: '1.5.27',
+      date: '2026-11-27',
+      notes: [
         'Pick a cartoon avatar on your profile — the same face now shows on the Rank card, the top-100 board and your friends league',
         'Habit icons are drawn in full colour again instead of washed-out outlines',
         'The bottom navigation is visible on phones in light mode, and so are the system buttons below it',
