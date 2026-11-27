@@ -62,3 +62,8 @@ nul
 *.tar.gz
 *.zip
 update_card_colors.py
+
+# Local env files — never commit secrets from a laptop build
+.env
+.env.*
+!.env.example
