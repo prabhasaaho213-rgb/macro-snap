@@ -65,6 +65,16 @@ android {
             storePassword = keystoreProperties.getProperty("storePassword")
             keyAlias = keystoreProperties.getProperty("keyAlias")
             keyPassword = keystoreProperties.getProperty("keyPassword")
+            // AGP stopped adding the v1 (JAR) signature because minSdk is 26,
+            // so the sideloaded APK carried a v2 signature ONLY. Several OEM
+            // installers (MIUI/HyperOS, the reported "App not installed as
+            // package appears to be invalid") reject an APK they cannot verify
+            // through the JAR manifest, so all three schemes are written now.
+            // Play ignores the extra schemes and re-signs with its own key.
+            enableV1Signing = true
+            enableV2Signing = true
+            enableV3Signing = true
+            enableV4Signing = false
         }
     }
 
