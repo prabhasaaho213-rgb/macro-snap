@@ -6,6 +6,8 @@ import 'package:permission_handler/permission_handler.dart';
 import '../core/app_nav.dart';
 import '../core/haptics.dart';
 import '../core/theme.dart';
+import '../models/diet_profile.dart';
+import '../services/calorie_estimate.dart';
 import '../services/health_service.dart';
 import '../services/leaderboard_service.dart';
 import '../services/meal_store.dart';
@@ -62,6 +64,10 @@ class _HealthDashboardScreenState extends State<HealthDashboardScreen>
   bool _loadFailed = false;
   DateTime? _lastUpdated;
 
+  /// The calendar day the figures belong to. A new day clears them instead of
+  /// leaving yesterday's numbers on screen until the first read lands.
+  String _loadedDay = '';
+
   Timer? _pollTimer;
   bool _appInForeground = true;
 
@@ -74,17 +80,34 @@ class _HealthDashboardScreenState extends State<HealthDashboardScreen>
   /// does not paint 0 steps and then swap to today's real total.
   int? _sensorSteps = StepCounterService.instance.todaySteps;
 
-  /// Today's steps from whichever source has the higher count. Health Connect
-  /// de-duplicates a phone and a watch, so when it is connected its number can
-  /// be larger; the sensor is the fallback that always exists.
+  /// Today's steps from ONE source, never a blend.
+  ///
+  /// Health Connect is the source the moment it is connected and holds a step
+  /// record: it covers midnight-to-now and de-duplicates the phone and a
+  /// watch. Only when it is not connected — or has no step data yet — does the
+  /// phone's own sensor supply the number. The two are never added together.
   int? get _stepsNow {
-    final sensor = StepCounterService.instance.todaySteps ?? _sensorSteps;
-    // Health Connect can report more than the phone's sensor (a watch); the
-    // free ceiling applies to that number too.
     final health = _steps == null ? null : StepLimit.cap(_steps!);
-    if (sensor == null) return health;
-    if (health == null) return sensor;
-    return sensor > health ? sensor : health;
+    if (_hasReadPermission && health != null) return health;
+    return StepCounterService.instance.todaySteps ?? _sensorSteps;
+  }
+
+  /// True when the figure on screen came from Health Connect — which is also
+  /// what makes the burn a platform reading instead of an in-app estimate.
+  bool get _healthIsSource => _hasReadPermission && _steps != null;
+
+  /// Calories burned today.
+  ///
+  /// Connected: Health Connect's own figure (total, falling back to active
+  /// energy), the same source as the steps above. Not connected: estimated
+  /// inside the app from the steps the phone counted and the profile weight,
+  /// because there is no platform to ask.
+  double? get _caloriesShown {
+    if (_hasReadPermission) return _caloriesBurned;
+    return CalorieEstimate.activeKcal(
+      steps: _stepsNow,
+      weightKg: DietPlanService.instance.profile?.weightKg,
+    )?.toDouble();
   }
 
   bool get _connected => _sensorActive || _hasReadPermission;
@@ -284,37 +307,46 @@ class _HealthDashboardScreenState extends State<HealthDashboardScreen>
   /// the last good numbers on screen instead of blanking them.
   Future<void> _loadToday() async {
     if (!_connected) return;
-    try {
-      final today = await HealthService.instance.fetchToday();
-      if (!mounted) return;
-      setState(() {
-        if (today.ok) {
-          _steps = today.steps ?? _steps;
-          _caloriesBurned = today.caloriesBurned ?? _caloriesBurned;
-          _activeCalories = today.activeCalories ?? _activeCalories;
-          _lastUpdated = DateTime.now();
-          _loadFailed = false;
-        } else if (_hasReadPermission) {
-          // Only a GRANTED Health Connect read can "fail": a phone without it
-          // is not an error, because the sensor is still counting.
-          _loadFailed = true;
-        }
-      });
-      // The streak advances the moment the target is crossed, not at the next
-      // launch — the poll runs while the tab is open, so this is the only
-      // place that sees the crossing happen.
-      final steps = _stepsNow;
-      if (steps != null) {
-        await StepGoalService.instance.recordToday(steps);
-        // The leaderboard's movement points use THIS number — the one the
-        // dashboard shows. It comes from the phone's sensor (or Health
-        // Connect when that is higher), so it is never a figure the user typed
-        // in.
-        await LeaderboardService.instance.noteSteps(steps);
+    // A new calendar day starts from zero. The old code kept the last known
+    // values when a read returned nothing, so the first look of the morning
+    // showed the previous day's steps and calories.
+    final day = _dayStamp();
+    if (day != _loadedDay) {
+      _loadedDay = day;
+      _steps = null;
+      _caloriesBurned = null;
+      _activeCalories = null;
+    }
+    if (_hasReadPermission) {
+      try {
+        final today = await HealthService.instance.fetchToday();
+        if (!mounted) return;
+        setState(() {
+          if (today.ok) {
+            _steps = today.steps;
+            _caloriesBurned = today.caloriesBurned;
+            _activeCalories = today.activeCalories;
+            _lastUpdated = DateTime.now();
+            _loadFailed = false;
+          } else {
+            // Only a GRANTED Health Connect read can "fail": a phone without
+            // it is not an error, because the sensor is still counting.
+            _loadFailed = true;
+          }
+        });
+      } catch (_) {
+        if (!mounted) return;
+        setState(() => _loadFailed = true);
       }
-    } catch (_) {
-      if (!mounted) return;
-      setState(() => _loadFailed = true);
+    }
+    // The streak advances the moment the target is crossed, not at the next
+    // launch — the poll runs while the tab is open, so this is the only place
+    // that sees the crossing happen. The number is the one on screen: Health
+    // Connect when it is connected, the phone's sensor otherwise, never both.
+    final steps = _stepsNow;
+    if (steps != null) {
+      await StepGoalService.instance.recordToday(steps);
+      await LeaderboardService.instance.noteSteps(steps);
     }
   }
 
@@ -609,7 +641,7 @@ class _HealthDashboardScreenState extends State<HealthDashboardScreen>
   /// Permissions granted: the live dashboard.
   Widget _buildDashboard(BuildContext context, bool isDark) {
     final steps = _stepsNow ?? 0;
-    final cals = _caloriesBurned;
+    final cals = _caloriesShown;
     final goal = _stepGoal;
     final progress = (steps / goal).clamp(0.0, 1.0);
     final eaten = MealStore.instance.todayCalories;
@@ -661,10 +693,12 @@ class _HealthDashboardScreenState extends State<HealthDashboardScreen>
                       unit: 'kcal',
                       subtitle: cals == null
                           ? 'No data yet'
-                          : (_activeCalories != null &&
-                                    cals > _activeCalories! + 1
-                                ? 'includes resting burn'
-                                : 'active energy'),
+                          : (_hasReadPermission
+                                ? (_activeCalories != null &&
+                                          cals > _activeCalories! + 1
+                                      ? 'includes resting burn'
+                                      : 'active energy')
+                                : 'estimated from your steps'),
                     ),
                   ),
                 ),
@@ -694,7 +728,14 @@ class _HealthDashboardScreenState extends State<HealthDashboardScreen>
             const SizedBox(height: 14),
             AnimatedEntrance(
               delayMs: 190,
-              child: _buildBalanceCard(context, isDark, steps, cals, eaten),
+                                child: _buildBalanceCard(
+                    context,
+                    isDark,
+                    steps,
+                    cals,
+                    eaten,
+                    estimated: !_hasReadPermission,
+                  ),
             ),
             // Health Connect is optional, but the option has to stay visible
             // AFTER the phone sensor starts working — otherwise a user who
@@ -779,10 +820,13 @@ class _HealthDashboardScreenState extends State<HealthDashboardScreen>
                       icon: Icons.phone_android_rounded,
                       iconColor: MacroSnapTheme.textTertiary(context),
                       title: 'Source',
-                      body:
-                          'Steps come from your phone\'s sensor; Health '
-                          'Connect adds a watch and calorie burn. MacroSnap '
-                          'only reads them — it never edits them.',
+                      body: _hasReadPermission
+                          ? 'Steps and calories are read from Health Connect '
+                                '— your watch included. MacroSnap only reads '
+                                'them, it never edits them.'
+                          : 'Steps come from your phone\'s sensor, and '
+                                'calories are estimated from them in the app. '
+                                'Connect Health Connect to use your watch.',
                     ),
                   ),
                 ),
@@ -967,17 +1011,24 @@ class _HealthDashboardScreenState extends State<HealthDashboardScreen>
     );
   }
 
-  /// Which sources are actually feeding the number above. "Not running" is a
-  /// visible answer instead of a silent zero.
+  /// Which single source feeds the numbers above. Naming both used to imply
+  /// the two were added together; one number, one source.
   String _stepSourceLabel() {
-    final sensor = StepCounterService.instance;
-    final parts = <String>[];
-    if (sensor.active) parts.add('phone sensor');
-    if (_hasReadPermission) parts.add('Health Connect');
-    if (parts.isEmpty) {
-      return 'No step source is running — allow activity access to start.';
+    if (_healthIsSource) {
+      return 'Steps and calories: Health Connect';
     }
-    return 'Step source: ${parts.join(' + ')}';
+    if (StepCounterService.instance.active) {
+      return 'Steps: phone sensor · calories: estimated in app';
+    }
+    return 'No step source is running — allow activity access to start.';
+  }
+
+  /// `2026-11-27` — the calendar day a figure belongs to.
+  static String _dayStamp([DateTime? at]) {
+    final now = at ?? DateTime.now();
+    return '${now.year.toString().padLeft(4, '0')}-'
+        '${now.month.toString().padLeft(2, '0')}-'
+        '${now.day.toString().padLeft(2, '0')}';
   }
 
   String _updatedLabel() {
@@ -1376,8 +1427,9 @@ class _HealthDashboardScreenState extends State<HealthDashboardScreen>
     bool isDark,
     int steps,
     double? burned,
-    int eaten,
-  ) {
+    int eaten, {
+    required bool estimated,
+  }) {
     final burn = burned ?? 0;
     final net = eaten - burn;
     final titleColour = isDark ? Colors.white : const Color(0xFF1A1A1A);
@@ -1432,9 +1484,12 @@ class _HealthDashboardScreenState extends State<HealthDashboardScreen>
           const SizedBox(height: 10),
           Text(
             burned == null
-                ? 'No burn recorded yet today — your phone records this as you '
-                      'move, and it appears here automatically.'
-                : 'Net = what you ate minus what you burned so far today.',
+                ? 'Walk a little and the burn appears here automatically.'
+                : (estimated
+                      ? 'Net = what you ate minus the burn estimated from your '
+                            'steps. Connect Health Connect to use your '
+                            'watch\'s figures instead.'
+                      : 'Net = what you ate minus what you burned so far today.'),
             style: TextStyle(
               fontSize: 11,
               height: 1.4,

@@ -235,28 +235,35 @@ class DietPlanService {
       final file = File(
         '${dir.path}/${AccountPartition.key('diet_profile', suffix)}.json',
       );
-      if (!await file.exists() && suffix.isNotEmpty) {
-        // One-shot migration: attribute the legacy pre-partitioning file to
-        // this account; the move deletes the legacy file so a later
-        // different account can never inherit it.
-        final legacy = File('${dir.path}/diet_profile.json');
-        if (await legacy.exists()) {
-          await legacy.rename(file.path);
-        }
-      }
       if (await file.exists()) {
         _profile = DietProfile.fromJson(jsonDecode(await file.readAsString()));
-      }
-      readSucceeded = true;
-      // Cloud restore: if no local profile, try to fetch from Firestore
-      if (_profile == null) {
+      } else {
+        // Nothing local for this account. The account's OWN cloud copy is the
+        // authority here, and it has to be read BEFORE the legacy-file
+        // migration below: logging out wipes the account keys and runs
+        // onboarding again, which writes a fresh guest profile. Renaming that
+        // guest file into the account's slot replaced the saved profile —
+        // which is how a chosen avatar vanished after a logout/login.
         final cloudProfile = await MealSyncService.fetchDietProfile();
         if (cloudProfile != null) {
           _profile = DietProfile.fromJson(cloudProfile);
           // Save locally for offline access
           await file.writeAsString(jsonEncode(cloudProfile));
+        } else if (suffix.isNotEmpty) {
+          // No cloud copy: this is a first sign-in on this device, so the
+          // profile written before login is this person's own data and becomes
+          // the account's. The move deletes the legacy file so a later
+          // different account can never inherit it.
+          final legacy = File('${dir.path}/diet_profile.json');
+          if (await legacy.exists()) {
+            await legacy.rename(file.path);
+            _profile = DietProfile.fromJson(
+              jsonDecode(await file.readAsString()),
+            );
+          }
         }
       }
+      readSucceeded = true;
     } catch (e, st) {
       logError('DietPlanService.load', e, st);
       // The local store could not be read at all. Keep what is in memory only
@@ -272,6 +279,27 @@ class DietPlanService {
     final write = _writeToDisk(profile);
     _pendingWrite = write.catchError((_) {});
     await write;
+  }
+
+  /// Waits for the profile in memory to reach the cloud.
+  ///
+  /// [save] fires the upload without waiting, because a disk write must not
+  /// hold up the screen. An avatar change is the one edit whose point is the
+  /// OTHER devices, though: signing out seconds later cancelled the in-flight
+  /// write, so a reinstall (or a second phone) restored the old face. Callers
+  /// that commit a deliberate choice await this; the result is best-effort and
+  /// never blocks for long enough to hang the UI.
+  Future<bool> syncToCloud() async {
+    final profile = _profile;
+    if (profile == null) return false;
+    try {
+      return await MealSyncService.syncDietProfile(
+        profile.toJson(),
+      ).timeout(const Duration(seconds: 10));
+    } catch (e, st) {
+      logError('DietPlanService.syncToCloud', e, st);
+      return false;
+    }
   }
 
   Future<void> _writeToDisk(DietProfile profile) async {

@@ -118,6 +118,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
       avatar: chosen,
     );
     await DietPlanService.instance.save(saved);
+    // The local write is what this screen reads, so paint it at once.
+    if (mounted) setState(() {});
+    // Then make sure the ACCOUNT's cloud copy has the new face. Logging out
+    // seconds after choosing one used to cancel the fire-and-forget upload, so
+    // a reinstall (or a second phone) came back with the old picture.
+    await DietPlanService.instance.syncToCloud();
     // The picture lives on the boards too, so push it now rather than waiting
     // for the next scored sync — but push ONLY the picture. Scoring a full
     // week re-reads every meal, habit, water log and weigh-in to recompute

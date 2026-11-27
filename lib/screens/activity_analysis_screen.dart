@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../core/theme.dart';
 import '../models/diet_profile.dart';
+import '../services/calorie_estimate.dart';
 import '../models/habit.dart';
 import '../services/habit_store.dart';
 import '../services/health_service.dart';
@@ -155,12 +156,12 @@ class _ActivityAnalysisScreenState extends State<ActivityAnalysisScreen> {
   /// numbers are capped for a free account, so the two sources mean the same
   /// thing here and on the dashboard.
   int? get _stepsNow {
-    final sensor = StepCounterService.instance.todaySteps;
     final health = _health?.steps;
     final cappedHealth = health == null ? null : StepLimit.cap(health);
-    if (sensor == null) return cappedHealth;
-    if (cappedHealth == null) return sensor;
-    return sensor > cappedHealth ? sensor : cappedHealth;
+    // Health Connect is a SOURCE, not an extra: when it has a reading it is
+    // the number, and the phone sensor is not added to it.
+    if (cappedHealth != null) return cappedHealth;
+    return StepCounterService.instance.todaySteps;
   }
 
   // ─── Build ───────────────────────────────────────────────────────────────
@@ -547,7 +548,14 @@ class _ActivityAnalysisScreenState extends State<ActivityAnalysisScreen> {
     // a free account's 10,000 goal is measured against the 5,000 ceiling, so
     // this bar can actually fill.
     final goal = StepGoalService.instance.effectiveGoal;
-    final burned = _health?.caloriesBurned;
+    // Health Connect's own figure when it supplies one; otherwise the same
+    // in-app estimate the Health tab shows, so the two pages agree.
+    final burned =
+        _health?.caloriesBurned ??
+        CalorieEstimate.activeKcal(
+          steps: steps,
+          weightKg: DietPlanService.instance.profile?.weightKg,
+        )?.toDouble();
     return _card(
       key: _keyFor(AnalysisSection.movement),
       section: AnalysisSection.movement,

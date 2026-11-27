@@ -150,6 +150,12 @@ class _PhoneLoginScreenState extends State<PhoneLoginScreen>
       // collision-prone suffix → the current one). Move the local data NOW,
       // before anything reloads from it.
       await AccountPartition.ensureCurrent(prefs);
+      // The partition just changed, so any profile in memory belongs to the
+      // guest or to the account that signed out. Reload it for THIS account
+      // before navigating: Profile and Settings only re-read when the profile
+      // is null, so without this the app kept showing the previous face (or
+      // the default) after a logout/login.
+      await DietPlanService.instance.load();
       // The sensor measures the PHONE; the steps and the points belong to the
       // ACCOUNT. Rebasing here means this account starts counting from this
       // moment instead of inheriting the previous account's total into its

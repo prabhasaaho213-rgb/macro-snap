@@ -150,12 +150,20 @@ extension _HomeBmi on _HomeScreenState {
               const SizedBox(height: 12),
               Row(
                 children: [
-                  Text(
-                    bmi == null ? 'Tap to calculate' : 'Open calculator',
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w700,
-                      color: MacroSnapTheme.textTertiary(context),
+                  // Flexible, not a bare Text: at 2x text "Open calculator" is
+                  // wider than the card and this row overflowed by 64 px on a
+                  // 430 dp phone. The label now gives way (with an ellipsis)
+                  // and the chevron always stays visible.
+                  Flexible(
+                    child: Text(
+                      bmi == null ? 'Tap to calculate' : 'Open calculator',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        color: MacroSnapTheme.textTertiary(context),
+                      ),
                     ),
                   ),
                   Icon(

@@ -60,10 +60,23 @@ void main() {
       await tester.pump(const Duration(milliseconds: 300));
     }
 
-    final exception = tester.takeException();
-    if (exception != null &&
-        exception.toString().toLowerCase().contains('overflow')) {
-      fail('$name overflowed at 2x font scale: $exception');
+    // Drain EVERY pending exception. `takeException()` hands back only the
+    // first one, so the old single take-and-check let a second and third
+    // overflow print to the console while the test passed — which is exactly
+    // how two Home rows (home_screen_bmi.dart and home_screen_calories.dart)
+    // stayed broken at 2x. Each overflow now fails the screen by name.
+    final overflows = <String>[];
+    for (Object? pending = tester.takeException();
+        pending != null;
+        pending = tester.takeException()) {
+      final text = pending.toString();
+      if (text.toLowerCase().contains('overflow')) overflows.add(text);
+    }
+    if (overflows.isNotEmpty) {
+      fail(
+        '$name overflowed at 2x font scale (${overflows.length}):\n'
+        '${overflows.join('\n---\n')}',
+      );
     }
     // Other exceptions (plugin/network noise in the test environment) are
     // intentionally ignored — this sweep only guards against overflow.

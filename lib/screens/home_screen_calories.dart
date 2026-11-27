@@ -201,25 +201,34 @@ extension _HomeCalories on _HomeScreenState {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              children: [
-                Text(
-                  'Macronutrients',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w900,
-                    color: isDark ? Colors.white : const Color(0xFF1A1A1A),
+            // A Row with a fixed-width title could not fit at 2x text: the
+            // 14-character title alone is wider than the card, so this row
+            // overflowed by 112 px. A Wrap keeps the right-aligned summary
+            // beside the title when there is room and drops it to its own
+            // line when there is not — no clipping, no lost percentage.
+            // A Row with a fixed-width title could not fit at 2x text: the
+            // 14-character title alone is wider than the card, so this row
+            // overflowed by 112 px. A Wrap keeps the right-aligned summary
+            // beside the title when there is room and drops it to its own
+            // line when there is not — no clipping, no lost percentage.
+            SizedBox(
+              width: double.infinity,
+              child: Wrap(
+                alignment: WrapAlignment.spaceBetween,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                spacing: 12,
+                runSpacing: 2,
+                children: [
+                  Text(
+                    'Macronutrients',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w900,
+                      color: isDark ? Colors.white : const Color(0xFF1A1A1A),
+                    ),
                   ),
-                ),
-                // No Spacer here: it claimed half the free width, so the
-                // summary was measured against ~85 px and ellipsized the fats
-                // share ("63% P · 6% C · …"). The summary now takes all the
-                // room the title leaves, right-aligned, and wraps to a second
-                // line rather than losing a number.
-                if (p + c + f > 0) ...[
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Text(
+                  if (p + c + f > 0)
+                    Text(
                       '${(p / max(p + c + f, 1) * 100).round()}% P · ${(c / max(p + c + f, 1) * 100).round()}% C · ${(f / max(p + c + f, 1) * 100).round()}% F',
                       maxLines: 2,
                       textAlign: TextAlign.end,
@@ -230,9 +239,8 @@ extension _HomeCalories on _HomeScreenState {
                         color: MacroSnapTheme.textTertiary(context),
                       ),
                     ),
-                  ),
                 ],
-              ],
+              ),
             ),
             const SizedBox(height: 20),
             MacroBar(

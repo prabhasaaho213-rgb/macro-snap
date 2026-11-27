@@ -418,16 +418,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
     // subscription row follow it instead of freezing the first reading.
     SubscriptionService.instance.addListener(_onSubscriptionChanged);
     _load();
-    // Opened straight from Home the plan is usually already in memory; if it
-    // is not (cold start into Settings), read it once so the card can show the
-    // chosen avatar rather than falling back to the initial.
-    if (DietPlanService.instance.profile == null) {
-      unawaited(
-        DietPlanService.instance.load().then((_) {
-          if (mounted) setState(() {});
-        }),
-      );
-    }
+    // Read the plan once, unconditionally. "Only when the profile is null"
+    // kept whatever the previous account (or the guest before login) left in
+    // memory, so the account card showed a stale face after a logout/login.
+    // For the same account this is a cheap local read; the cloud is only
+    // touched when no local profile exists.
+    unawaited(
+      DietPlanService.instance.load().then((_) {
+        if (mounted) setState(() {});
+      }),
+    );
   }
 
   @override

@@ -261,16 +261,39 @@ class _OnboardingScreenState extends State<OnboardingScreen>
                       )
                     else
                       const SizedBox(width: 48),
-                    const Spacer(),
-                    Text(
-                      '${p + 1}/$_totalSteps',
-                      style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                        color: subText,
+                    // Flexible, not Spacer-flanked: at 2x text the full
+                    // "Step 1 of 9" pill used to push the row 179 px past the
+                    // edge. It now takes the middle space it needs and falls
+                    // back to the fraction when the system font is huge.
+                    Expanded(
+                      child: Center(
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 4,
+                          ),
+                          decoration: BoxDecoration(
+                            color: MacroSnapTheme.neonGreen.withValues(
+                              alpha: isDark ? 0.16 : 0.12,
+                            ),
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: Text(
+                            MediaQuery.textScalerOf(context).scale(1) > 1.5
+                                ? '${p + 1}/$_totalSteps'
+                                : 'Step ${p + 1} of $_totalSteps',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: 11.5,
+                              fontWeight: FontWeight.w800,
+                              letterSpacing: 0.2,
+                              color: MacroSnapTheme.greenText(context),
+                            ),
+                          ),
+                        ),
                       ),
                     ),
-                    const Spacer(),
                     TextButton(
                       onPressed: _skip,
                       child: Text(
@@ -294,16 +317,24 @@ class _OnboardingScreenState extends State<OnboardingScreen>
                   vertical: 8,
                 ),
                 child: ClipRRect(
-                  borderRadius: BorderRadius.circular(4),
-                  child: LinearProgressIndicator(
-                    value: (p + 1) / _totalSteps,
-                    backgroundColor: isDark
-                        ? Colors.white10
-                        : const Color(0xFFE2E8F0),
-                    valueColor: AlwaysStoppedAnimation(
-                      MacroSnapTheme.neonGreen,
+                  borderRadius: BorderRadius.circular(6),
+                  // Animated: the bar used to jump a whole step in one frame,
+                  // which made the flow feel like separate screens rather than
+                  // one continuous setup.
+                  child: TweenAnimationBuilder<double>(
+                    tween: Tween<double>(end: (p + 1) / _totalSteps),
+                    duration: const Duration(milliseconds: 350),
+                    curve: Curves.easeOutCubic,
+                    builder: (context, value, _) => LinearProgressIndicator(
+                      value: value,
+                      backgroundColor: isDark
+                          ? Colors.white10
+                          : const Color(0xFFE2E8F0),
+                      valueColor: AlwaysStoppedAnimation(
+                        MacroSnapTheme.neonGreen,
+                      ),
+                      minHeight: 6,
                     ),
-                    minHeight: 4,
                   ),
                 ),
               ),
@@ -341,13 +372,25 @@ class _OnboardingScreenState extends State<OnboardingScreen>
                         borderRadius: BorderRadius.circular(16),
                       ),
                     ),
-                    child: Text(
-                      p == _totalSteps - 1 ? 'GET STARTED' : 'NEXT',
-                      style: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w800,
-                        letterSpacing: 0.5,
-                      ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text(
+                          p == _totalSteps - 1 ? 'GET STARTED' : 'NEXT',
+                          style: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: 0.5,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Icon(
+                          p == _totalSteps - 1
+                              ? Icons.rocket_launch_rounded
+                              : Icons.arrow_forward_rounded,
+                          size: 19,
+                        ),
+                      ],
                     ),
                   ),
                 ),
@@ -424,64 +467,152 @@ class _OnboardingScreenState extends State<OnboardingScreen>
           child: ConstrainedBox(
             constraints: BoxConstraints(minHeight: constraints.maxHeight),
             child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 24),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  // Glowing circle icon
-                  Container(
-                    width: 120,
-                    height: 120,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      gradient: RadialGradient(
-                        colors: [
-                          MacroSnapTheme.neonGreen.withValues(alpha: 0.2),
-                          MacroSnapTheme.neonGreen.withValues(alpha: 0.05),
-                          Colors.transparent,
-                        ],
-                      ),
-                      boxShadow: [
-                        BoxShadow(
-                          color: MacroSnapTheme.neonGreen.withValues(
-                            alpha: 0.3,
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+              child: Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 440),
+                  // The welcome is a CARD, not loose centred text: it gives the
+                  // first screen the same surface language as Home and the
+                  // profile pages, and the tinted chips answer "what does this
+                  // do?" before the user types anything.
+                  child: Container(
+                    padding: const EdgeInsets.fromLTRB(22, 24, 22, 22),
+                    decoration: MacroSnapTheme.habitlyCard(context),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        _welcomeMark(),
+                        const SizedBox(height: 20),
+                        Text(
+                          'Welcome to\nMacroSnap',
+                          textAlign: TextAlign.center,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 30,
+                            fontWeight: FontWeight.w900,
+                            color: textColor,
+                            height: 1.2,
                           ),
-                          blurRadius: 40,
-                          spreadRadius: 10,
+                        ),
+                        const SizedBox(height: 12),
+                        Text(
+                          'Snap a meal and MacroSnap works out the calories '
+                          'and macros — then builds the daily target that fits '
+                          'your body and your goal.',
+                          textAlign: TextAlign.center,
+                          maxLines: 4,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 14.5,
+                            color: subText,
+                            height: 1.5,
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          alignment: WrapAlignment.center,
+                          children: [
+                            _welcomeChip(
+                              'Snap a meal',
+                              Icons.camera_alt_rounded,
+                              MacroSnapTheme.neonGreen,
+                            ),
+                            _welcomeChip(
+                              'Macros in seconds',
+                              Icons.bolt_rounded,
+                              MacroSnapTheme.neonPurple,
+                            ),
+                            _welcomeChip(
+                              'Your own plan',
+                              Icons.flag_rounded,
+                              MacroSnapTheme.neonCyan,
+                            ),
+                          ],
                         ),
                       ],
                     ),
-                    child: const Center(
-                      child: Text('📸', style: TextStyle(fontSize: 52)),
-                    ),
                   ),
-                  const SizedBox(height: 32),
-                  Text(
-                    'Welcome to\nMacroSnap',
-                    textAlign: TextAlign.center,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontSize: 30,
-                      fontWeight: FontWeight.w900,
-                      color: textColor,
-                      height: 1.2,
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  Text(
-                    "Let's set up your profile for personalized calorie and macro targets.",
-                    textAlign: TextAlign.center,
-                    maxLines: 3,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(fontSize: 15, color: subText, height: 1.5),
-                  ),
-                ],
+                ),
               ),
             ),
           ),
         ),
+      ),
+    );
+  }
+
+  /// The app's own mark inside a soft green halo.
+  ///
+  /// The first screen after the launcher used to show a camera emoji while the
+  /// login screen showed the real icon; a generic glyph is the weakest thing a
+  /// new user sees. The emoji stays only as the fallback for a build whose
+  /// asset is missing.
+  Widget _welcomeMark() {
+    return Container(
+      width: 88,
+      height: 88,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        gradient: RadialGradient(
+          colors: [
+            MacroSnapTheme.neonGreen.withValues(alpha: 0.22),
+            MacroSnapTheme.neonGreen.withValues(alpha: 0.06),
+            Colors.transparent,
+          ],
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: MacroSnapTheme.neonGreen.withValues(alpha: 0.28),
+            blurRadius: 32,
+            spreadRadius: 6,
+          ),
+        ],
+      ),
+      child: Center(
+        child: ClipOval(
+          child: Image.asset(
+            'assets/branding/app_icon_512.png',
+            width: 62,
+            height: 62,
+            fit: BoxFit.cover,
+            errorBuilder: (_, _, _) =>
+                const Text('📸', style: TextStyle(fontSize: 40)),
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// One promise on the welcome card.
+  Widget _welcomeChip(String label, IconData icon, Color colour) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: colour.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: colour.withValues(alpha: 0.25)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 13, color: colour),
+          const SizedBox(width: 5),
+          Flexible(
+            child: Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w800,
+                color: colour,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -1227,26 +1358,36 @@ class _OnboardingScreenState extends State<OnboardingScreen>
   // ── Shared widgets ──────────────────────────────────────────────
 
   Widget _buildQuestion(String title, Color textColor, Widget child) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 28),
-      child: SingleChildScrollView(
+    // Centered in the ACTUAL page height (the old fixed minHeight of 400 sat
+    // high on tall phones and clipped on short ones), capped in width so a
+    // tablet does not stretch a one-line question across the screen.
+    return LayoutBuilder(
+      builder: (context, constraints) => SingleChildScrollView(
         child: ConstrainedBox(
-          constraints: const BoxConstraints(minHeight: 400),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Text(
-                title,
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 24,
-                  fontWeight: FontWeight.w900,
-                  color: textColor,
+          constraints: BoxConstraints(minHeight: constraints.maxHeight),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 28),
+            child: Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 440),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      title,
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 24,
+                        fontWeight: FontWeight.w900,
+                        color: textColor,
+                      ),
+                    ),
+                    const SizedBox(height: 28),
+                    child,
+                  ],
                 ),
               ),
-              const SizedBox(height: 28),
-              child,
-            ],
+            ),
           ),
         ),
       ),

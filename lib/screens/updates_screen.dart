@@ -53,6 +53,18 @@ class _UpdatesScreenState extends State<UpdatesScreen> {
       date: '2026-11-27',
       isLatest: true,
       notes: [
+        'Your avatar now survives logging out and back in, and it is saved to your account instead of only this phone',
+        'Without Health Connect, calories burned are estimated from the steps your phone counted and the weight on your profile',
+        'With Health Connect connected, steps AND calories both come from it — the phone sensor is never added on top',
+        'Steps and calories start fresh at midnight instead of showing yesterday\'s numbers first thing',
+        'The welcome screen is a proper card with the app icon, and setup shows "Step 3 of 9" with an animated progress bar',
+        'The BMI and Macronutrients cards on Home no longer overflow at large system text',
+      ],
+    ),
+    _UpdateEntry(
+      version: '1.5.28',
+      date: '2026-11-27',
+      notes: [
         'Your picture shows on the Settings account card now, instead of the first letter of your name',
         'The avatar picker fills the sheet evenly — four columns, no empty strip on one side',
         'Six avatars were re-cut, so no illustration has a pale border along one edge',
