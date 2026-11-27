@@ -53,6 +53,15 @@ class _UpdatesScreenState extends State<UpdatesScreen> {
       date: '2026-11-27',
       isLatest: true,
       notes: [
+        'Your meal history is written safely now: a crash or a full disk can no longer leave you with an empty history',
+        'Restoring after a reinstall brings back your newest meals first instead of an arbitrary slice of older ones',
+        'A meal logged on a bad connection can no longer fall out of the upload retry queue',
+      ],
+    ),
+    _UpdateEntry(
+      version: '1.5.29',
+      date: '2026-11-27',
+      notes: [
         'Your avatar now survives logging out and back in, and it is saved to your account instead of only this phone',
         'Without Health Connect, calories burned are estimated from the steps your phone counted and the weight on your profile',
         'With Health Connect connected, steps AND calories both come from it — the phone sensor is never added on top',

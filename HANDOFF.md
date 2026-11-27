@@ -1,6 +1,6 @@
 # MacroSnap — project handoff
 
-Last updated: 10 Nov 2026 · version `1.5.16+119`
+Last updated: 27 Nov 2026 · version `1.5.29+10533`
 
 This file used to contain machine-specific paths, a personal email address and
 the filename of a service-account key. All of that has been removed: nothing
@@ -54,6 +54,13 @@ of the screen, and `SwipeActionBackground` has its own shape test.
 
 When adding UI to one of these screens, put it in the part file that matches its
 feature; a new 400-line screen method is how these files got to 2,000 lines.
+
+Three screens have NOT been split yet and are still monoliths:
+`leaderboard_screen.dart` (2,054 lines), `health_dashboard_screen.dart` (1,652)
+and `onboarding_screen.dart` (1,585). `diet_plan_screen.dart` (1,311) is next
+behind them. Splitting them is the same mechanical job as above — same-named
+`part` files, no behaviour change — and is the first cleanup task on the list.
+Do not add new features to these four until they are split.
 
 ## Build and release
 
@@ -146,6 +153,14 @@ sign-in only, and the app's data is always attached to an account. Do not add
 `signInAnonymously` or a "continue without an account" button — the product
 decision is that using MacroSnap requires an account.
 
+Note the misleading filename: `lib/screens/phone_login_screen.dart` is the
+Google sign-in screen (`PhoneLoginScreen`, `_signInWithGoogle`). No phone/SMS
+authentication exists anywhere in the app — no `signInWithPhoneNumber`, no
+`verifyPhoneNumber`, no OTP UI. The name is a leftover from an abandoned plan;
+rename it only together with its four call sites (`app.dart`,
+`settings_screen.dart` ×2, `subscription_screen.dart`, and
+`test/large_text_regression_test.dart`).
+
 The `guest_*` / empty-`phone` handling that remains throughout `lib/services`
 is NOT a guest mode; it is how the app represents "no account is currently
 active" (a signed-out device, or the moment before auth state restores). Those
@@ -177,6 +192,23 @@ are per account and are on the account-deletion wipe list.
 
 - A real payment has not been tested on a release build. R8 keep rules for
   Razorpay exist, but only a paid checkout on a real phone proves them.
+- The cloud copy is a **backup, not multi-device sync**. `MealStore`'s merge
+  only adds meals that are missing locally and applies deletions confirmed on
+  this device; an edit made on another device is never pulled in. `habitData`
+  is a whole-document `set`, so two devices overwrite each other's habits and
+  water log. The UI and the policy now say "backup"; do not reintroduce the
+  word "sync" without adding per-record merge with `updatedAt`.
+- Pro state has four inputs: `users/{uid}` in Firestore, `/subscription/status`,
+  `/me/entitlements` and `/me/payment/status`, cached in prefs by
+  `SubscriptionService`. They agree today because the server writes all of them
+  from the same webhook, but nothing enforces that. Anything that costs money
+  must still be gated server-side (scans and photo upload already are).
+- Leaderboard points are computed on the device and written by the client; the
+  rules bound the payload but cannot prove the score. That is acceptable while
+  there are no prizes, and it must change before there are.
+- Leaderboard entries expose the chosen display name and the state/district to
+  every signed-in user in that area. The privacy policy says so — keep it in
+  step if the exposed fields change.
 - Reminders are scheduled INEXACTLY (`AndroidScheduleMode.inexactAllowWhileIdle`).
   `SCHEDULE_EXACT_ALARM` was removed deliberately: Google Play restricts exact
   alarms to alarm-clock/calendar apps, and shipping it on a nutrition app risks

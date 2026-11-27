@@ -201,9 +201,16 @@ class MealSyncService {
     // not treat the empty answer as "the account has no meals".
     if (_isGuestUid(uid)) return const CloudMeals.unavailable();
     try {
+      // Newest first, and it MUST stay that way. Without an orderBy, Firestore
+      // returns documents by doc id, so a capped read is an arbitrary slice: at
+      // three meals a day the 600-doc page fills in about 200 days, and the
+      // meals that fall outside it would be the newest ones — a reinstall would
+      // silently drop today's history while keeping last year's. The existing
+      // (uid ASC, date ASC) composite index serves this descending scan.
       final snap = await _db
           .collection('meals')
           .where('uid', isEqualTo: uid)
+          .orderBy('date', descending: true)
           .limit(restorePageSize)
           .get()
           .timeout(const Duration(seconds: 15));
@@ -215,21 +222,27 @@ class MealSyncService {
       for (final doc in snap.docs) {
         try {
           meals.add(_mealFromDoc(doc));
-        } catch (e) {
-          debugPrint('Skipping malformed meal doc ${doc.id}: $e');
+        } catch (e, st) {
+          logError('MealSyncService.mealFromDoc ${doc.id}', e, st);
         }
       }
       meals.sort((a, b) => b.date.compareTo(a.date));
       SyncStatusService.instance.reportSuccess();
-      return CloudMeals(
-        meals: meals,
-        ok: true,
-        // A page that came back full MIGHT have been truncated, so only a
-        // short page proves the read covered the account.
-        complete: snap.docs.length < restorePageSize,
-      );
-    } catch (e) {
-      debugPrint('MealSyncService.fetchMeals failed: $e');
+      // A page that came back full MIGHT have been truncated, so only a
+      // short page proves the read covered the account. With newest-first
+      // ordering the missing rows are the oldest, and it is reported rather
+      // than guessed at: a capped restore used to be invisible.
+      final complete = snap.docs.length < restorePageSize;
+      if (!complete) {
+        logError(
+          'MealSyncService.fetchMeals: restore page full at $restorePageSize docs; older meals missing',
+          StateError('restore page truncated'),
+          StackTrace.current,
+        );
+      }
+      return CloudMeals(meals: meals, ok: true, complete: complete);
+    } catch (e, st) {
+      logError('MealSyncService.fetchMeals', e, st);
       SyncStatusService.instance.reportFailure('Meal restore failed');
       return const CloudMeals.unavailable();
     }
@@ -281,8 +294,11 @@ class MealSyncService {
       });
       SyncStatusService.instance.reportSuccess();
       return true;
-    } catch (e) {
-      debugPrint('MealSyncService.syncHabits failed: $e');
+    } catch (e, st) {
+      // Habit sync failing used to print and vanish, so a user whose habits
+      // stopped backing up left no trace anywhere. It is a real failure with a
+      // user-visible consequence, so it goes to Crashlytics.
+      logError('MealSyncService.syncHabits', e, st);
       SyncStatusService.instance.reportFailure('Habit sync failed');
       return false;
     }

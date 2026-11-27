@@ -59,6 +59,27 @@ class PendingSyncQueue with WidgetsBindingObserver {
   bool _draining = false;
   bool _observing = false;
 
+  /// Serialises every read-modify-write of the queue and of the confirmed-id
+  /// list. Both are stored as one JSON string / one string list in prefs, so
+  /// two overlapping operations otherwise lose one another's writes — and the
+  /// overlap is exactly the failure this queue exists for: a write that fails
+  /// while a drain is running.
+  Future<void> _lock = Future<void>.value();
+
+  /// Runs [action] after every earlier critical section has finished. Actions
+  /// must not call [_synchronized] again (that would deadlock on itself).
+  Future<T> _synchronized<T>(Future<T> Function() action) {
+    final completer = Completer<T>();
+    _lock = _lock.then((_) async {
+      try {
+        completer.complete(await action());
+      } catch (e, st) {
+        completer.completeError(e, st);
+      }
+    });
+    return completer.future;
+  }
+
   /// Starts replaying pending writes when the app returns to the foreground.
   /// Called once at startup; safe to call again.
   void start() {
@@ -119,13 +140,17 @@ class PendingSyncQueue with WidgetsBindingObserver {
   /// Marks [mealId] as needing a cloud delete.
   Future<void> enqueueDelete(String mealId) => _put(mealId, 'del');
 
-  Future<void> _put(String mealId, String op) async {
-    if (mealId.isEmpty) return;
-    final pending = await _readPending();
-    // A delete always wins over a queued upload of the same id.
-    if (pending[mealId] == 'del' && op == 'set') return;
-    pending[mealId] = op;
-    await _writePending(pending);
+  Future<void> _put(String mealId, String op) {
+    if (mealId.isEmpty) return Future<void>.value();
+    // Locked: an unlocked read-modify-write could drop an entry that a drain
+    // or another failing upload wrote in between.
+    return _synchronized(() async {
+      final pending = await _readPending();
+      // A delete always wins over a queued upload of the same id.
+      if (pending[mealId] == 'del' && op == 'set') return;
+      pending[mealId] = op;
+      await _writePending(pending);
+    });
   }
 
   /// The ids currently waiting to be replayed.
@@ -135,23 +160,27 @@ class PendingSyncQueue with WidgetsBindingObserver {
   Future<bool> get isEmpty async => (await _readPending()).isEmpty;
 
   /// Records that [mealId] is in the cloud. Called after a successful upload.
-  Future<void> markSynced(String mealId) async {
-    if (mealId.isEmpty) return;
-    try {
-      final (prefs, suffix) = await _partition();
-      final key = AccountPartition.key(_syncedBase, suffix);
-      final list = prefs.getStringList(key) ?? <String>[];
-      if (list.contains(mealId)) return;
-      list.add(mealId);
-      // Keep the newest [maxSyncedIds]: the oldest confirmations stop mattering
-      // long before they fall off the end of this window.
-      final trimmed = list.length > maxSyncedIds
-          ? list.sublist(list.length - maxSyncedIds)
-          : list;
-      await prefs.setStringList(key, trimmed);
-    } catch (e, st) {
-      logError('PendingSyncQueue.markSynced', e, st);
-    }
+  Future<void> markSynced(String mealId) {
+    if (mealId.isEmpty) return Future<void>.value();
+    // Locked: markSynced and forget both rewrite the whole id list, and a drain
+    // can interleave with an upload's confirmation.
+    return _synchronized(() async {
+      try {
+        final (prefs, suffix) = await _partition();
+        final key = AccountPartition.key(_syncedBase, suffix);
+        final list = prefs.getStringList(key) ?? <String>[];
+        if (list.contains(mealId)) return;
+        list.add(mealId);
+        // Keep the newest [maxSyncedIds]: the oldest confirmations stop
+        // mattering long before they fall off the end of this window.
+        final trimmed = list.length > maxSyncedIds
+            ? list.sublist(list.length - maxSyncedIds)
+            : list;
+        await prefs.setStringList(key, trimmed);
+      } catch (e, st) {
+        logError('PendingSyncQueue.markSynced', e, st);
+      }
+    });
   }
 
   /// Whether this device has ever confirmed [mealId] in the cloud.
@@ -169,17 +198,19 @@ class PendingSyncQueue with WidgetsBindingObserver {
 
   /// Forgets [mealId]'s confirmation — used once a meal is gone, so the list
   /// does not accumulate ids of meals that no longer exist anywhere.
-  Future<void> forget(String mealId) async {
-    try {
-      final (prefs, suffix) = await _partition();
-      final key = AccountPartition.key(_syncedBase, suffix);
-      final list = prefs.getStringList(key);
-      if (list == null || !list.contains(mealId)) return;
-      list.remove(mealId);
-      await prefs.setStringList(key, list);
-    } catch (e, st) {
-      logError('PendingSyncQueue.forget', e, st);
-    }
+  Future<void> forget(String mealId) {
+    return _synchronized(() async {
+      try {
+        final (prefs, suffix) = await _partition();
+        final key = AccountPartition.key(_syncedBase, suffix);
+        final list = prefs.getStringList(key);
+        if (list == null || !list.contains(mealId)) return;
+        list.remove(mealId);
+        await prefs.setStringList(key, list);
+      } catch (e, st) {
+        logError('PendingSyncQueue.forget', e, st);
+      }
+    });
   }
 
   /// Replays every queued write. Safe to call repeatedly and concurrently: a
@@ -228,11 +259,18 @@ class PendingSyncQueue with WidgetsBindingObserver {
       }
 
       if (done.isEmpty) return;
-      final remaining = Map<String, String>.from(pending);
-      for (final id in done) {
-        remaining.remove(id);
-      }
-      await _writePending(remaining);
+      // Re-read before writing back. The snapshot above is up to 20 seconds
+      // old, and a meal whose upload failed during the drain was enqueued in
+      // the meantime; writing "snapshot minus done" would erase that entry and
+      // the meal would never be retried. Remove only the ids this drain
+      // actually finished.
+      await _synchronized(() async {
+        final current = await _readPending();
+        for (final id in done) {
+          current.remove(id);
+        }
+        await _writePending(current);
+      });
     } catch (e, st) {
       logError('PendingSyncQueue.drain', e, st);
     } finally {

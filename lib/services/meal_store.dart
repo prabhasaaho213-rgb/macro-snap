@@ -84,38 +84,14 @@ class MealStore {
         }
       }
       if (await file.exists()) {
-        final raw = await file.readAsString();
-        if (raw.trim().isEmpty) {
-          _meals = [];
-        } else {
-          final data = jsonDecode(raw);
-          if (data is List) {
-            // Parse per record: a single corrupt entry is skipped instead of
-            // aborting the loop (which used to reset the whole history).
-            final parsed = data
-                .whereType<Map>()
-                .map(
-                  (e) => MealRecord.tryFromJson(Map<String, dynamic>.from(e)),
-                )
-                .toList();
-            _meals = parsed.whereType<MealRecord>().toList();
-            // A skipped record used to vanish without a trace: the meal
-            // was simply missing next launch and nothing explained it.
-            // Report the count so a bad writer becomes visible.
-            final skipped = parsed.length - _meals.length;
-            if (skipped > 0) {
-              logError(
-                'MealStore.load: skipped $skipped unreadable meal record(s)',
-                StateError('unreadable meal record'),
-                StackTrace.current,
-              );
-            }
-          }
-        }
+        _meals = await _parseSnapshot(file);
       }
-    } catch (_) {
-      // Corrupted or unreadable local data — reset rather than crash.
-      _meals = [];
+    } catch (e, st) {
+      // The snapshot could not be read at all. Before this, that reset the
+      // history to empty — and the next save then overwrote the file, making
+      // the loss permanent. Recover the previous good write instead.
+      logError('MealStore.load', e, st);
+      _meals = await _recoverFromBackup();
     }
     _loaded = true;
     // Meal photos only live a day. Sweeping them here — once per launch —
@@ -355,13 +331,92 @@ class MealStore {
     }
   }
 
-  Future<void> _save() async {
+  /// Parses one snapshot file. Per-record: a single corrupt entry is skipped
+  /// instead of aborting the rest of the history.
+  Future<List<MealRecord>> _parseSnapshot(File file) async {
+    final raw = await file.readAsString();
+    if (raw.trim().isEmpty) return [];
+    final data = jsonDecode(raw);
+    if (data is! List) return [];
+    final parsed = data
+        .whereType<Map>()
+        .map((e) => MealRecord.tryFromJson(Map<String, dynamic>.from(e)))
+        .toList();
+    final meals = parsed.whereType<MealRecord>().toList();
+    // A skipped record used to vanish without a trace: the meal was simply
+    // missing next launch and nothing explained it. Report the count so a bad
+    // writer becomes visible.
+    final skipped = parsed.length - meals.length;
+    if (skipped > 0) {
+      logError(
+        'MealStore.load: skipped $skipped unreadable meal record(s)',
+        StateError('unreadable meal record'),
+        StackTrace.current,
+      );
+    }
+    return meals;
+  }
+
+  /// The previous good snapshot, written on every save (see [_writeSnapshot]).
+  /// Only used when the live file cannot be parsed at all.
+  Future<List<MealRecord>> _recoverFromBackup() async {
+    try {
+      final dir = await getApplicationDocumentsDirectory();
+      final bak = File('${dir.path}/$_fileName.bak');
+      if (!await bak.exists()) return [];
+      final meals = await _parseSnapshot(bak);
+      logError(
+        'MealStore.load: recovered ${meals.length} meal(s) from .bak',
+        StateError('recovered from backup'),
+        StackTrace.current,
+      );
+      return meals;
+    } catch (e, st) {
+      logError('MealStore._recoverFromBackup', e, st);
+      return [];
+    }
+  }
+
+  /// Serialises writes. add/remove/update and the cloud merge can overlap, and
+  /// two interleaved whole-file writes are how a truncated file happens; a
+  /// queued chain means the last full snapshot always wins.
+  Future<void> _saveChain = Future<void>.value();
+
+  Future<void> _save() {
+    final next = _saveChain.then((_) => _writeSnapshot());
+    // Keep the chain alive after a failure: one bad write must not stop every
+    // later save for the rest of the session.
+    _saveChain = next.catchError((Object _) {});
+    return next;
+  }
+
+  /// Writes the snapshot atomically: a temp file is flushed and then renamed
+  /// over the real one, and the previous good file is kept as `.bak`. A crash
+  /// mid-write therefore leaves a complete file behind (either the old one or
+  /// the new one) instead of a half-written JSON array that cannot be parsed.
+  Future<void> _writeSnapshot() async {
     try {
       final dir = await getApplicationDocumentsDirectory();
       final file = File('${dir.path}/$_fileName');
-      await file.writeAsString(
-        jsonEncode(_meals.map((m) => m.toJson()).toList()),
-      );
+      final json = jsonEncode(_meals.map((m) => m.toJson()).toList());
+      final tmp = File('${file.path}.tmp');
+      await tmp.writeAsString(json, flush: true);
+      if (await file.exists()) {
+        try {
+          await file.copy('${file.path}.bak');
+        } catch (_) {
+          // A missing backup only costs one generation of recovery.
+        }
+      }
+      try {
+        await tmp.rename(file.path);
+      } on FileSystemException {
+        // Some Windows configurations refuse a rename onto an existing file.
+        // Deleting first reopens the same (tiny) window as before, so it is
+        // only the fallback path.
+        await file.delete();
+        await tmp.rename(file.path);
+      }
     } catch (e, st) {
       logError('MealStore._save', e, st);
     }

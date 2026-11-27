@@ -78,12 +78,23 @@
 
         <div class="card">
             <strong>Account Information</strong>
-            <p>You sign in with Google — there is no guest or phone-number account. We collect the email address of the Google account you sign in with and the display name you choose, used only to identify your account via Firebase Authentication.</p>
+            <p>You sign in with Google — there is no guest mode. We collect the email address of the Google account you sign in with and the display name you choose, used only to identify your account via Firebase Authentication. Your account is identified by a Firebase user ID; a verified phone number is also accepted as an account identifier for accounts created that way.</p>
         </div>
 
         <div class="card">
             <strong>Meal, Habit & Diet Data</strong>
-            <p>Your logged meals, nutrition targets, habit trackers, water logs and diet preferences are stored on your device and saved to the cloud automatically whenever you are signed in. There is nothing you need to press — every change syncs in the background so your data survives reinstalls and device changes.</p>
+            <p>Your logged meals, nutrition targets, habit trackers, water logs and diet preferences are stored on your device and backed up to the cloud automatically whenever you are signed in. There is nothing you need to press — every change is backed up in the background so your data survives reinstalls and device changes.</p>
+            <p>The cloud copy is a <strong>backup</strong>, not a live two-way merge: meals you add or delete reach your other devices, but an edit made to an existing meal on one device is not merged into the copy on another, and habits and the water log are stored as one document per account, so the most recent save wins.</p>
+        </div>
+
+        <div class="card">
+            <strong>Leaderboard (optional)</strong>
+            <p>If you join the Weekly Leaderboard, your chosen display name, your area (state and district) and your weekly points are visible to other signed-in MacroSnap users in the same area. Your meals, weight, photos and habits are never shown there. Weekly points are derived from activity you already log — meals, habits, water, weigh-ins and your step totals — and are stored per week.</p>
+        </div>
+
+        <div class="card">
+            <strong>Health &amp; fitness data (optional)</strong>
+            <p>Only if you grant the permission, the app reads step counts and active-calorie totals from Health Connect on Android (or Apple Health on iOS) to show your movement and count it towards habits and leaderboard points. The raw health records stay on your device; only per-day step totals are uploaded to your account so a reinstall can restore them. You can revoke the permission at any time in the system settings, and the app keeps working without it. The phone's own step sensor is also used and needs no health permission.</p>
         </div>
 
         <div class="card">

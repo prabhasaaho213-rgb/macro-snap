@@ -13,6 +13,8 @@ account needs a cloud backup and a subscription identity.
 - **History** — one document per meal in Cloud Firestore (`meals/{mealId}`),
   mirrored on device so the app works offline. Failed writes queue locally and
   replay on the next launch/resume (`lib/services/pending_sync_queue.dart`).
+  The cloud copy is a **backup**, not a live merge: meals added or deleted on
+  one device reach the others, but an edit to an existing meal stays local.
 - **Habits & water** — habit list, streaks and a daily water log, backed up as
   one `habitData/{uid}` document; reminders are re-armed after reboot.
 - **Guru** — an in-app nutrition assistant whose context is built from the
@@ -27,7 +29,7 @@ lib/
   core/        theme, haptics, shared formatting
   models/      MealRecord, DietProfile, habit models
   screens/     one file per screen (home, scan, habits, settings, …)
-  services/    Firestore sync, auth, Gemini, Razorpay, notifications, crash reporting
+  services/    Firestore backup, auth, Gemini, Razorpay, notifications, crash reporting
   widgets/     reusable cards, sheets, animations
 android/       Gradle config, manifest, signing (key.properties is NOT in git)
 docs/          privacy policy + account deletion pages served by GitHub Pages
